@@ -38,10 +38,8 @@
             background: #e5e3df;
         }
         
-        /* Ocultar la caja de texto con las instrucciones paso a paso de Leaflet para que no tape el diseño móvil */
-        .leaflet-routing-container {
-            display: none !important;
-        }
+        /* Ocultar la caja de texto con las instrucciones de Leaflet */
+        .leaflet-routing-container { display: none !important; }
         
         /* BOTÓN DE GOOGLE */
         .btn-google {
@@ -52,7 +50,7 @@
         .btn-google:hover { background-color: #f8fafd; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
         .btn-google svg { width: 18px; height: 18px; margin-right: 10px; }
 
-        /* TARJETAS DE PEDIDOS */
+        /* TARJETAS DE PEDIDOS Y FOTOS */
         .lista-tarjetas { display: grid; gap: 15px; margin-top: 15px; }
         .tarjeta-pedido { 
             border-left: 5px solid #00d1b2; background: #ffffff; padding: 18px; 
@@ -62,6 +60,9 @@
             border-left: 5px solid #ffdd57; 
             background: #fffdf3; 
             box-shadow: 0 4px 10px rgba(255, 221, 87, 0.25);
+        }
+        .foto-mercancia {
+            width: 100%; max-height: 200px; object-fit: cover; border-radius: 6px; margin: 10px 0; border: 1px solid #ddd;
         }
 
         .oculto { display: none !important; }
@@ -131,7 +132,7 @@
 
         <div class="contenedor-cotizacion">
             <div class="dato-cotizacion">Distancia Estimada<strong id="vistaDistancia">0.00 km</strong></div>
-            <div class="dato-cotizacion">Costo de Envío<strong id="vistaCosto" class="costo-resaltado">$0.00</strong></div>
+            <div class="dato-cotizacion">Costo de Envío ($25/km)<strong id="vistaCosto" class="costo-resaltado">$0.00</strong></div>
         </div>
 
         <form id="formPedido">
@@ -141,13 +142,17 @@
             <label for="destino">¿A dónde lo llevamos? (Destino):</label>
             <input type="text" id="destino" placeholder="Usa el mapa de arriba para fijar el destino" required readonly>
 
-            <label for="paquete">¿Qué mercancía envías?:</label>
-            <input type="text" id="paquete" placeholder="Ej. Documentos, Comida, Llaves" required>
+            <label for="paquete">Descripción del paquete:</label>
+            <input type="text" id="paquete" placeholder="Ej. Documentos importantes, Hamburguesa con papas" required>
+
+            <!-- NUEVO CAMPO PARA SUBIR FOTO -->
+            <label for="fotoInput">Foto de la mercancía (Obligatoria):</label>
+            <input type="file" id="fotoInput" accept="image/*" required>
 
             <label for="telefono">Número telefónico de contacto:</label>
             <input type="tel" id="telefono" placeholder="Ej. 11 1234-5678" required>
 
-            <button type="submit">Publicar Pedido de Entrega</button>
+            <button type="submit" id="btnPublicarPedido">Publicar Pedido de Entrega</button>
         </form>
     </div>        
 
@@ -325,9 +330,11 @@
     }
 
     // =========================================================================
-    // FORMULARIO CLIENTE
+    // ENVIAR FORMULARIO CON SUBIDA DE IMAGEN
     // =========================================================================
     const formPedido = document.getElementById('formPedido');
+    const btnPublicarPedido = document.getElementById('btnPublicarPedido');
+
     formPedido.addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -336,29 +343,65 @@
             return;
         }
 
-        const { error } = await supabaseClient.from('pedidos').insert([
-            { 
-                origen: document.getElementById('origen').value, 
-                destino: document.getElementById('destino').value, 
-                origen_lat: coordenadasOrigen.lat,
-                origen_lng: coordenadasOrigen.lng,
-                destino_lat: coordenadasDestino.lat,
-                destino_lng: coordenadasDestino.lng,
-                paquete: document.getElementById('paquete').value, 
-                telefono: document.getElementById('telefono').value,
-                costo: costoEnvioFinal, 
-                estado: 'solicitado',
-                cliente_id: usuarioActual.id
-            }
-        ]);
+        const fotoFile = document.getElementById('fotoInput').files[0];
+        if(!fotoFile) {
+            alert("Por favor, selecciona una foto de la mercancía.");
+            return;
+        }
 
-        if (error) alert("Error: " + error.message);
-        else { 
+        btnPublicarPedido.innerText = "Subiendo imagen y publicando...";
+        btnPublicarPedido.disabled = true;
+
+        try {
+            // Generar un nombre único para la foto
+            const extension = fotoFile.name.split('.').pop();
+            const nombreArchivo = `${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
+
+            // Subir al bucket 'fotos-mercancia'
+            const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                .from('fotos-mercancia')
+                .upload(nombreArchivo, fotoFile);
+
+            if (uploadError) throw uploadError;
+
+            // Obtener la URL pública del archivo subido
+            const { data: publicUrlData } = supabaseClient.storage
+                .from('fotos-mercancia')
+                .getPublicUrl(nombreArchivo);
+
+            const fotoUrlFinal = publicUrlData.publicUrl;
+
+            // Insertar el registro del pedido en la tabla incluyendo la columna "mercancia" con el link
+            const { error: insertError } = await supabaseClient.from('pedidos').insert([
+                { 
+                    origen: document.getElementById('origen').value, 
+                    destino: document.getElementById('destino').value, 
+                    origen_lat: coordenadasOrigen.lat,
+                    origen_lng: coordenadasOrigen.lng,
+                    destino_lat: coordenadasDestino.lat,
+                    destino_lng: coordenadasDestino.lng,
+                    paquete: document.getElementById('paquete').value, 
+                    mercancia: fotoUrlFinal, // Aquí se guarda la URL de la imagen en tu base de datos
+                    telefono: document.getElementById('telefono').value,
+                    costo: costoEnvioFinal, 
+                    estado: 'solicitado',
+                    cliente_id: usuarioActual.id
+                }
+            ]);
+
+            if (insertError) throw insertError;
+
             alert("¡Pedido creado con éxito!");
             formPedido.reset();
             document.getElementById('vistaDistancia').innerText = "0.00 km";
             document.getElementById('vistaCosto').innerText = "$0.00";
             coordenadasOrigen = null; coordenadasDestino = null; costoEnvioFinal = 0;
+
+        } catch (error) {
+            alert("Error al procesar el pedido: " + error.message);
+        } finally {
+            btnPublicarPedido.innerText = "Publicar Pedido de Entrega";
+            btnPublicarPedido.disabled = false;
         }
     });
 
@@ -366,45 +409,34 @@
     // MAPA DEL REPARTIDOR (RUTAS EXACTAS POR CALLE)
     // =========================================================================
     function mostrarRutaEnMapaRepartidor(origLat, origLng, destLat, destLng) {
-        // 1. Mostrar contenedor en pantalla
         document.getElementById('contenedorMapaRepartidor').classList.remove('oculto');
 
-        // 2. Limpieza estricta de mapas previos para evitar fallos de Leaflet
         if (mapaRepartidor) {
             mapaRepartidor.remove();
             mapaRepartidor = null;
         }
 
-        // 3. Crear mapa base
         mapaRepartidor = L.map('mapaRepartidor').setView([origLat, origLng], 14);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaRepartidor);
 
-        // 4. Implementar el motor de enrutamiento por calles reales (OSM Engine)
         controlRuta = L.Routing.control({
             waypoints: [
                 L.latLng(origLat, origLng),
                 L.latLng(destLat, destLng)
             ],
             lineOptions: {
-                styles: [{ color: '#209cee', opacity: 0.8, weight: 6 }] // Línea azul de ruta urbana
+                styles: [{ color: '#209cee', opacity: 0.8, weight: 6 }]
             },
             createMarker: function(i, waypoint, n) {
-                // Crear marcadores personalizados e informativos
-                if (i === 0) {
-                    return L.marker(waypoint.latLng).bindPopup("📍 Recoger aquí (Origen)");
-                } else if (i === n - 1) {
-                    return L.marker(waypoint.latLng).bindPopup("🏁 Entregar aquí (Destino)");
-                }
+                if (i === 0) return L.marker(waypoint.latLng).bindPopup("📍 Recoger aquí (Origen)");
+                if (i === n - 1) return L.marker(waypoint.latLng).bindPopup("🏁 Entregar aquí (Destino)");
             },
             routeWhileDragging: false,
             addWaypoints: false,
             fitSelectedRoutes: true
         }).addTo(mapaRepartidor);
 
-        // 5. Ajuste asíncrono para asegurar la correcta escala visual
-        setTimeout(() => { 
-            mapaRepartidor.invalidateSize(); 
-        }, 300);
+        setTimeout(() => { mapaRepartidor.invalidateSize(); }, 300);
     }
 
     function ocultarMapaRepartidor() {
@@ -441,7 +473,7 @@
         if (!listaPedidosDiv) return;
         listaPedidosDiv.innerHTML = "";
 
-        // CASO A: El repartidor ya aceptó un viaje
+        // CASO A: El repartidor ya aceptó un viaje (Muestra la foto de la mercancía)
         if (misViajes && misViajes.length > 0) {
             const viajeActivo = misViajes[0];
             
@@ -450,6 +482,7 @@
             tarjetaAmarilla.innerHTML = `
                 <h3 style="color: #bfa100; margin-top:0;">⚡ Viaje en curso (Asignado a ti)</h3>
                 <p><strong>📦 Paquete:</strong> ${viajeActivo.paquete}</p>
+                ${viajeActivo.mercancia ? `<img src="${viajeActivo.mercancia}" class="foto-mercancia" alt="Foto del paquete">` : ''}
                 <p><strong>💰 Ganancia:</strong> <span style="font-size:18px; color:#14532d; font-weight:bold;">$${viajeActivo.costo || 0}</span></p>
                 <p><strong>📍 Origen:</strong> ${viajeActivo.origen}</p>
                 <p><strong>🏁 Destino:</strong> ${viajeActivo.destino}</p>
@@ -464,7 +497,6 @@
                 entregarPedido(viajeActivo.id);
             });
 
-            // Llama a calcular y trazar el mapa calle por calle
             if(viajeActivo.origen_lat && viajeActivo.destino_lat) {
                 mostrarRutaEnMapaRepartidor(viajeActivo.origen_lat, viajeActivo.origen_lng, viajeActivo.destino_lat, viajeActivo.destino_lng);
             }
@@ -493,6 +525,7 @@
                     <span style="background:#eef9f8; padding:4px 8px; border-radius:4px; color:#00d1b2; font-weight:bold;">$${pedido.costo || 0}</span>
                 </p>
                 <p><strong>📦 Producto:</strong> ${pedido.paquete}</p>
+                ${pedido.mercancia ? `<img src="${pedido.mercancia}" class="foto-mercancia" alt="Foto del paquete">` : ''}
                 <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
                 <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
                 <button id="btnAceptar-${pedido.id}">Tomar este reparto</button>
