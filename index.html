@@ -3,59 +3,184 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plataforma de Repartos (Supabase)</title>
+    <title>Plataforma de Repartos con Auth</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h2 { color: #333; border-bottom: 2px solid #00d1b2; padding-bottom: 10px; }
+        h2 { color: #333; border-bottom: 2px solid #00d1b2; padding-bottom: 10px; margin-top: 30px; }
         label { display: block; margin: 10px 0 5px; font-weight: bold; }
-        input { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { background-color: #00d1b2; color: white; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; }
+        input, select { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #00d1b2; color: white; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; margin-bottom: 10px; }
         button:hover { background-color: #00b196; }
+        .btn-secundario { background-color: #666; }
+        .btn-secundario:hover { background-color: #444; }
         .pedido-card { border: 1px solid #ddd; background: #fafafa; padding: 15px; margin-top: 15px; border-radius: 5px; }
         .estado-solicitado { color: orange; font-weight: bold; }
+        .oculto { display: none; }
+        .user-info { background: #eef9f8; padding: 10px; border-radius: 4px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <!-- SECCIÓN CLIENTE -->
-    <h2>1. Solicitar un Repartidor (Vista Cliente)</h2>
-    <form id="formPedido">
-        <label for="origen">Dirección de Recogida (Origen):</label>
-        <input type="text" id="origen" placeholder="Ej. Calle Av. Central 123" required>
+    <!-- 1. SECCIÓN DE AUTENTICACIÓN (LOGIN / REGISTRO) -->
+    <div id="seccionAuth">
+        <h2>Iniciar Sesión / Registrarse</h2>
+        <form id="formAuth">
+            <label for="email">Correo Electrónico:</label>
+            <input type="email" id="email" placeholder="correo@ejemplo.com" required>
 
-        <label for="destino">Dirección de Entrega (Destino):</label>
-        <input type="text" id="destino" placeholder="Ej. Calle Comercio 456" required>
+            <label for="password">Contraseña (Mínimo 6 caracteres):</label>
+            <input type="password" id="password" placeholder="******" required>
 
-        <label for="paquete">¿Qué envías?:</label>
-        <input type="text" id="paquete" placeholder="Ej. Documentos, Hamburguesa, Llaves" required>
+            <label for="rol">¿Qué eres en la plataforma?:</label>
+            <select id="rol">
+                <option value="cliente">Quiero pedir envíos (Cliente)</option>
+                <option value="repartidor">Quiero trabajar entregando (Repartidor)</option>
+            </select>
 
-        <button type="submit">Solicitar Servicio</button>
-    </form>
+            <button type="button" id="btnIngresar">Iniciar Sesión</button>
+            <button type="button" id="btnRegistrar" class="btn-secundario">Crear Cuenta Nueva</button>
+        </form>
+    </div>
 
-    <!-- SECCIÓN REPARTIDOR -->
-    <h2>2. Pedidos Disponibles (Vista Repartidor en Tiempo Real)</h2>
-    <div id="listaPedidos">
-        <p>Cargando solicitudes...</p>
+    <!-- 2. CONTENIDO PRINCIPAL DE LA APP (OCULTO HASTA HACER LOGIN) -->
+    <div id="seccionApp" class="oculto">
+        <div class="user-info">
+            <div>
+                <span id="txtUsuarioLogueado">Cargando usuario...</span> 
+                (<strong id="txtRolUsuario">...</strong>)
+            </div>
+            <button id="btnCerrarSesion" style="width: auto; padding: 5px 10px; font-size: 12px; margin: 0;" class="btn-secundario">Salir</button>
+        </div>
+
+        <!-- VISTA EXCLUSIVA DEL CLIENTE -->
+        <div id="vistaCliente" class="oculto">
+            <h2>Solicitar un Repartidor</h2>
+            <form id="formPedido">
+                <label for="origen">Dirección de Recogida (Origen):</label>
+                <input type="text" id="origen" placeholder="Ej. Av. Central 123" required>
+
+                <label for="destino">Dirección de Entrega (Destino):</label>
+                <input type="text" id="destino" placeholder="Ej. Calle Comercio 456" required>
+
+                <label for="paquete">¿Qué envías?:</label>
+                <input type="text" id="paquete" placeholder="Ej. Hamburguesa, Llaves" required>
+
+                <button type="submit">Solicitar Servicio</button>
+            </form>
+        </div>
+
+        <!-- VISTA EXCLUSIVA DEL REPARTIDOR -->
+        <div id="vistaRepartidor" class="oculto">
+            <h2>Pedidos Disponibles (Tiempo Real)</h2>
+            <div id="listaPedidos">
+                <p>Buscando solicitudes en tu zona...</p>
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- Librería Oficial de Supabase desde CDN -->
+<!-- Librería de Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
-    // CONFIGURACIÓN DE TU PROYECTO (Reemplaza con tus datos de Supabase)
-    const SUPABASE_URL = "TU_SUPABASE_PROJECT_URL";
-    const SUPABASE_ANON_KEY = "TU_SUPABASE_ANON_KEY";
+    // CONFIGURACIÓN (Reemplaza con tus llaves reales)
+    const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit";
 
-    // Inicializar el cliente de Supabase
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const formPedido = document.getElementById('formPedido');
-    const listaPedidosDiv = document.getElementById('listaPedidos');
+    // Elementos del DOM
+    const seccionAuth = document.getElementById('seccionAuth');
+    const seccionApp = document.getElementById('seccionApp');
+    const vistaCliente = document.getElementById('vistaCliente');
+    const vistaRepartidor = document.getElementById('vistaRepartidor');
+    
+    let usuarioActual = null;
+    let rolActual = null;
 
-    // --- LÓGICA DEL CLIENTE: ENVIAR PEDIDO A SUPABASE ---
+    // --- ESCUCHAR CAMBIOS DE SESIÓN ---
+    // Supabase detecta automáticamente si el usuario ya estaba logueado antes
+    supabase.auth.onAuthStateChange((event, session) => {
+        if (session) {
+            usuarioActual = session.user;
+            // Guardamos el rol temporalmente usando los metadatos del usuario de Supabase
+            rolActual = usuarioActual.user_metadata.rol || 'cliente';
+            
+            mostrarPantallaApp();
+        } else {
+            usuarioActual = null;
+            rolActual = null;
+            mostrarPantallaAuth();
+        }
+    });
+
+    function mostrarPantallaApp() {
+        seccionAuth.classList.add('oculto');
+        seccionApp.classList.remove('oculto');
+        document.getElementById('txtUsuarioLogueado').innerText = usuarioActual.email;
+        document.getElementById('txtRolUsuario').innerText = rolActual.toUpperCase();
+
+        if (rolActual === 'cliente') {
+            vistaCliente.classList.remove('oculto');
+            vistaRepartidor.classList.add('oculto');
+        } else {
+            vistaRepartidor.classList.remove('oculto');
+            vistaCliente.classList.add('oculto');
+            escucharPedidosRealtime(); // Solo el repartidor activa el tiempo real
+        }
+    }
+
+    function mostrarPantallaAuth() {
+        seccionAuth.classList.remove('oculto');
+        seccionApp.classList.add('oculto');
+    }
+
+    // --- BOTÓN: CREAR CUENTA NUEVA ---
+    document.getElementById('btnRegistrar').addEventListener('click', async () => {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const rol = document.getElementById('rol').value;
+
+        if(!email || !password) return alert("Completa los campos");
+
+        const { data, error } = await supabase.auth.signUp({
+            email: email,
+            password: password,
+            options: {
+                // Guardamos el rol dentro de los metadatos del usuario
+                data: { rol: rol }
+            }
+        });
+
+        if (error) alert("Error al registrar: " + error.message);
+        else alert("¡Cuenta creada con éxito! Sesión iniciada automáticamente.");
+    });
+
+    // --- BOTÓN: INICIAR SESIÓN ---
+    document.getElementById('btnIngresar').addEventListener('click', async () => {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+
+        if(!email || !password) return alert("Completa los campos");
+
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: email,
+            password: password
+        });
+
+        if (error) alert("Error de credenciales: " + error.message);
+    });
+
+    // --- BOTÓN: CERRAR SESIÓN ---
+    document.getElementById('btnCerrarSesion').addEventListener('click', async () => {
+        await supabase.auth.signOut();
+    });
+
+
+    // --- LÓGICA DEL CLIENTE: CREAR PEDIDO ---
+    const formPedido = document.getElementById('formPedido');
     formPedido.addEventListener('submit', async (e) => {
         e.preventDefault();
 
@@ -63,40 +188,55 @@
         const destino = document.getElementById('destino').value;
         const paquete = document.getElementById('paquete').value;
 
-        // Insertar datos en la tabla 'pedidos'
-        const { data, error } = await supabase
+        const { error } = await supabase
             .from('pedidos')
             .insert([
-                { origen: origen, destino: destino, paquete: paquete, estado: 'solicitado' }
+                { 
+                    origen: origen, 
+                    destino: destino, 
+                    paquete: paquete, 
+                    estado: 'solicitado',
+                    cliente_id: usuarioActual.id // Guardamos quién lo solicitó
+                }
             ]);
 
-        if (error) {
-            console.error("Error al guardar:", error);
-            alert("Hubo un error al procesar tu solicitud.");
-        } else {
-            alert("¡Pedido solicitado con éxito!");
+        if (error) alert("Error al solicitar: " + error.message);
+        else {
+            alert("¡Pedido solicitado!");
             formPedido.reset();
-            cargarPedidos(); // Recargar la lista manualmente tras enviar
         }
     });
 
-    // --- LÓGICA DEL REPARTIDOR: LEER PEDIDOS DISPONIBLES ---
-    async function cargarPedidos() {
-        // Traer de la base de datos los pedidos que tengan estado 'solicitado'
+
+    // --- LÓGICA DEL REPARTIDOR: ESCUCHAR EN TIEMPO REAL ---
+    let canalRealtime = null;
+
+    function escucharPedidosRealtime() {
+        refrescarListaVisual();
+
+        if (canalRealtime) return; // Evita duplicar suscripciones
+
+        canalRealtime = supabase
+            .channel('cambios-pedidos')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
+                refrescarListaVisual();
+            })
+            .subscribe();
+    }
+
+    async function refrescarListaVisual() {
         const { data: pedidos, error } = await supabase
             .from('pedidos')
             .select('*')
             .eq('estado', 'solicitado');
 
-        if (error) {
-            console.error("Error al leer:", error);
-            return;
-        }
+        if (error) return;
 
+        const listaPedidosDiv = document.getElementById('listaPedidos');
         listaPedidosDiv.innerHTML = "";
 
         if (pedidos.length === 0) {
-            listaPedidosDiv.innerHTML = "<p>No hay envíos pendientes en tu zona en este momento.</p>";
+            listaPedidosDiv.innerHTML = "<p>No hay envíos pendientes en este momento.</p>";
             return;
         }
 
@@ -107,31 +247,26 @@
                 <p><strong>📦 Paquete:</strong> ${pedido.paquete}</p>
                 <p><strong>📍 Origen:</strong> ${pedido.origen}</p>
                 <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
-                <p><strong>💵 Tarifa:</strong> $${pedido.precio_base} (Comisión plataforma: $${pedido.comision})</p>
-                <p><strong>Estado:</strong> <span class="estado-solicitado">${pedido.estado.toUpperCase()}</span></p>
+                <p><strong>💵 Tarifa:</strong> $50</p>
                 <button onclick="aceptarPedido(${pedido.id})">Aceptar Pedido</button>
             `;
             listaPedidosDiv.appendChild(card);
         });
     }
 
-    // --- LÓGICA DE ACEPTAR EL PEDIDO (ACTUALIZAR ESTADO) ---
-    async function aceptarPedido(idPedido) {
-        const { data, error } = await supabase
+    // --- LÓGICA DEL REPARTIDOR: ACEPTAR PEDIDO ---
+    window.aceptarPedido = async function(idPedido) {
+        const { error } = await supabase
             .from('pedidos')
-            .update({ estado: 'en_camino' }) // Cambiamos el estado
-            .eq('id', idPedido); // Específicamente a este ID de pedido
+            .update({ 
+                estado: 'en_camino',
+                repartidor_id: usuarioActual.id // Registramos qué repartidor tomó el pedido
+            })
+            .eq('id', idPedido);
 
-        if (error) {
-            alert("Error al aceptar el pedido");
-        } else {
-            alert("¡Pedido aceptado! Ya vas en camino.");
-            cargarPedidos(); // Refrescar la lista para que desaparezca porque ya no está "solicitado"
-        }
-    }
-
-    // Ejecutar al abrir la página por primera vez
-    cargarPedidos();
+        if (error) alert("Error al aceptar el pedido");
+        else alert("¡Pedido aceptado! Ve por él.");
+    };
 </script>
 
 </body>
