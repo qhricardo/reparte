@@ -62,6 +62,21 @@
         .oculto { display: none !important; }
         .user-info { background: #eef9f8; padding: 15px; border-radius: 4px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
         .alerta-telefono { background: #fff3cd; border: 1px dashed #ffeeba; padding: 10px; border-radius: 4px; margin: 10px 0; font-size: 15px; }
+        
+        /* CONTENEDOR DE TARIFA INTERACTIVA */
+        .contenedor-cotizacion {
+            background-color: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+        .dato-cotizacion { font-size: 14px; color: #166534; }
+        .dato-cotizacion strong { display: block; font-size: 20px; color: #14532d; margin-top: 4px; }
+        .costo-resaltado { color: #00d1b2 !important; }
     </style>
 </head>
 <body>
@@ -108,7 +123,7 @@
         <button id="btnCerrarSesion" style="width: auto; padding: 8px 15px; font-size: 13px; margin: 0;" class="btn-secundario">Cerrar Sesión</button>
     </div>
 
-    <!-- PÁGINA 2: INTERFAZ DEL CLIENTE (CON MAPA INTERACTIVO) -->
+    <!-- PÁGINA 2: INTERFAZ DEL CLIENTE -->
     <div id="pantallaCliente" class="oculto">
         <h2>Panel de Clientes: Solicitar Envíos</h2>
         
@@ -119,6 +134,18 @@
         <div class="flex-botones">
             <button type="button" id="btnFijarOrigen" class="btn-mapa">📍 Fijar como Origen</button>
             <button type="button" id="btnFijarDestino" class="btn-mapa" style="background-color: #ff3860;">🏁 Fijar como Destino</button>
+        </div>
+
+        <!-- APARTADO INTERACTIVO DE DISTANCIA Y PRECIO -->
+        <div class="contenedor-cotizacion">
+            <div class="dato-cotizacion">
+                Distancia Estimada
+                <strong id="vistaDistancia">0.00 km</strong>
+            </div>
+            <div class="dato-cotizacion">
+                Costo de Envío ($25/km)
+                <strong id="vistaCosto" class="costo-resaltado">$0.00</strong>
+            </div>
         </div>
 
         <form id="formPedido">
@@ -169,10 +196,15 @@
     let mapa = null;
     let marcador = null;
     
-    // Coordenadas en tiempo real del pin actual
+    // Posición del pin móvil en tiempo real
     let latActual = -34.6037;
     let lngActual = -58.3816;
     let direccionTextoActual = ""; 
+
+    // ESTRUCTURA PARA CALCULAR LA TARIFA
+    let coordenadasOrigen = null;  // Guardará {lat, lng} al pulsar Origen
+    let coordenadasDestino = null; // Guardará {lat, lng} al pulsar Destino
+    let costoEnvioFinal = 0;
 
     const rolTemporal = localStorage.getItem('rol_seleccionado_google');
     if (rolTemporal) {
@@ -212,8 +244,6 @@
         if (rol === 'cliente') {
             pantallaCliente.classList.remove('oculto');
             pantallaRepartidor.classList.add('oculto');
-            
-            // Retrasamos un instante la carga del mapa para que el contenedor HTML ya sea visible
             setTimeout(inicializarMapa, 300);
         } else {
             pantallaRepartidor.classList.remove('oculto');
@@ -230,7 +260,7 @@
     }
 
     // =========================================================================
-    // LÓGICA DEL MAPA REPARADA
+    // LÓGICA DEL MAPA
     // =========================================================================
     function inicializarMapa() {
         if (mapa) {
@@ -252,39 +282,29 @@
     }
 
     function crearElementosMapa() {
-        // Inicializamos mapa físico
         mapa = L.map('mapa').setView([latActual, lngActual], 15);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(mapa);
 
-        // Marcador movible
         marcador = L.marker([latActual, lngActual], { draggable: true }).addTo(mapa);
         
-        // Al empezar, tomamos el valor por defecto en texto
         direccionTextoActual = `${latActual.toFixed(5)}, ${lngActual.toFixed(5)}`;
         buscarDireccionTexto(latActual, lngActual);
 
-        // EVENTO: Captura la posición apenas el usuario arrastra el marcador
         marcador.on('dragend', function () {
             const posicion = marcador.getLatLng();
             latActual = posicion.lat;
             lngActual = posicion.lng;
-            
-            // Respaldo inmediato por si falla internet
             direccionTextoActual = `${latActual.toFixed(5)}, ${lngActual.toFixed(5)}`;
-            
-            // Intenta traer la calle en texto
             buscarDireccionTexto(latActual, lngActual);
         });
 
-        // EVENTO ADICIONAL: Si el usuario hace clic directo en cualquier punto del mapa, movemos el pin ahí
         mapa.on('click', function(e) {
             latActual = e.latlng.lat;
             lngActual = e.latlng.lng;
             marcador.setLatLng([latActual, lngActual]);
-            
             direccionTextoActual = `${latActual.toFixed(5)}, ${lngActual.toFixed(5)}`;
             buscarDireccionTexto(latActual, lngActual);
         });
@@ -298,18 +318,49 @@
                 direccionTextoActual = data.display_name;
             }
         } catch (e) {
-            console.log("Servidor de nombres ocupado, usando coordenadas físicas.");
+            console.log("Servidor ocupado, usando coordenadas.");
         }
     }
 
-    // ACCIÓN DE LOS BOTONES: Ahora inyectan directamente el valor actual guardado
+    // BOTONES DE FIJAR UBICACIONES (Guardando coordenadas e iniciando cálculo)
     document.getElementById('btnFijarOrigen').addEventListener('click', () => {
         document.getElementById('origen').value = direccionTextoActual;
+        coordenadasOrigen = { lat: latActual, lng: lngActual };
+        calcularTarifaEnvio();
     });
 
     document.getElementById('btnFijarDestino').addEventListener('click', () => {
         document.getElementById('destino').value = direccionTextoActual;
+        coordenadasDestino = { lat: latActual, lng: lngActual };
+        calcularTarifaEnvio();
     });
+
+    // =========================================================================
+    // FUNCIÓN MATEMÁTICA: CALCULAR DISTANCIA Y COSTO (Haversine)
+    // =========================================================================
+    function calcularTarifaEnvio() {
+        // Necesitamos tener ambos puntos fijados para calcular
+        if (!coordenadasOrigen || !coordenadasDestino) return;
+
+        const R = 6371; // Radio del planeta Tierra en kilómetros
+        const dLat = (coordenadasDestino.lat - coordenadasOrigen.lat) * Math.PI / 180;
+        const dLng = (coordenadasDestino.lng - coordenadasOrigen.lng) * Math.PI / 180;
+        
+        const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(coordenadasOrigen.lat * Math.PI / 180) * Math.cos(coordenadasDestino.lat * Math.PI / 180) * 
+            Math.sin(dLng/2) * Math.sin(dLng/2);
+            
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const distanciaKm = R * c; // Distancia final en kilómetros reales
+
+        // Multiplicador solicitado: $25 por kilómetro
+        costoEnvioFinal = Math.round(distanciaKm * 25);
+
+        // Actualizar visualmente la pantalla del cliente
+        document.getElementById('vistaDistancia').innerText = `${distanciaKm.toFixed(2)} km`;
+        document.getElementById('vistaCosto').innerText = `$${costoEnvioFinal.toLocaleString()}`;
+    }
 
 
     // --- ACCIONES DE AUTENTICACIÓN ---
@@ -359,16 +410,18 @@
         await supabaseClient.auth.signOut();
     });
 
-    // ENVÍO DE FORMULARIO
+    // ENVÍO DE FORMULARIO (Guarda el costo calculado)
     const formPedido = document.getElementById('formPedido');
     formPedido.addEventListener('submit', async (e) => {
         e.preventDefault();
+        
         const { error } = await supabaseClient.from('pedidos').insert([
             { 
                 origen: document.getElementById('origen').value, 
                 destino: document.getElementById('destino').value, 
                 paquete: document.getElementById('paquete').value, 
                 telefono: document.getElementById('telefono').value,
+                costo: costoEnvioFinal, // Insertamos el precio del envío calculado
                 estado: 'solicitado',
                 cliente_id: usuarioActual.id
             }
@@ -377,7 +430,13 @@
         if (error) alert("Error: " + error.message);
         else { 
             alert("¡Pedido creado con éxito!");
-            formPedido.reset(); 
+            formPedido.reset();
+            // Reseteamos el casillero visual
+            document.getElementById('vistaDistancia').innerText = "0.00 km";
+            document.getElementById('vistaCosto').innerText = "$0.00";
+            coordenadasOrigen = null;
+            coordenadasDestino = null;
+            costoEnvioFinal = 0;
         }
     });
 
@@ -418,6 +477,7 @@
             tarjetaAmarilla.innerHTML = `
                 <h3 style="color: #bfa100; margin-top:0;">⚡ Viaje en curso (Asignado a ti)</h3>
                 <p><strong>📦 Paquete:</strong> ${viajeActivo.paquete}</p>
+                <p><strong>💰 Ganancia del viaje:</strong> <span style="font-size:18px; color:#14532d; font-weight:bold;">$${viajeActivo.costo || 0}</span></p>
                 <p><strong>📍 Origen:</strong> ${viajeActivo.origen}</p>
                 <p><strong>🏁 Destino:</strong> ${viajeActivo.destino}</p>
                 <div class="alerta-telefono">
@@ -447,7 +507,11 @@
             const tarjeta = document.createElement('div');
             tarjeta.className = 'tarjeta-pedido';
             tarjeta.innerHTML = `
-                <p style="margin-top: 0;"><strong>📦 Envío disponible:</strong> ${pedido.paquete}</p>
+                <p style="margin-top: 0; display:flex; justify-content:space-between; align-items:center;">
+                    <strong>📦 Envío disponible:</strong> 
+                    <span style="background:#eef9f8; padding:4px 8px; border-radius:4px; color:#00d1b2; font-weight:bold;">$${pedido.costo || 0}</span>
+                </p>
+                <p><strong>📦 Producto:</strong> ${pedido.paquete}</p>
                 <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
                 <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
                 <button id="btnAceptar-${pedido.id}">Tomar este reparto</button>
