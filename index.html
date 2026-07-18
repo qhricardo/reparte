@@ -41,6 +41,7 @@
 
             <button type="button" id="btnIngresar">Iniciar Sesión</button>
             <button type="button" id="btnRegistrar" class="btn-secundario">Crear Cuenta Nueva</button>
+            <button type="button" id="btnGoogle" style="background-color: #df4a32; color: white;">Entrar con Google</button>
         </form>
     </div>
 
@@ -69,7 +70,7 @@
 
                 <button type="submit">Solicitar Servicio</button>
             </form>
-        </div>
+        </div>        
 
         <!-- VISTA EXCLUSIVA DEL REPARTIDOR -->
         <div id="vistaRepartidor" class="oculto">
@@ -179,6 +180,29 @@
     });
 
 
+// --- BOTÓN: INICIAR SESIÓN CON GOOGLE ---
+document.getElementById('btnGoogle').addEventListener('click', async () => {
+    // Obtenemos el rol que seleccionó el usuario en el menú desplegable
+    const rol = document.getElementById('rol').value;
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            // Guardamos el rol en los metadatos para saber si es cliente o repartidor
+            queryParams: {
+                access_type: 'offline',
+                prompt: 'select_account'
+            },
+            data: { rol: rol },
+            // Redirige al usuario de vuelta a tu página tras iniciar sesión
+            redirectTo: window.location.origin + window.location.pathname 
+        }
+    });
+
+    if (error) alert("Error al conectar con Google: " + error.message);
+});
+
+    
     // --- LÓGICA DEL CLIENTE: CREAR PEDIDO ---
     const formPedido = document.getElementById('formPedido');
     formPedido.addEventListener('submit', async (e) => {
