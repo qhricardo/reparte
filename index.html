@@ -1,1 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plataforma de Repartos (Supabase)</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { color: #333; border-bottom: 2px solid #00d1b2; padding-bottom: 10px; }
+        label { display: block; margin: 10px 0 5px; font-weight: bold; }
+        input { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #00d1b2; color: white; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; }
+        button:hover { background-color: #00b196; }
+        .pedido-card { border: 1px solid #ddd; background: #fafafa; padding: 15px; margin-top: 15px; border-radius: 5px; }
+        .estado-solicitado { color: orange; font-weight: bold; }
+    </style>
+</head>
+<body>
 
+<div class="container">
+    <!-- SECCIÓN CLIENTE -->
+    <h2>1. Solicitar un Repartidor (Vista Cliente)</h2>
+    <form id="formPedido">
+        <label for="origen">Dirección de Recogida (Origen):</label>
+        <input type="text" id="origen" placeholder="Ej. Calle Av. Central 123" required>
+
+        <label for="destino">Dirección de Entrega (Destino):</label>
+        <input type="text" id="destino" placeholder="Ej. Calle Comercio 456" required>
+
+        <label for="paquete">¿Qué envías?:</label>
+        <input type="text" id="paquete" placeholder="Ej. Documentos, Hamburguesa, Llaves" required>
+
+        <button type="submit">Solicitar Servicio</button>
+    </form>
+
+    <!-- SECCIÓN REPARTIDOR -->
+    <h2>2. Pedidos Disponibles (Vista Repartidor en Tiempo Real)</h2>
+    <div id="listaPedidos">
+        <p>Cargando solicitudes...</p>
+    </div>
+</div>
+
+<!-- Librería Oficial de Supabase desde CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+    // CONFIGURACIÓN DE TU PROYECTO (Reemplaza con tus datos de Supabase)
+    const SUPABASE_URL = "TU_SUPABASE_PROJECT_URL";
+    const SUPABASE_ANON_KEY = "TU_SUPABASE_ANON_KEY";
+
+    // Inicializar el cliente de Supabase
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const formPedido = document.getElementById('formPedido');
+    const listaPedidosDiv = document.getElementById('listaPedidos');
+
+    // --- LÓGICA DEL CLIENTE: ENVIAR PEDIDO A SUPABASE ---
+    formPedido.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const origen = document.getElementById('origen').value;
+        const destino = document.getElementById('destino').value;
+        const paquete = document.getElementById('paquete').value;
+
+        // Insertar datos en la tabla 'pedidos'
+        const { data, error } = await supabase
+            .from('pedidos')
+            .insert([
+                { origen: origen, destino: destino, paquete: paquete, estado: 'solicitado' }
+            ]);
+
+        if (error) {
+            console.error("Error al guardar:", error);
+            alert("Hubo un error al procesar tu solicitud.");
+        } else {
+            alert("¡Pedido solicitado con éxito!");
+            formPedido.reset();
+            cargarPedidos(); // Recargar la lista manualmente tras enviar
+        }
+    });
+
+    // --- LÓGICA DEL REPARTIDOR: LEER PEDIDOS DISPONIBLES ---
+    async function cargarPedidos() {
+        // Traer de la base de datos los pedidos que tengan estado 'solicitado'
+        const { data: pedidos, error } = await supabase
+            .from('pedidos')
+            .select('*')
+            .eq('estado', 'solicitado');
+
+        if (error) {
+            console.error("Error al leer:", error);
+            return;
+        }
+
+        listaPedidosDiv.innerHTML = "";
+
+        if (pedidos.length === 0) {
+            listaPedidosDiv.innerHTML = "<p>No hay envíos pendientes en tu zona en este momento.</p>";
+            return;
+        }
+
+        pedidos.forEach((pedido) => {
+            const card = document.createElement('div');
+            card.className = 'pedido-card';
+            card.innerHTML = `
+                <p><strong>📦 Paquete:</strong> ${pedido.paquete}</p>
+                <p><strong>📍 Origen:</strong> ${pedido.origen}</p>
+                <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
+                <p><strong>💵 Tarifa:</strong> $${pedido.precio_base} (Comisión plataforma: $${pedido.comision})</p>
+                <p><strong>Estado:</strong> <span class="estado-solicitado">${pedido.estado.toUpperCase()}</span></p>
+                <button onclick="aceptarPedido(${pedido.id})">Aceptar Pedido</button>
+            `;
+            listaPedidosDiv.appendChild(card);
+        });
+    }
+
+    // --- LÓGICA DE ACEPTAR EL PEDIDO (ACTUALIZAR ESTADO) ---
+    async function aceptarPedido(idPedido) {
+        const { data, error } = await supabase
+            .from('pedidos')
+            .update({ estado: 'en_camino' }) // Cambiamos el estado
+            .eq('id', idPedido); // Específicamente a este ID de pedido
+
+        if (error) {
+            alert("Error al aceptar el pedido");
+        } else {
+            alert("¡Pedido aceptado! Ya vas en camino.");
+            cargarPedidos(); // Refrescar la lista para que desaparezca porque ya no está "solicitado"
+        }
+    }
+
+    // Ejecutar al abrir la página por primera vez
+    cargarPedidos();
+</script>
+
+</body>
+</html>
