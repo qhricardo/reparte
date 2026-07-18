@@ -173,25 +173,22 @@
         pantallaActiva.classList.remove('oculto');
     }
 
-    // --- ACCIÓN: BOTÓN GOOGLE ---
-    document.getElementById('btnGoogle').addEventListener('click', async () => {
-        const rolSeleccionado = document.getElementById('rol').value;
-        let targetRedirect = window.location.origin + window.location.pathname;
+   // --- ACCIÓN: BOTÓN GOOGLE ---
+document.getElementById('btnGoogle').addEventListener('click', async () => {
+    const rolSeleccionado = document.getElementById('rol').value;
+    
+    // Cambia esta dirección por tu URL de producción (ej. de GitHub Pages o tu Live Server)
+    let targetRedirect = "http://127.0.0.1:5500/index.html"; 
 
-        if (window.location.protocol === 'file:') {
-            alert("⚠️ Recuerda abrir tu proyecto mediante un servidor local (Live Server en VSCode) o desde GitHub Pages para usar el botón de Google.");
-            return;
+    await supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            queryParams: { access_type: 'offline', prompt: 'select_account' },
+            data: { rol: rolSeleccionado },
+            redirectTo: targetRedirect // Esto obliga a Google a regresar aquí y no a localhost:3000
         }
-
-        await supabaseClient.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                queryParams: { access_type: 'offline', prompt: 'select_account' },
-                data: { rol: rolSeleccionado }, // Le pasamos el rol elegido a los datos de Google
-                redirectTo: targetRedirect
-            }
-        });
     });
+});
 
     // --- ACCIÓN: REGISTRO MANUAL CON EMAIL ---
     document.getElementById('btnRegistrar').addEventListener('click', async () => {
