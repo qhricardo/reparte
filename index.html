@@ -15,6 +15,8 @@
         button:hover { background-color: #00b196; }
         .btn-secundario { background-color: #666; }
         .btn-secundario:hover { background-color: #444; }
+        .btn-exito { background-color: #23d160; }
+        .btn-exito:hover { background-color: #20bc56; }
         
         /* BOTÓN DE GOOGLE */
         .btn-google {
@@ -27,6 +29,7 @@
 
         /* DISEÑO DE LAS VISTAS */
         .pedido-card { border: 1px solid #ddd; background: #fafafa; padding: 15px; margin-top: 15px; border-radius: 5px; }
+        .pedido-activo { border: 2px solid #23d160; background: #f0fbf4; padding: 15px; margin-top: 15px; border-radius: 5px; }
         .oculto { display: none !important; }
         .user-info { background: #eef9f8; padding: 15px; border-radius: 4px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
     </style>
@@ -100,9 +103,17 @@
     <!-- PÁGINA 3: INTERFAZ DEL REPARTIDOR          -->
     <!-- ========================================== -->
     <div id="pantallaRepartidor" class="oculto">
-        <h2>Panel de Repartidores: Pedidos Disponibles</h2>
-        <div id="listaPedidos">
-            <p>Conectando con el radar de solicitudes en vivo...</p>
+        <!-- SECCIÓN 1: REPARTO ACTUAL -->
+        <div id="seccionPedidoActivo">
+            <!-- Se cargará mediante JavaScript si el repartidor tiene un viaje en proceso -->
+        </div>
+
+        <!-- SECCIÓN 2: RADAR DE PEDIDOS DISPONIBLES -->
+        <div id="seccionRadar">
+            <h2>Pedidos Disponibles en el Radar</h2>
+            <div id="listaPedidos">
+                <p>Conectando con el radar de solicitudes en vivo...</p>
+            </div>
         </div>
     </div>
 
@@ -123,7 +134,7 @@
     
     let usuarioActual = null;
 
-    // Al cargar la página, verificamos si dejamos un rol pendiente guardado en el navegador
+    // Recuperar rol de localStorage al iniciar
     const rolTemporal = localStorage.getItem('rol_seleccionado_google');
     if (rolTemporal) {
         document.getElementById('rol').value = rolTemporal;
@@ -134,24 +145,18 @@
         if (session) {
             usuarioActual = session.user;
             
-            // Recuperamos el rol del localStorage (que es el real que clickeó el usuario antes de irse a Google)
             let rolElegidoAntesDeGoogle = localStorage.getItem('rol_seleccionado_google');
             let rolGuardadoEnBaseDatos = usuarioActual.user_metadata?.rol;
-            
             let rolFinal = 'cliente';
 
-            // Si el usuario viene regresando de Google y explícitamente cambió su rol en el menú
             if (rolElegidoAntesDeGoogle && rolElegidoAntesDeGoogle !== rolGuardadoEnBaseDatos) {
                 await supabaseClient.auth.updateUser({ data: { rol: rolElegidoAntesDeGoogle } });
                 rolFinal = rolElegidoAntesDeGoogle;
             } else {
-                // Si no hay cambio reciente, respetamos el de la base de datos o el del selector actual
                 rolFinal = rolGuardadoEnBaseDatos || document.getElementById('rol').value || 'cliente';
             }
 
-            // Sincronizamos el selector visual por si acaso
             document.getElementById('rol').value = rolFinal;
-            // Limpiamos el almacenamiento temporal
             localStorage.removeItem('rol_seleccionado_google');
 
             redireccionarSegunRol(rolFinal);
@@ -188,10 +193,7 @@
     // --- ACCIÓN: BOTÓN GOOGLE ---
     document.getElementById('btnGoogle').addEventListener('click', async () => {
         const rolSeleccionado = document.getElementById('rol').value;
-        
-        // 💾 GUARDADO CRUCIAL: Guardamos el rol en el navegador antes de salir hacia Google
         localStorage.setItem('rol_seleccionado_google', rolSeleccionado);
-        
         let targetRedirect = "https://qhricardo.github.io/reparte/"; 
 
         await supabaseClient.auth.signInWithOAuth({
@@ -204,7 +206,7 @@
         });
     });
 
-    // --- ACCIÓN: REGISTRO MANUAL CON EMAIL ---
+    // --- ACCIÓN: REGISTRO MANUAL ---
     document.getElementById('btnRegistrar').addEventListener('click', async () => {
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
@@ -221,7 +223,7 @@
         else alert("¡Cuenta creada!");
     });
 
-    // --- ACCIÓN: INGRESO MANUAL CON EMAIL ---
+    // --- ACCIÓN: INGRESO MANUAL ---
     document.getElementById('btnIngresar').addEventListener('click', async () => {
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
@@ -256,7 +258,7 @@
         else { alert("¡Pedido enviado al mapa!"); formPedido.reset(); }
     });
 
-    // --- OPERACIÓN: REPARTIDOR EN TIEMPO REAL ---
+    // --- OPERACIÓN: REPARTIDOR EN TIEMPO REAL Y FLUJO DE TRABAJO ---
     let canalRealtime = null;
 
     function escucharPedidosRealtime() {
@@ -270,23 +272,59 @@
             })
             .subscribe((status) => {
                 if (status === 'CHANNEL_ERROR') {
-                    console.log("Error de conexión en tiempo real, reintentando por sondeo...");
                     setInterval(refrescarListaVisual, 5000); 
                 }
             });
     }
 
     async function refrescarListaVisual() {
-        const { data: pedidos } = await supabaseClient.from('pedidos').select('*').eq('estado', 'solicitado');
+        if (!usuarioActual) return;
+
+        // 1. Buscamos si ESTE repartidor ya tiene un pedido aceptado ('en_camino')
+        const { data: pedidosActivos } = await supabaseClient
+            .from('pedidos')
+            .select('*')
+            .eq('repartidor_id', usuarioActual.id)
+            .eq('estado', 'en_camino');
+
+        const seccionPedidoActivo = document.getElementById('seccionPedidoActivo');
+        const seccionRadar = document.getElementById('seccionRadar');
+
+        // REGLA: Si ya tiene 1 pedido en camino, bloqueamos el radar para que no agarre más
+        if (pedidosActivos && pedidosActivos.length > 0) {
+            const miPedido = pedidosActivos[0];
+            seccionRadar.classList.add('oculto'); // Oculta el mapa/radar
+            
+            seccionPedidoActivo.innerHTML = `
+                <div class="pedido-activo">
+                    <h3 style="color: #23d160; margin-top:0;">🚀 Tienes un reparto en progreso</h3>
+                    <p><strong>📦 Paquete:</strong> ${miPedido.paquete}</p>
+                    <p><strong>📍 Recoger en:</strong> ${miPedido.origen}</p>
+                    <p><strong>🏁 Entregar en:</strong> ${miPedido.destino}</p>
+                    <button class="btn-exito" onclick="entregarPedido(${miPedido.id})">✔ Marcar como Entregado</button>
+                </div>
+            `;
+            return; // Detiene la ejecución aquí para que no cargue la lista general
+        }
+
+        // 2. Si NO tiene pedidos activos, limpiamos la zona activa y mostramos el radar de disponibles
+        seccionPedidoActivo.innerHTML = "";
+        seccionRadar.classList.remove('oculto');
+
+        const { data: pedidosDisponibles } = await supabaseClient
+            .from('pedidos')
+            .select('*')
+            .eq('estado', 'solicitado');
+
         const listaPedidosDiv = document.getElementById('listaPedidos');
         listaPedidosDiv.innerHTML = "";
 
-        if (!pedidos || pedidos.length === 0) {
+        if (!pedidosDisponibles || pedidosDisponibles.length === 0) {
             listaPedidosDiv.innerHTML = "<p>No hay envíos pendientes por ahora.</p>";
             return;
         }
 
-        pedidos.forEach((pedido) => {
+        pedidosDisponibles.forEach((pedido) => {
             const card = document.createElement('div');
             card.className = 'pedido-card';
             card.innerHTML = `
@@ -299,13 +337,32 @@
         });
     }
 
+    // ACCIÓN: El repartidor acepta el pedido
     window.aceptarPedido = async function(idPedido) {
         const { error } = await supabaseClient.from('pedidos')
             .update({ estado: 'en_camino', repartidor_id: usuarioActual.id })
             .eq('id', idPedido);
 
-        if (error) alert("Error al asignar pedido.");
-        else alert("¡Entendido! Pedido asignado a tu cuenta.");
+        if (error) {
+            alert("Error al asignar pedido.");
+        } else {
+            alert("¡Pedido asignado! Dirígete a recoger el paquete.");
+            refrescarListaVisual(); // Refresca inmediatamente para ocultar el radar y mostrar el viaje
+        }
+    };
+
+    // ACCIÓN: El repartidor termina la entrega actual y queda libre para otro
+    window.entregarPedido = async function(idPedido) {
+        const { error } = await supabaseClient.from('pedidos')
+            .update({ estado: 'entregado' })
+            .eq('id', idPedido);
+
+        if (error) {
+            alert("Error al finalizar la entrega.");
+        } else {
+            alert("¡Excelente trabajo! Pedido completado. Volviendo al radar.");
+            refrescarListaVisual(); // Vuelve a abrir el radar de pedidos disponibles automáticamente
+        }
     };
 </script>
 </body>
