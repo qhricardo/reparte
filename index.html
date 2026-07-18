@@ -68,7 +68,7 @@
         </form>
     </div>
 
-    <!-- BARRA DE USUARIO (Se muestra arriba al iniciar sesión) -->
+    <!-- BARRA DE USUARIO -->
     <div id="barraUsuario" class="user-info oculto">
         <div>
             <span id="txtUsuarioLogueado">...</span><br>
@@ -108,7 +108,6 @@
 
 </div>
 
-<!-- Carga de la API de Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
@@ -117,7 +116,6 @@
 
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Capturar las 3 pantallas principales
     const pantallaAuth = document.getElementById('pantallaAuth');
     const pantallaCliente = document.getElementById('pantallaCliente');
     const pantallaRepartidor = document.getElementById('pantallaRepartidor');
@@ -125,24 +123,36 @@
     
     let usuarioActual = null;
 
-   // --- ENRUTADOR AUTOMÁTICO AL CAMBIAR DE ESTADO (GOOGLE O EMAIL) ---
+    // Al cargar la página, verificamos si dejamos un rol pendiente guardado en el navegador
+    const rolTemporal = localStorage.getItem('rol_seleccionado_google');
+    if (rolTemporal) {
+        document.getElementById('rol').value = rolTemporal;
+    }
+
+    // --- ENRUTADOR AUTOMÁTICO AL CAMBIAR DE ESTADO ---
     supabaseClient.auth.onAuthStateChange(async (event, session) => {
         if (session) {
             usuarioActual = session.user;
             
-            // 1. Miramos qué rol seleccionó el usuario en el menú desplegable JUSTO AHORA
-            let rolSeleccionado = document.getElementById('rol').value;
-            let rolGuardado = usuarioActual.user_metadata.rol;
+            // Recuperamos el rol del localStorage (que es el real que clickeó el usuario antes de irse a Google)
+            let rolElegidoAntesDeGoogle = localStorage.getItem('rol_seleccionado_google');
+            let rolGuardadoEnBaseDatos = usuarioActual.user_metadata?.rol;
             
-            // 2. Si el rol del menú es diferente al que tenía guardado en Supabase,
-            // lo actualizamos en tiempo real para que no se quede "atrapado" en un rol viejo.
-            if (rolSeleccionado && rolSeleccionado !== rolGuardado) {
-                await supabaseClient.auth.updateUser({ data: { rol: rolSeleccionado } });
-                rolGuardado = rolSeleccionado;
+            let rolFinal = 'cliente';
+
+            // Si el usuario viene regresando de Google y explícitamente cambió su rol en el menú
+            if (rolElegidoAntesDeGoogle && rolElegidoAntesDeGoogle !== rolGuardadoEnBaseDatos) {
+                await supabaseClient.auth.updateUser({ data: { rol: rolElegidoAntesDeGoogle } });
+                rolFinal = rolElegidoAntesDeGoogle;
+            } else {
+                // Si no hay cambio reciente, respetamos el de la base de datos o el del selector actual
+                rolFinal = rolGuardadoEnBaseDatos || document.getElementById('rol').value || 'cliente';
             }
-            
-            // 3. Si por alguna razón entra automáticamente sin tocar el menú, usa el que ya tenía
-            let rolFinal = rolGuardado || rolSeleccionado || 'cliente';
+
+            // Sincronizamos el selector visual por si acaso
+            document.getElementById('rol').value = rolFinal;
+            // Limpiamos el almacenamiento temporal
+            localStorage.removeItem('rol_seleccionado_google');
 
             redireccionarSegunRol(rolFinal);
         } else {
@@ -152,7 +162,6 @@
         }
     });
 
-    // Función encargada de apagar unas páginas y encender otra
     function redireccionarSegunRol(rol) {
         pantallaAuth.classList.add('oculto');
         barraUsuario.classList.remove('oculto');
@@ -165,7 +174,7 @@
         } else {
             pantallaRepartidor.classList.remove('oculto');
             pantallaCliente.classList.add('oculto');
-            escucharPedidosRealtime(); // Activa el radar si es repartidor
+            escucharPedidosRealtime();
         }
     }
 
@@ -176,22 +185,24 @@
         pantallaActiva.classList.remove('oculto');
     }
 
-   // --- ACCIÓN: BOTÓN GOOGLE ---
-document.getElementById('btnGoogle').addEventListener('click', async () => {
-    const rolSeleccionado = document.getElementById('rol').value;
-    
-    // Cambia esta dirección por tu URL de producción (ej. de GitHub Pages o tu Live Server)
-    let targetRedirect = "https://qhricardo.github.io/reparte/"; 
+    // --- ACCIÓN: BOTÓN GOOGLE ---
+    document.getElementById('btnGoogle').addEventListener('click', async () => {
+        const rolSeleccionado = document.getElementById('rol').value;
+        
+        // 💾 GUARDADO CRUCIAL: Guardamos el rol en el navegador antes de salir hacia Google
+        localStorage.setItem('rol_seleccionado_google', rolSeleccionado);
+        
+        let targetRedirect = "https://qhricardo.github.io/reparte/"; 
 
-    await supabaseClient.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-            queryParams: { access_type: 'offline', prompt: 'select_account' },
-            data: { rol: rolSeleccionado },
-            redirectTo: targetRedirect // Esto obliga a Google a regresar aquí y no a localhost:3000
-        }
+        await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                queryParams: { access_type: 'offline', prompt: 'select_account' },
+                data: { rol: rolSeleccionado },
+                redirectTo: targetRedirect
+            }
+        });
     });
-});
 
     // --- ACCIÓN: REGISTRO MANUAL CON EMAIL ---
     document.getElementById('btnRegistrar').addEventListener('click', async () => {
@@ -223,6 +234,7 @@ document.getElementById('btnGoogle').addEventListener('click', async () => {
 
     // --- ACCIÓN: SALIR ---
     document.getElementById('btnCerrarSesion').addEventListener('click', async () => {
+        localStorage.removeItem('rol_seleccionado_google');
         await supabaseClient.auth.signOut();
     });
 
@@ -245,27 +257,24 @@ document.getElementById('btnGoogle').addEventListener('click', async () => {
     });
 
     // --- OPERACIÓN: REPARTIDOR EN TIEMPO REAL ---
-   let canalRealtime = null;
+    let canalRealtime = null;
 
-function escucharPedidosRealtime() {
-    refrescarListaVisual();
+    function escucharPedidosRealtime() {
+        refrescarListaVisual();
+        if (canalRealtime) return;
 
-    if (canalRealtime) return;
-
-    // Forzamos la conexión limpia a la base de datos pública en internet
-    canalRealtime = supabaseClient
-        .channel('public:pedidos') 
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
-            refrescarListaVisual();
-        })
-        .subscribe((status) => {
-            if (status === 'CHANNEL_ERROR') {
-                console.log("Error de conexión en tiempo real, reintentando por sondeo...");
-                // Alternativa por si el cortafuegos de tu red bloquea WebSockets
-                setInterval(refrescarListaVisual, 5000); 
-            }
-        });
-}
+        canalRealtime = supabaseClient
+            .channel('public:pedidos') 
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
+                refrescarListaVisual();
+            })
+            .subscribe((status) => {
+                if (status === 'CHANNEL_ERROR') {
+                    console.log("Error de conexión en tiempo real, reintentando por sondeo...");
+                    setInterval(refrescarListaVisual, 5000); 
+                }
+            });
+    }
 
     async function refrescarListaVisual() {
         const { data: pedidos } = await supabaseClient.from('pedidos').select('*').eq('estado', 'solicitado');
