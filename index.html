@@ -14,6 +14,35 @@
         button:hover { background-color: #00b196; }
         .btn-secundario { background-color: #666; }
         .btn-secundario:hover { background-color: #444; }
+        
+        /* BOTÓN DE GOOGLE ESTILO OFICIAL */
+        .btn-google {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #ffffff;
+            color: #1f1f1f;
+            border: 1px solid #747775;
+            border-radius: 4px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: "Roboto", arial, sans-serif;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            margin-top: 15px;
+        }
+        .btn-google:hover {
+            background-color: #f8fafd;
+            box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+        }
+        .btn-google svg {
+            width: 18px;
+            height: 18px;
+            margin-right: 10px;
+        }
+
         .pedido-card { border: 1px solid #ddd; background: #fafafa; padding: 15px; margin-top: 15px; border-radius: 5px; }
         .estado-solicitado { color: orange; font-weight: bold; }
         .oculto { display: none; }
@@ -41,7 +70,17 @@
 
             <button type="button" id="btnIngresar">Iniciar Sesión</button>
             <button type="button" id="btnRegistrar" class="btn-secundario">Crear Cuenta Nueva</button>
-            <button type="button" id="btnGoogle" style="background-color: #df4a32; color: white;">Entrar con Google</button>
+            
+            <!-- BOTÓN CON LOGO Y COLORES OFICIALES DE GOOGLE -->
+            <button type="button" id="btnGoogle" class="btn-google">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.5 24c0-1.55-.15-3.24-.47-4.77H24v9.03h12.75c-.55 2.87-2.22 5.29-4.72 6.96v5.78h7.63c4.46-4.1 7.04-10.15 7.04-17z"/>
+                    <path fill="#FBBC05" d="M10.54 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.98-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.63-5.78c-2.11 1.42-4.81 2.3-8.26 2.3-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+                Continuar con Google
+            </button>
         </form>
     </div>
 
@@ -86,7 +125,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
-    // CONFIGURACIÓN (Reemplaza con tus llaves reales)
+    // CONFIGURACIÓN
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit";
 
@@ -102,13 +141,10 @@
     let rolActual = null;
 
     // --- ESCUCHAR CAMBIOS DE SESIÓN ---
-    // Supabase detecta automáticamente si el usuario ya estaba logueado antes
     supabase.auth.onAuthStateChange((event, session) => {
         if (session) {
             usuarioActual = session.user;
-            // Guardamos el rol temporalmente usando los metadatos del usuario de Supabase
             rolActual = usuarioActual.user_metadata.rol || 'cliente';
-            
             mostrarPantallaApp();
         } else {
             usuarioActual = null;
@@ -129,7 +165,7 @@
         } else {
             vistaRepartidor.classList.remove('oculto');
             vistaCliente.classList.add('oculto');
-            escucharPedidosRealtime(); // Solo el repartidor activa el tiempo real
+            escucharPedidosRealtime();
         }
     }
 
@@ -149,14 +185,11 @@
         const { data, error } = await supabase.auth.signUp({
             email: email,
             password: password,
-            options: {
-                // Guardamos el rol dentro de los metadatos del usuario
-                data: { rol: rol }
-            }
+            options: { data: { rol: rol } }
         });
 
         if (error) alert("Error al registrar: " + error.message);
-        else alert("¡Cuenta creada con éxito! Sesión iniciada automáticamente.");
+        else alert("¡Cuenta creada con éxito!");
     });
 
     // --- BOTÓN: INICIAR SESIÓN ---
@@ -180,27 +213,32 @@
     });
 
 
-// --- BOTÓN: INICIAR SESIÓN CON GOOGLE ---
-document.getElementById('btnGoogle').addEventListener('click', async () => {
-    // Obtenemos el rol que seleccionó el usuario en el menú desplegable
-    const rol = document.getElementById('rol').value;
+    // --- BOTÓN: INICIAR SESIÓN CON GOOGLE (CORREGIDO) ---
+    document.getElementById('btnGoogle').addEventListener('click', async () => {
+        const rol = document.getElementById('rol').value;
 
-    const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-            // Guardamos el rol en los metadatos para saber si es cliente o repartidor
-            queryParams: {
-                access_type: 'offline',
-                prompt: 'select_account'
-            },
-            data: { rol: rol },
-            // Redirige al usuario de vuelta a tu página tras iniciar sesión
-            redirectTo: window.location.origin + window.location.pathname 
+        // Validamos si estás abriendo el archivo localmente como file://
+        let targetRedirect = window.location.origin + window.location.pathname;
+        if (window.location.protocol === 'file:') {
+            alert("⚠️ Alerta de desarrollo: Para probar Google Auth localmente, necesitas correr un servidor local (como Live Server en VSCode) o subir tu código a GitHub Pages. Google bloquea los accesos desde archivos directos 'file://'.");
+            // Intentamos usar localhost como fallback para que no rompa el flujo si tienes un puerto abierto
+            targetRedirect = "http://localhost:5500/index.html"; 
         }
-    });
 
-    if (error) alert("Error al conectar con Google: " + error.message);
-});
+        const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                queryParams: {
+                    access_type: 'offline',
+                    prompt: 'select_account'
+                },
+                data: { rol: rol },
+                redirectTo: targetRedirect
+            }
+        });
+
+        if (error) alert("Error al conectar con Google: " + error.message);
+    });
 
     
     // --- LÓGICA DEL CLIENTE: CREAR PEDIDO ---
@@ -220,7 +258,7 @@ document.getElementById('btnGoogle').addEventListener('click', async () => {
                     destino: destino, 
                     paquete: paquete, 
                     estado: 'solicitado',
-                    cliente_id: usuarioActual.id // Guardamos quién lo solicitó
+                    cliente_id: usuarioActual.id
                 }
             ]);
 
@@ -231,14 +269,13 @@ document.getElementById('btnGoogle').addEventListener('click', async () => {
         }
     });
 
-
     // --- LÓGICA DEL REPARTIDOR: ESCUCHAR EN TIEMPO REAL ---
     let canalRealtime = null;
 
     function escucharPedidosRealtime() {
         refrescarListaVisual();
 
-        if (canalRealtime) return; // Evita duplicar suscripciones
+        if (canalRealtime) return;
 
         canalRealtime = supabase
             .channel('cambios-pedidos')
@@ -284,7 +321,7 @@ document.getElementById('btnGoogle').addEventListener('click', async () => {
             .from('pedidos')
             .update({ 
                 estado: 'en_camino',
-                repartidor_id: usuarioActual.id // Registramos qué repartidor tomó el pedido
+                repartidor_id: usuarioActual.id
             })
             .eq('id', idPedido);
 
