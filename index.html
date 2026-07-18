@@ -125,23 +125,26 @@
     
     let usuarioActual = null;
 
-    // --- ENRUTADOR AUTOMÁTICO AL CAMBIAR DE ESTADO (GOOGLE O EMAIL) ---
-    supabaseClient.auth.onAuthStateChange((event, session) => {
+   // --- ENRUTADOR AUTOMÁTICO AL CAMBIAR DE ESTADO (GOOGLE O EMAIL) ---
+    supabaseClient.auth.onAuthStateChange(async (event, session) => {
         if (session) {
             usuarioActual = session.user;
             
-            // 🚨 AQUÍ ESTÁ EL TRUCO: Si el usuario entró con Google, primero intentamos leer
-            // el rol que guardó en sus metadatos. Si es la primera vez o no existía, le asignamos
-            // el rol que dejó seleccionado en el menú desplegable del formulario.
-            let rolAsignado = usuarioActual.user_metadata.rol;
+            // 1. Miramos qué rol seleccionó el usuario en el menú desplegable JUSTO AHORA
+            let rolSeleccionado = document.getElementById('rol').value;
+            let rolGuardado = usuarioActual.user_metadata.rol;
             
-            if (!rolAsignado) {
-                rolAsignado = document.getElementById('rol').value;
-                // Guardamos el rol en la sesión para que lo recuerde la próxima vez
-                supabaseClient.auth.updateUser({ data: { rol: rolAsignado } });
+            // 2. Si el rol del menú es diferente al que tenía guardado en Supabase,
+            // lo actualizamos en tiempo real para que no se quede "atrapado" en un rol viejo.
+            if (rolSeleccionado && rolSeleccionado !== rolGuardado) {
+                await supabaseClient.auth.updateUser({ data: { rol: rolSeleccionado } });
+                rolGuardado = rolSeleccionado;
             }
+            
+            // 3. Si por alguna razón entra automáticamente sin tocar el menú, usa el que ya tenía
+            let rolFinal = rolGuardado || rolSeleccionado || 'cliente';
 
-            redireccionarSegunRol(rolAsignado);
+            redireccionarSegunRol(rolFinal);
         } else {
             usuarioActual = null;
             mostrarSoloPantalla(pantallaAuth);
