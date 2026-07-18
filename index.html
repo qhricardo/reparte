@@ -29,17 +29,15 @@
         .btn-google:hover { background-color: #f8fafd; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
         .btn-google svg { width: 18px; height: 18px; margin-right: 10px; }
 
-        /* TARJETAS DE PEDIDOS (REDiseñadas) */
+        /* TARJETAS DE PEDIDOS */
         .lista-tarjetas { display: grid; gap: 15px; margin-top: 15px; }
         
-        /* Estado 1: Disponible (Gris/Blanco elegante) */
         .tarjeta-pedido { 
             border-left: 5px solid #00d1b2; background: #ffffff; padding: 18px; 
             border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             transition: all 0.3s ease;
         }
         
-        /* Estado 2: En camino / Tomado (Cambia a Amarillo automáticamente) */
         .tarjeta-pedido.tomado { 
             border-left: 5px solid #ffdd57; 
             background: #fffdf3; 
@@ -54,9 +52,7 @@
 
 <div class="container">
 
-    <!-- ========================================== -->
-    <!-- PÁGINA 1: PANTALLA DE INICIO / AUTH        -->
-    <!-- ========================================== -->
+    <!-- PÁGINA 1: PANTALLA DE INICIO / AUTH -->
     <div id="pantallaAuth">
         <h2>Iniciar Sesión / Registrarse</h2>
         <form id="formAuth" onsubmit="return false;">
@@ -96,9 +92,7 @@
         <button id="btnCerrarSesion" style="width: auto; padding: 8px 15px; font-size: 13px; margin: 0;" class="btn-secundario">Cerrar Sesión</button>
     </div>
 
-    <!-- ========================================== -->
-    <!-- PÁGINA 2: INTERFAZ DEL CLIENTE             -->
-    <!-- ========================================== -->
+    <!-- PÁGINA 2: INTERFAZ DEL CLIENTE -->
     <div id="pantallaCliente" class="oculto">
         <h2>Panel de Clientes: Solicitar Envíos</h2>
         <form id="formPedido">
@@ -115,13 +109,11 @@
         </form>
     </div>        
 
-    <!-- ========================================== -->
-    <!-- PÁGINA 3: INTERFAZ DEL REPARTIDOR          -->
-    <!-- ========================================== -->
+    <!-- PÁGINA 3: INTERFAZ DEL REPARTIDOR -->
     <div id="pantallaRepartidor" class="oculto">
         <h2>Panel de Envíos Activos</h2>
         <div id="listaPedidos" class="lista-tarjetas">
-            <p>Sincronizando radar en tiempo real...</p>
+            <p>Sincronizando radar...</p>
         </div>
     </div>
 
@@ -258,37 +250,44 @@
     });
 
     // =========================================================================
-    // NUEVA LÓGICA DE RADAR REACTIVO Y TARJETAS EN TIEMPO REAL
+    // ESCUCHA REALTIME + RESPUESTA INMEDIATA HÍBRIDA
     // =========================================================================
     let canalRealtime = null;
 
     function escucharPedidosRealtime() {
-        refrescarListaVisual(); // Carga inicial
-        if (canalRealtime) return;
-
-        // Oímos cualquier cambio en la tabla de pedidos y repintamos automáticamente
-        canalRealtime = supabaseClient
-            .channel('public:pedidos') 
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
-                refrescarListaVisual();
-            })
-            .subscribe();
+        refrescarListaVisual(); // Carga de seguridad inicial
+        
+        if (!canalRealtime) {
+            canalRealtime = supabaseClient
+                .channel('cambios-pedidos') 
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, (payload) => {
+                    console.log("Cambio en tiempo real detectado:", payload);
+                    refrescarListaVisual();
+                })
+                .subscribe((status) => {
+                    console.log("Estado del canal de Supabase:", status);
+                });
+        }
     }
 
     async function refrescarListaVisual() {
         if (!usuarioActual) return;
 
-        // 1. Validamos si este repartidor ya tiene un viaje activo guardado en Supabase
-        const { data: misViajes } = await supabaseClient
+        // Buscamos si el repartidor ya tiene algo en camino
+        const { data: misViajes, error: errViajes } = await supabaseClient
             .from('pedidos')
             .select('*')
             .eq('repartidor_id', usuarioActual.id)
             .eq('estado', 'en_camino');
 
+        if (errViajes) console.error("Error cargando tus viajes:", errViajes);
+
         const listaPedidosDiv = document.getElementById('listaPedidos');
+        if (!listaPedidosDiv) return;
+        
         listaPedidosDiv.innerHTML = "";
 
-        // CASO A: El repartidor TIENE un pedido en proceso -> Mostrar tarjeta Amarilla fijada
+        // CASO A: Pedido tomado -> Tarjeta Amarilla inmediata
         if (misViajes && misViajes.length > 0) {
             const viajeActivo = misViajes[0];
             
@@ -299,24 +298,30 @@
                 <p><strong>📦 Paquete:</strong> ${viajeActivo.paquete}</p>
                 <p><strong>📍 Origen:</strong> ${viajeActivo.origen}</p>
                 <p><strong>🏁 Destino:</strong> ${viajeActivo.destino}</p>
-                <button class="btn-advertencia" onclick="entregarPedido(${viajeActivo.id})">Marcar como entregado</button>
+                <button class="btn-advertencia" id="btnEntregar-${viajeActivo.id}">Marcar como entregado</button>
             `;
             listaPedidosDiv.appendChild(tarjetaAmarilla);
-            return; // Bloqueamos la carga de otros pedidos para respetar la regla de "1 a la vez"
+            
+            // Asignar el click directamente usando el DOM real
+            document.getElementById(`btnEntregar-${viajeActivo.id}`).addEventListener('click', () => {
+                entregarPedido(viajeActivo.id);
+            });
+            return; 
         }
 
-        // CASO B: El repartidor está libre -> Mostrar radar de tarjetas disponibles
-        const { data: disponibles } = await supabaseClient
+        // CASO B: Mostrar pedidos solicitados en general
+        const { data: disponibles, error: errDisp } = await supabaseClient
             .from('pedidos')
             .select('*')
             .eq('estado', 'solicitado');
+
+        if (errDisp) console.error("Error cargando disponibles:", errDisp);
 
         if (!disponibles || disponibles.length === 0) {
             listaPedidosDiv.innerHTML = "<p style='color: #666; text-align: center; padding: 20px;'>No hay pedidos en el radar por el momento...</p>";
             return;
         }
 
-        // Renderizar las solicitudes como tarjetas individuales limpias
         disponibles.forEach((pedido) => {
             const tarjeta = document.createElement('div');
             tarjeta.className = 'tarjeta-pedido';
@@ -324,34 +329,47 @@
                 <p style="margin-top: 0;"><strong>📦 Envío disponible:</strong> ${pedido.paquete}</p>
                 <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
                 <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
-                <button onclick="aceptarPedido(${pedido.id})">Tomar este reparto</button>
+                <button id="btnAceptar-${pedido.id}">Tomar este reparto</button>
             `;
             listaPedidosDiv.appendChild(tarjeta);
+
+            // Vinculamos el click al elemento directamente del DOM para que responda al 100%
+            document.getElementById(`btnAceptar-${pedido.id}`).addEventListener('click', () => {
+                aceptarPedido(pedido.id);
+            });
         });
     }
 
-    // ACCIÓN: Tomar reparto (Pasa a amarillo al instante)
+    // ACCIÓN CORREGIDA: Fuerza actualización instantánea tras actualizar la base de datos
     window.aceptarPedido = async function(idPedido) {
+        console.log("Intentando tomar el pedido número:", idPedido);
+        
         const { error } = await supabaseClient.from('pedidos')
             .update({ estado: 'en_camino', repartidor_id: usuarioActual.id })
             .eq('id', idPedido);
 
         if (error) {
-            alert("Este pedido ya no está disponible.");
+            alert("No se pudo asignar el pedido: " + error.message);
+        } else {
+            // Si el tiempo real de Supabase falla en el navegador, esta línea fuerza que cambie a amarillo ya
+            refrescarListaVisual(); 
         }
-        // Nota: No hace falta refrescar manualmente; el webhook de Supabase Realtime lo detecta y cambia la tarjeta a amarillo solo.
     };
 
-    // ACCIÓN: Entregar (Desaparece del mapa al instante)
+    // ACCIÓN CORREGIDA: Fuerza la desaparición visual inmediata tras marcar entregado
     window.entregarPedido = async function(idPedido) {
+        console.log("Finalizando entrega del pedido:", idPedido);
+
         const { error } = await supabaseClient.from('pedidos')
             .update({ estado: 'entregado' })
             .eq('id', idPedido);
 
         if (error) {
-            alert("Error al procesar la entrega.");
+            alert("Error al procesar la entrega: " + error.message);
+        } else {
+            // Fuerza a la pantalla a limpiar la tarjeta amarilla y encender el radar al instante
+            refrescarListaVisual(); 
         }
-        // Nota: Realtime detecta que cambió a 'entregado', limpia el espacio y te devuelve al radar automáticamente.
     };
 </script>
 </body>
