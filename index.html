@@ -3,71 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plataforma de Repartos con Auth</title>
+    <title>Plataforma de Repartos</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h2 { color: #333; border-bottom: 2px solid #00d1b2; padding-bottom: 10px; margin-top: 30px; }
-        label { display: block; margin: 10px 0 5px; font-weight: bold; }
+        h2 { color: #333; border-bottom: 2px solid #00d1b2; padding-bottom: 10px; margin-top: 10px; }
+        label { display: block; margin: 15px 0 5px; font-weight: bold; }
         input, select { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        
         button { background-color: #00d1b2; color: white; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; margin-bottom: 10px; }
         button:hover { background-color: #00b196; }
         .btn-secundario { background-color: #666; }
         .btn-secundario:hover { background-color: #444; }
         
-        /* BOTÓN DE GOOGLE ESTILO OFICIAL */
+        /* BOTÓN DE GOOGLE */
         .btn-google {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: #ffffff;
-            color: #1f1f1f;
-            border: 1px solid #747775;
-            border-radius: 4px;
-            padding: 10px 16px;
-            font-size: 14px;
-            font-weight: 500;
-            font-family: "Roboto", arial, sans-serif;
-            cursor: pointer;
-            width: 100%;
-            transition: background-color 0.2s, box-shadow 0.2s;
-            margin-top: 15px;
+            display: flex; align-items: center; justify-content: center; background-color: #ffffff; color: #1f1f1f;
+            border: 1px solid #747775; border-radius: 4px; padding: 10px 16px; font-size: 14px; font-weight: 500;
+            cursor: pointer; width: 100%; transition: background-color 0.2s; margin-top: 15px;
         }
-        .btn-google:hover {
-            background-color: #f8fafd;
-            box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
-        }
-        .btn-google svg {
-            width: 18px;
-            height: 18px;
-            margin-right: 10px;
-        }
+        .btn-google:hover { background-color: #f8fafd; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        .btn-google svg { width: 18px; height: 18px; margin-right: 10px; }
 
+        /* DISEÑO DE LAS VISTAS */
         .pedido-card { border: 1px solid #ddd; background: #fafafa; padding: 15px; margin-top: 15px; border-radius: 5px; }
-        .oculto { display: none; }
-        .user-info { background: #eef9f8; padding: 10px; border-radius: 4px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .oculto { display: none !important; }
+        .user-info { background: #eef9f8; padding: 15px; border-radius: 4px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <!-- 1. SECCIÓN DE AUTENTICACIÓN (LOGIN / REGISTRO) -->
-    <div id="seccionAuth">
+
+    <!-- ========================================== -->
+    <!-- PÁGINA 1: PANTALLA DE INICIO / AUTH        -->
+    <!-- ========================================== -->
+    <div id="pantallaAuth">
         <h2>Iniciar Sesión / Registrarse</h2>
         <form id="formAuth" onsubmit="return false;">
-            <label for="email">Correo Electrónico:</label>
-            <input type="email" id="email" placeholder="correo@ejemplo.com" required>
-
-            <label for="password">Contraseña (Mínimo 6 caracteres):</label>
-            <input type="password" id="password" placeholder="******" required>
-
-            <label for="rol">¿Qué eres en la plataforma?:</label>
+            <label for="rol">1. Selecciona tu Rol ANTES de entrar:</label>
             <select id="rol">
                 <option value="cliente">Quiero pedir envíos (Cliente)</option>
-                <option value="repartidor">Quiero trabajar entregando (Repartidor)</option>
+                <option value="repartidor">Quiero entregar paquetes (Repartidor)</option>
             </select>
 
-            <button type="button" id="btnIngresar">Iniciar Sesión</button>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+
+            <label for="email">Opcional: Entrar con Correo</label>
+            <input type="email" id="email" placeholder="correo@ejemplo.com">
+            <input type="password" id="password" placeholder="Tu contraseña">
+
+            <button type="button" id="btnIngresar">Entrar con Correo</button>
             <button type="button" id="btnRegistrar" class="btn-secundario">Crear Cuenta Nueva</button>
             
             <button type="button" id="btnGoogle" class="btn-google">
@@ -82,214 +68,199 @@
         </form>
     </div>
 
-    <!-- 2. CONTENIDO PRINCIPAL DE LA APP -->
-    <div id="seccionApp" class="oculto">
-        <div class="user-info">
-            <div>
-                <span id="txtUsuarioLogueado">Cargando usuario...</span> 
-                (<strong id="txtRolUsuario">...</strong>)
-            </div>
-            <button id="btnCerrarSesion" style="width: auto; padding: 5px 10px; font-size: 12px; margin: 0;" class="btn-secundario">Salir</button>
+    <!-- BARRA DE USUARIO (Se muestra arriba al iniciar sesión) -->
+    <div id="barraUsuario" class="user-info oculto">
+        <div>
+            <span id="txtUsuarioLogueado">...</span><br>
+            Rol Activo: <strong id="txtRolUsuario" style="color: #00d1b2;">...</strong>
         </div>
+        <button id="btnCerrarSesion" style="width: auto; padding: 8px 15px; font-size: 13px; margin: 0;" class="btn-secundario">Cerrar Sesión</button>
+    </div>
 
-        <!-- VISTA EXCLUSIVA DEL CLIENTE -->
-        <div id="vistaCliente" class="oculto">
-            <h2>Solicitar un Repartidor</h2>
-            <form id="formPedido">
-                <label for="origen">Dirección de Recogida (Origen):</label>
-                <input type="text" id="origen" placeholder="Ej. Av. Central 123" required>
+    <!-- ========================================== -->
+    <!-- PÁGINA 2: INTERFAZ DEL CLIENTE             -->
+    <!-- ========================================== -->
+    <div id="pantallaCliente" class="oculto">
+        <h2>Panel de Clientes: Solicitar Envíos</h2>
+        <form id="formPedido">
+            <label for="origen">¿Dónde lo recogemos? (Origen):</label>
+            <input type="text" id="origen" placeholder="Dirección completa" required>
 
-                <label for="destino">Dirección de Entrega (Destino):</label>
-                <input type="text" id="destino" placeholder="Ej. Calle Comercio 456" required>
+            <label for="destino">¿A dónde lo llevamos? (Destino):</label>
+            <input type="text" id="destino" placeholder="Dirección completa" required>
 
-                <label for="paquete">¿Qué envías?:</label>
-                <input type="text" id="paquete" placeholder="Ej. Hamburguesa, Llaves" required>
+            <label for="paquete">¿Qué mercancía envías?:</label>
+            <input type="text" id="paquete" placeholder="Ej. Documentos, Comida, Llaves" required>
 
-                <button type="submit">Solicitar Servicio</button>
-            </form>
-        </div>        
+            <button type="submit">Publicar Pedido de Entrega</button>
+        </form>
+    </div>        
 
-        <!-- VISTA EXCLUSIVA DEL REPARTIDOR -->
-        <div id="vistaRepartidor" class="oculto">
-            <h2>Pedidos Disponibles (Tiempo Real)</h2>
-            <div id="listaPedidos">
-                <p>Buscando solicitudes en tu zona...</p>
-            </div>
+    <!-- ========================================== -->
+    <!-- PÁGINA 3: INTERFAZ DEL REPARTIDOR          -->
+    <!-- ========================================== -->
+    <div id="pantallaRepartidor" class="oculto">
+        <h2>Panel de Repartidores: Pedidos Disponibles</h2>
+        <div id="listaPedidos">
+            <p>Conectando con el radar de solicitudes en vivo...</p>
         </div>
     </div>
+
 </div>
 
-<!-- Librería de Supabase -->
+<!-- Carga de la API de Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
-    // CONFIGURACIÓN (Corregido el método de creación de cliente)
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit";
 
-    // CORRECCIÓN AQUÍ: Se usa window.supabase.createClient para evitar conflictos de variables
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Elementos del DOM
-    const seccionAuth = document.getElementById('seccionAuth');
-    const seccionApp = document.getElementById('seccionApp');
-    const vistaCliente = document.getElementById('vistaCliente');
-    const vistaRepartidor = document.getElementById('vistaRepartidor');
+    // Capturar las 3 pantallas principales
+    const pantallaAuth = document.getElementById('pantallaAuth');
+    const pantallaCliente = document.getElementById('pantallaCliente');
+    const pantallaRepartidor = document.getElementById('pantallaRepartidor');
+    const barraUsuario = document.getElementById('barraUsuario');
     
     let usuarioActual = null;
-    let rolActual = null;
 
-    // --- ESCUCHAR CAMBIOS DE SESIÓN ---
+    // --- ENRUTADOR AUTOMÁTICO AL CAMBIAR DE ESTADO (GOOGLE O EMAIL) ---
     supabaseClient.auth.onAuthStateChange((event, session) => {
         if (session) {
             usuarioActual = session.user;
-            rolActual = usuarioActual.user_metadata.rol || 'cliente';
-            mostrarPantallaApp();
+            
+            // 🚨 AQUÍ ESTÁ EL TRUCO: Si el usuario entró con Google, primero intentamos leer
+            // el rol que guardó en sus metadatos. Si es la primera vez o no existía, le asignamos
+            // el rol que dejó seleccionado en el menú desplegable del formulario.
+            let rolAsignado = usuarioActual.user_metadata.rol;
+            
+            if (!rolAsignado) {
+                rolAsignado = document.getElementById('rol').value;
+                // Guardamos el rol en la sesión para que lo recuerde la próxima vez
+                supabaseClient.auth.updateUser({ data: { rol: rolAsignado } });
+            }
+
+            redireccionarSegunRol(rolAsignado);
         } else {
             usuarioActual = null;
-            rolActual = null;
-            mostrarPantallaAuth();
+            mostrarSoloPantalla(pantallaAuth);
+            barraUsuario.classList.add('oculto');
         }
     });
 
-    function mostrarPantallaApp() {
-        seccionAuth.classList.add('oculto');
-        seccionApp.classList.remove('oculto');
-        document.getElementById('txtUsuarioLogueado').innerText = usuarioActual.email;
-        document.getElementById('txtRolUsuario').innerText = rolActual.toUpperCase();
+    // Función encargada de apagar unas páginas y encender otra
+    function redireccionarSegunRol(rol) {
+        pantallaAuth.classList.add('oculto');
+        barraUsuario.classList.remove('oculto');
+        document.getElementById('txtUsuarioLogueado').innerText = usuarioActual.email || "Usuario de Google";
+        document.getElementById('txtRolUsuario').innerText = rol.toUpperCase();
 
-        if (rolActual === 'cliente') {
-            vistaCliente.classList.remove('oculto');
-            vistaRepartidor.classList.add('oculto');
+        if (rol === 'cliente') {
+            pantallaCliente.classList.remove('oculto');
+            pantallaRepartidor.classList.add('oculto');
         } else {
-            vistaRepartidor.classList.remove('oculto');
-            vistaCliente.classList.add('oculto');
-            escucharPedidosRealtime();
+            pantallaRepartidor.classList.remove('oculto');
+            pantallaCliente.classList.add('oculto');
+            escucharPedidosRealtime(); // Activa el radar si es repartidor
         }
     }
 
-    function mostrarPantallaAuth() {
-        seccionAuth.classList.remove('oculto');
-        seccionApp.classList.add('oculto');
+    function mostrarSoloPantalla(pantallaActiva) {
+        pantallaAuth.classList.add('oculto');
+        pantallaCliente.classList.add('oculto');
+        pantallaRepartidor.classList.add('oculto');
+        pantallaActiva.classList.remove('oculto');
     }
 
-    // --- BOTÓN: CREAR CUENTA NUEVA ---
+    // --- ACCIÓN: BOTÓN GOOGLE ---
+    document.getElementById('btnGoogle').addEventListener('click', async () => {
+        const rolSeleccionado = document.getElementById('rol').value;
+        let targetRedirect = window.location.origin + window.location.pathname;
+
+        if (window.location.protocol === 'file:') {
+            alert("⚠️ Recuerda abrir tu proyecto mediante un servidor local (Live Server en VSCode) o desde GitHub Pages para usar el botón de Google.");
+            return;
+        }
+
+        await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                queryParams: { access_type: 'offline', prompt: 'select_account' },
+                data: { rol: rolSeleccionado }, // Le pasamos el rol elegido a los datos de Google
+                redirectTo: targetRedirect
+            }
+        });
+    });
+
+    // --- ACCIÓN: REGISTRO MANUAL CON EMAIL ---
     document.getElementById('btnRegistrar').addEventListener('click', async () => {
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
-        const rol = document.getElementById('rol').value;
+        const rolSeleccionado = document.getElementById('rol').value;
 
-        if(!email || !password) return alert("Por favor ingresa correo y contraseña.");
+        if(!email || !password) return alert("Ingresa correo y contraseña.");
 
-        const { data, error } = await supabaseClient.auth.signUp({
-            email: email,
-            password: password,
-            options: { data: { rol: rol } }
+        const { error } = await supabaseClient.auth.signUp({
+            email: email, password: password,
+            options: { data: { rol: rolSeleccionado } }
         });
 
-        if (error) alert("Error al registrar: " + error.message);
-        else alert("¡Cuenta creada con éxito! Revisa tu correo por si Supabase te envió un email de confirmación.");
+        if (error) alert("Error: " + error.message);
+        else alert("¡Cuenta creada!");
     });
 
-    // --- BOTÓN: INICIAR SESIÓN ---
+    // --- ACCIÓN: INGRESO MANUAL CON EMAIL ---
     document.getElementById('btnIngresar').addEventListener('click', async () => {
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
 
-        if(!email || !password) return alert("Por favor ingresa tu correo y contraseña.");
+        if(!email || !password) return alert("Ingresa correo y contraseña.");
 
-        const { data, error } = await supabaseClient.auth.signInWithPassword({
-            email: email,
-            password: password
-        });
-
-        if (error) alert("Error de credenciales: " + error.message);
+        const { error } = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
+        if (error) alert("Error: " + error.message);
     });
 
-    // --- BOTÓN: CERRAR SESIÓN ---
+    // --- ACCIÓN: SALIR ---
     document.getElementById('btnCerrarSesion').addEventListener('click', async () => {
         await supabaseClient.auth.signOut();
     });
 
-    // --- BOTÓN: GOOGLE AUTH ---
-    document.getElementById('btnGoogle').addEventListener('click', async () => {
-        const rol = document.getElementById('rol').value;
-
-        let targetRedirect = window.location.origin + window.location.pathname;
-        if (window.location.protocol === 'file:') {
-            alert("⚠️ Recuerda: Google Auth necesita que tu app esté subida a internet (como GitHub Pages) o corriendo en un servidor local. Si abres el archivo directo desde tu carpeta, fallará.");
-            return;
-        }
-
-        const { data, error } = await supabaseClient.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                queryParams: { access_type: 'offline', prompt: 'select_account' },
-                data: { rol: rol },
-                redirectTo: targetRedirect
-            }
-        });
-
-        if (error) alert("Error al conectar con Google: " + error.message);
-    });
-
-    // --- CLIENTE: CREAR PEDIDO ---
+    // --- OPERACIÓN: CLIENTE SUBE PEDIDO ---
     const formPedido = document.getElementById('formPedido');
     formPedido.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const { error } = await supabaseClient.from('pedidos').insert([
+            { 
+                origen: document.getElementById('origen').value, 
+                destino: document.getElementById('destino').value, 
+                paquete: document.getElementById('paquete').value, 
+                estado: 'solicitado',
+                cliente_id: usuarioActual.id
+            }
+        ]);
 
-        const origen = document.getElementById('origen').value;
-        const destino = document.getElementById('destino').value;
-        const paquete = document.getElementById('paquete').value;
-
-        const { error } = await supabaseClient
-            .from('pedidos')
-            .insert([
-                { 
-                    origen: origen, 
-                    destino: destino, 
-                    paquete: paquete, 
-                    estado: 'solicitado',
-                    cliente_id: usuarioActual.id
-                }
-            ]);
-
-        if (error) alert("Error al solicitar: " + error.message);
-        else {
-            alert("¡Pedido solicitado con éxito!");
-            formPedido.reset();
-        }
+        if (error) alert("Error: " + error.message);
+        else { alert("¡Pedido enviado al mapa!"); formPedido.reset(); }
     });
 
-    // --- REPARTIDOR: ESCUCHAR EN TIEMPO REAL ---
+    // --- OPERACIÓN: REPARTIDOR EN TIEMPO REAL ---
     let canalRealtime = null;
-
     function escucharPedidosRealtime() {
         refrescarListaVisual();
-
         if (canalRealtime) return;
-
-        canalRealtime = supabaseClient
-            .channel('cambios-pedidos')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
-                refrescarListaVisual();
-            })
+        canalRealtime = supabaseClient.channel('cambios-pedidos')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => { refrescarListaVisual(); })
             .subscribe();
     }
 
     async function refrescarListaVisual() {
-        const { data: pedidos, error } = await supabaseClient
-            .from('pedidos')
-            .select('*')
-            .eq('estado', 'solicitado');
-
-        if (error) return;
-
+        const { data: pedidos } = await supabaseClient.from('pedidos').select('*').eq('estado', 'solicitado');
         const listaPedidosDiv = document.getElementById('listaPedidos');
         listaPedidosDiv.innerHTML = "";
 
-        if (pedidos.length === 0) {
-            listaPedidosDiv.innerHTML = "<p>No hay envíos pendientes en este momento.</p>";
+        if (!pedidos || pedidos.length === 0) {
+            listaPedidosDiv.innerHTML = "<p>No hay envíos pendientes por ahora.</p>";
             return;
         }
 
@@ -297,29 +268,23 @@
             const card = document.createElement('div');
             card.className = 'pedido-card';
             card.innerHTML = `
-                <p><strong>📦 Paquete:</strong> ${pedido.paquete}</p>
-                <p><strong>📍 Origen:</strong> ${pedido.origen}</p>
+                <p><strong>📦 Envío:</strong> ${pedido.paquete}</p>
+                <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
                 <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
-                <button onclick="aceptarPedido(${pedido.id})">Aceptar Pedido</button>
+                <button onclick="aceptarPedido(${pedido.id})">Tomar este reparto</button>
             `;
             listaPedidosDiv.appendChild(card);
         });
     }
 
-    // --- REPARTIDOR: ACEPTAR PEDIDO ---
     window.aceptarPedido = async function(idPedido) {
-        const { error } = await supabaseClient
-            .from('pedidos')
-            .update({ 
-                estado: 'en_camino',
-                repartidor_id: usuarioActual.id
-            })
+        const { error } = await supabaseClient.from('pedidos')
+            .update({ estado: 'en_camino', repartidor_id: usuarioActual.id })
             .eq('id', idPedido);
 
-        if (error) alert("Error al aceptar el pedido");
-        else alert("¡Pedido aceptado!");
+        if (error) alert("Error al asignar pedido.");
+        else alert("¡Entendido! Pedido asignado a tu cuenta.");
     };
 </script>
-
 </body>
 </html>
