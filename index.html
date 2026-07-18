@@ -20,15 +20,14 @@
         .btn-secundario { background-color: #666; }
         .btn-secundario:hover { background-color: #444; }
         
-        /* BOTONES DE ESTADOS Y MAPA */
         .btn-advertencia { background-color: #ffdd57; color: #3b3103; }
         .btn-advertencia:hover { background-color: #fcd116; }
         .btn-mapa { background-color: #209cee; color: white; padding: 10px; font-size: 14px; margin-bottom: 15px; }
         .btn-mapa:hover { background-color: #1485d4; }
         .flex-botones { display: flex; gap: 10px; }
 
-        /* CONTENEDOR DEL MAPA */
-        #mapa {
+        /* MAPAS */
+        #mapa, #mapaRepartidor {
             width: 100%;
             height: 280px;
             border-radius: 6px;
@@ -51,7 +50,6 @@
         .tarjeta-pedido { 
             border-left: 5px solid #00d1b2; background: #ffffff; padding: 18px; 
             border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            transition: all 0.3s ease;
         }
         .tarjeta-pedido.tomado { 
             border-left: 5px solid #ffdd57; 
@@ -63,16 +61,8 @@
         .user-info { background: #eef9f8; padding: 15px; border-radius: 4px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
         .alerta-telefono { background: #fff3cd; border: 1px dashed #ffeeba; padding: 10px; border-radius: 4px; margin: 10px 0; font-size: 15px; }
         
-        /* CONTENEDOR DE TARIFA INTERACTIVA */
         .contenedor-cotizacion {
-            background-color: #f0fdf4;
-            border: 1px solid #bbf7d0;
-            padding: 15px;
-            border-radius: 6px;
-            margin: 15px 0;
-            display: flex;
-            justify-content: space-around;
-            text-align: center;
+            background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 15px; border-radius: 6px; margin: 15px 0; display: flex; justify-content: space-around; text-align: center;
         }
         .dato-cotizacion { font-size: 14px; color: #166534; }
         .dato-cotizacion strong { display: block; font-size: 20px; color: #14532d; margin-top: 4px; }
@@ -92,13 +82,10 @@
                 <option value="cliente">Quiero pedir envíos (Cliente)</option>
                 <option value="repartidor">Quiero entregar paquetes (Repartidor)</option>
             </select>
-
             <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
-
             <label for="email">Opcional: Entrar con Correo</label>
             <input type="email" id="email" placeholder="correo@ejemplo.com">
             <input type="password" id="password" placeholder="Tu contraseña">
-
             <button type="button" id="btnIngresar">Entrar con Correo</button>
             <button type="button" id="btnRegistrar" class="btn-secundario">Crear Cuenta Nueva</button>
             
@@ -126,7 +113,6 @@
     <!-- PÁGINA 2: INTERFAZ DEL CLIENTE -->
     <div id="pantallaCliente" class="oculto">
         <h2>Panel de Clientes: Solicitar Envíos</h2>
-        
         <label>1. Mueve el marcador rojo en el mapa hacia la ubicación deseada:</label>
         <div id="mapa"></div>
 
@@ -136,16 +122,9 @@
             <button type="button" id="btnFijarDestino" class="btn-mapa" style="background-color: #ff3860;">🏁 Fijar como Destino</button>
         </div>
 
-        <!-- APARTADO INTERACTIVO DE DISTANCIA Y PRECIO -->
         <div class="contenedor-cotizacion">
-            <div class="dato-cotizacion">
-                Distancia Estimada
-                <strong id="vistaDistancia">0.00 km</strong>
-            </div>
-            <div class="dato-cotizacion">
-                Costo de Envío
-                <strong id="vistaCosto" class="costo-resaltado">$0.00</strong>
-            </div>
+            <div class="dato-cotizacion">Distancia Estimada<strong id="vistaDistancia">0.00 km</strong></div>
+            <div class="dato-cotizacion">Costo de Envío ($25/km)<strong id="vistaCosto" class="costo-resaltado">$0.00</strong></div>
         </div>
 
         <form id="formPedido">
@@ -168,6 +147,13 @@
     <!-- PÁGINA 3: INTERFAZ DEL REPARTIDOR -->
     <div id="pantallaRepartidor" class="oculto">
         <h2>Panel de Envíos Activos</h2>
+        
+        <!-- Contenedor dinámico para el mapa del Repartidor (Ruta de entrega) -->
+        <div id="contenedorMapaRepartidor" class="oculto">
+            <label>🗺️ Ruta de Entrega Activa:</label>
+            <div id="mapaRepartidor"></div>
+        </div>
+
         <div id="listaPedidos" class="lista-tarjetas">
             <p>Sincronizando radar...</p>
         </div>
@@ -175,7 +161,7 @@
 
 </div>
 
-<!-- Scripts de Supabase y Leaflet (Mapa) -->
+<!-- Scripts de Supabase y Leaflet -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -192,24 +178,24 @@
     
     let usuarioActual = null;
     
-    // VARIABLES DEL MAPA
+    // MAPA CLIENTE
     let mapa = null;
     let marcador = null;
-    
-    // Posición del pin móvil en tiempo real
     let latActual = -34.6037;
     let lngActual = -58.3816;
     let direccionTextoActual = ""; 
 
-    // ESTRUCTURA PARA CALCULAR LA TARIFA
-    let coordenadasOrigen = null;  // Guardará {lat, lng} al pulsar Origen
-    let coordenadasDestino = null; // Guardará {lat, lng} al pulsar Destino
+    // MAPA REPARTIDOR
+    let mapaRepartidor = null;
+    let capaRutaLineal = null; 
+
+    // VARIABLES DE LOGÍSTICA
+    let coordenadasOrigen = null;  
+    let coordenadasDestino = null; 
     let costoEnvioFinal = 0;
 
     const rolTemporal = localStorage.getItem('rol_seleccionado_google');
-    if (rolTemporal) {
-        document.getElementById('rol').value = rolTemporal;
-    }
+    if (rolTemporal) document.getElementById('rol').value = rolTemporal;
 
     supabaseClient.auth.onAuthStateChange(async (event, session) => {
         if (session) {
@@ -244,7 +230,7 @@
         if (rol === 'cliente') {
             pantallaCliente.classList.remove('oculto');
             pantallaRepartidor.classList.add('oculto');
-            setTimeout(inicializarMapa, 300);
+            setTimeout(inicializarMapaCliente, 300);
         } else {
             pantallaRepartidor.classList.remove('oculto');
             pantallaCliente.classList.add('oculto');
@@ -260,34 +246,23 @@
     }
 
     // =========================================================================
-    // LÓGICA DEL MAPA
+    // MAPA DEL CLIENTE
     // =========================================================================
-    function inicializarMapa() {
-        if (mapa) {
-            mapa.invalidateSize();
-            return;
-        }
+    function inicializarMapaCliente() {
+        if (mapa) { mapa.invalidateSize(); return; }
 
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition((position) => {
                 latActual = position.coords.latitude;
                 lngActual = position.coords.longitude;
                 crearElementosMapa();
-            }, () => {
-                crearElementosMapa();
-            });
-        } else {
-            crearElementosMapa();
-        }
+            }, () => { crearElementosMapa(); });
+        } else { crearElementosMapa(); }
     }
 
     function crearElementosMapa() {
         mapa = L.map('mapa').setView([latActual, lngActual], 15);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(mapa);
-
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapa);
         marcador = L.marker([latActual, lngActual], { draggable: true }).addTo(mapa);
         
         direccionTextoActual = `${latActual.toFixed(5)}, ${lngActual.toFixed(5)}`;
@@ -295,17 +270,13 @@
 
         marcador.on('dragend', function () {
             const posicion = marcador.getLatLng();
-            latActual = posicion.lat;
-            lngActual = posicion.lng;
-            direccionTextoActual = `${latActual.toFixed(5)}, ${lngActual.toFixed(5)}`;
+            latActual = posicion.lat; lngActual = posicion.lng;
             buscarDireccionTexto(latActual, lngActual);
         });
 
         mapa.on('click', function(e) {
-            latActual = e.latlng.lat;
-            lngActual = e.latlng.lng;
+            latActual = e.latlng.lat; lngActual = e.latlng.lng;
             marcador.setLatLng([latActual, lngActual]);
-            direccionTextoActual = `${latActual.toFixed(5)}, ${lngActual.toFixed(5)}`;
             buscarDireccionTexto(latActual, lngActual);
         });
     }
@@ -314,15 +285,10 @@
         try {
             const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
             const data = await response.json();
-            if (data && data.display_name) {
-                direccionTextoActual = data.display_name;
-            }
-        } catch (e) {
-            console.log("Servidor ocupado, usando coordenadas.");
-        }
+            if (data && data.display_name) direccionTextoActual = data.display_name;
+        } catch (e) { console.log("Servidor ocupado."); }
     }
 
-    // BOTONES DE FIJAR UBICACIONES (Guardando coordenadas e iniciando cálculo)
     document.getElementById('btnFijarOrigen').addEventListener('click', () => {
         document.getElementById('origen').value = direccionTextoActual;
         coordenadasOrigen = { lat: latActual, lng: lngActual };
@@ -335,82 +301,24 @@
         calcularTarifaEnvio();
     });
 
-    // =========================================================================
-    // FUNCIÓN MATEMÁTICA: CALCULAR DISTANCIA Y COSTO (Haversine)
-    // =========================================================================
     function calcularTarifaEnvio() {
-        // Necesitamos tener ambos puntos fijados para calcular
         if (!coordenadasOrigen || !coordenadasDestino) return;
 
-        const R = 6371; // Radio del planeta Tierra en kilómetros
+        const R = 6371; 
         const dLat = (coordenadasDestino.lat - coordenadasOrigen.lat) * Math.PI / 180;
         const dLng = (coordenadasDestino.lng - coordenadasOrigen.lng) * Math.PI / 180;
-        
-        const a = 
-            Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(coordenadasOrigen.lat * Math.PI / 180) * Math.cos(coordenadasDestino.lat * Math.PI / 180) * 
-            Math.sin(dLng/2) * Math.sin(dLng/2);
-            
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(coordenadasOrigen.lat * Math.PI / 180) * Math.cos(coordenadasDestino.lat * Math.PI / 180) * Math.sin(dLng/2) * Math.sin(dLng/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        const distanciaKm = R * c; // Distancia final en kilómetros reales
+        const distanciaKm = R * c; 
 
-        // Multiplicador solicitado: $25 por kilómetro
         costoEnvioFinal = Math.round(distanciaKm * 25);
-
-        // Actualizar visualmente la pantalla del cliente
         document.getElementById('vistaDistancia').innerText = `${distanciaKm.toFixed(2)} km`;
         document.getElementById('vistaCosto').innerText = `$${costoEnvioFinal.toLocaleString()}`;
     }
 
-
-    // --- ACCIONES DE AUTENTICACIÓN ---
-    document.getElementById('btnGoogle').addEventListener('click', async () => {
-        const rolSeleccionado = document.getElementById('rol').value;
-        localStorage.setItem('rol_seleccionado_google', rolSeleccionado);
-        let targetRedirect = "https://qhricardo.github.io/reparte/"; 
-
-        await supabaseClient.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                queryParams: { access_type: 'offline', prompt: 'select_account' },
-                data: { rol: rolSeleccionado },
-                redirectTo: targetRedirect
-            }
-        });
-    });
-
-    document.getElementById('btnRegistrar').addEventListener('click', async () => {
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        const rolSeleccionado = document.getElementById('rol').value;
-
-        if(!email || !password) return alert("Ingresa correo y contraseña.");
-
-        const { error } = await supabaseClient.auth.signUp({
-            email: email, password: password,
-            options: { data: { rol: rolSeleccionado } }
-        });
-
-        if (error) alert("Error: " + error.message);
-        else alert("¡Cuenta creada!");
-    });
-
-    document.getElementById('btnIngresar').addEventListener('click', async () => {
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-
-        if(!email || !password) return alert("Ingresa correo y contraseña.");
-
-        const { error } = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
-        if (error) alert("Error: " + error.message);
-    });
-
-    document.getElementById('btnCerrarSesion').addEventListener('click', async () => {
-        localStorage.removeItem('rol_seleccionado_google');
-        await supabaseClient.auth.signOut();
-    });
-
-    // ENVÍO DE FORMULARIO (Guarda el costo calculado)
+    // =========================================================================
+    // FORMULARIO: GUARDAR VIAJE CON COORDENADAS NUMÉRICAS
+    // =========================================================================
     const formPedido = document.getElementById('formPedido');
     formPedido.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -419,9 +327,13 @@
             { 
                 origen: document.getElementById('origen').value, 
                 destino: document.getElementById('destino').value, 
+                origen_lat: coordenadasOrigen.lat,
+                origen_lng: coordenadasOrigen.lng,
+                destino_lat: coordenadasDestino.lat,
+                destino_lng: coordenadasDestino.lng,
                 paquete: document.getElementById('paquete').value, 
                 telefono: document.getElementById('telefono').value,
-                costo: costoEnvioFinal, // Insertamos el precio del envío calculado
+                costo: costoEnvioFinal, 
                 estado: 'solicitado',
                 cliente_id: usuarioActual.id
             }
@@ -431,27 +343,63 @@
         else { 
             alert("¡Pedido creado con éxito!");
             formPedido.reset();
-            // Reseteamos el casillero visual
             document.getElementById('vistaDistancia').innerText = "0.00 km";
             document.getElementById('vistaCosto').innerText = "$0.00";
-            coordenadasOrigen = null;
-            coordenadasDestino = null;
-            costoEnvioFinal = 0;
+            coordenadasOrigen = null; coordenadasDestino = null; costoEnvioFinal = 0;
         }
     });
 
-    // --- SISTEMA DEL REPARTIDOR EN TIEMPO REAL ---
+    // =========================================================================
+    // MAPA DEL REPARTIDOR Y TRAZADO DE RUTA
+    // =========================================================================
+    function mostrarRutaEnMapaRepartidor(origLat, origLng, destLat, destLng) {
+        document.getElementById('contenedorMapaRepartidor').classList.remove('oculto');
+
+        // Si el mapa no está inicializado, lo creamos
+        if (!mapaRepartidor) {
+            mapaRepartidor = L.map('mapaRepartidor');
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaRepartidor);
+        } else {
+            // Limpiar marcadores y líneas previas si el mapa ya existía
+            mapaRepartidor.eachLayer((layer) => {
+                if (!!layer.toGeoJSON && layer instanceof L.Marker || layer instanceof L.Polyline) {
+                    mapaRepartidor.removeLayer(layer);
+                }
+            });
+        }
+
+        // Crear marcadores personalizados para Origen y Destino
+        const markerOrigen = L.marker([origLat, origLng]).addTo(mapaRepartidor).bindPopup("📍 Recoger aquí (Origen)").openPopup();
+        const markerDestino = L.marker([destLat, destLng]).addTo(mapaRepartidor).bindPopup("🏁 Entregar aquí (Destino)");
+
+        // Dibujar línea de ruta (Polyline) de color azul cyan
+        const puntosRuta = [
+            [origLat, origLng],
+            [destLat, destLng]
+        ];
+        capaRutaLineal = L.polyline(puntosRuta, { color: '#00d1b2', weight: 5, opacity: 0.8 }).addTo(mapaRepartidor);
+
+        // Ajustar el zoom automáticamente para que ambos puntos queden visibles en pantalla
+        const limites = L.latLngBounds(puntosRuta);
+        mapaRepartidor.fitBounds(limites, { padding: [40, 40] });
+        
+        // Forzar recalcular tamaño del mapa por si estaba oculto en el DOM
+        setTimeout(() => { mapaRepartidor.invalidateSize(); }, 200);
+    }
+
+    function ocultarMapaRepartidor() {
+        document.getElementById('contenedorMapaRepartidor').classList.add('oculto');
+    }
+
+    // --- RADAR EN TIEMPO REAL ---
     let canalRealtime = null;
 
     function escucharPedidosRealtime() {
         refrescarListaVisual(); 
-        
         if (!canalRealtime) {
             canalRealtime = supabaseClient
                 .channel('cambios-pedidos') 
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
-                    refrescarListaVisual();
-                })
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => { refrescarListaVisual(); })
                 .subscribe();
         }
     }
@@ -467,21 +415,27 @@
 
         const listaPedidosDiv = document.getElementById('listaPedidos');
         if (!listaPedidosDiv) return;
-        
         listaPedidosDiv.innerHTML = "";
 
+        // CASO A: El repartidor YA TIENE un viaje tomado
         if (misViajes && misViajes.length > 0) {
             const viajeActivo = misViajes[0];
+            
+            // Pintamos la ruta en el mapa superior de su panel
+            if(viajeActivo.origen_lat && viajeActivo.destino_lat) {
+                mostrarRutaEnMapaRepartidor(viajeActivo.origen_lat, viajeActivo.origen_lng, viajeActivo.destino_lat, viajeActivo.destino_lng);
+            }
+
             const tarjetaAmarilla = document.createElement('div');
             tarjetaAmarilla.className = 'tarjeta-pedido tomado';
             tarjetaAmarilla.innerHTML = `
                 <h3 style="color: #bfa100; margin-top:0;">⚡ Viaje en curso (Asignado a ti)</h3>
                 <p><strong>📦 Paquete:</strong> ${viajeActivo.paquete}</p>
-                <p><strong>💰 Ganancia del viaje:</strong> <span style="font-size:18px; color:#14532d; font-weight:bold;">$${viajeActivo.costo || 0}</span></p>
+                <p><strong>💰 Ganancia:</strong> <span style="font-size:18px; color:#14532d; font-weight:bold;">$${viajeActivo.costo || 0}</span></p>
                 <p><strong>📍 Origen:</strong> ${viajeActivo.origen}</p>
                 <p><strong>🏁 Destino:</strong> ${viajeActivo.destino}</p>
                 <div class="alerta-telefono">
-                    📞 **Contacto del cliente:** <a href="tel:${viajeActivo.telefono}" style="font-weight: bold; color: #1f1f1f;">${viajeActivo.telefono || 'No proporcionado'}</a>
+                    📞 **Contacto:** <a href="tel:${viajeActivo.telefono}" style="font-weight: bold; color: #1f1f1f;">${viajeActivo.telefono || 'Sin número'}</a>
                 </div>
                 <button class="btn-advertencia" id="btnEntregar-${viajeActivo.id}">Marcar como entregado</button>
             `;
@@ -492,6 +446,9 @@
             });
             return; 
         }
+
+        // CASO B: El repartidor está libre, ocultamos mapa y mostramos radar general
+        ocultarMapaRepartidor();
 
         const { data: disponibles } = await supabaseClient
             .from('pedidos')
@@ -537,6 +494,32 @@
             .eq('id', idPedido);
         refrescarListaVisual(); 
     };
+
+    // --- ACCIONES SECUNDARIAS DE AUTH ---
+    document.getElementById('btnGoogle').addEventListener('click', async () => {
+        const rolSeleccionado = document.getElementById('rol').value;
+        localStorage.setItem('rol_seleccionado_google', rolSeleccionado);
+        await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: { queryParams: { access_type: 'offline', prompt: 'select_account' }, data: { rol: rolSeleccionado }, redirectTo: "https://qhricardo.github.io/reparte/" }
+        });
+    });
+    document.getElementById('btnRegistrar').addEventListener('click', async () => {
+        const email = document.getElementById('email').value; const password = document.getElementById('password').value; const rolSeleccionado = document.getElementById('rol').value;
+        if(!email || !password) return alert("Ingresa datos.");
+        const { error } = await supabaseClient.auth.signUp({ email, password, options: { data: { rol: rolSeleccionado } } });
+        if (error) alert(error.message); else alert("¡Cuenta creada!");
+    });
+    document.getElementById('btnIngresar').addEventListener('click', async () => {
+        const email = document.getElementById('email').value; const password = document.getElementById('password').value;
+        if(!email || !password) return alert("Ingresa datos.");
+        const { error } = await supabaseClient.signInWithPassword({ email, password });
+        if (error) alert(error.message);
+    });
+    document.getElementById('btnCerrarSesion').addEventListener('click', async () => {
+        localStorage.removeItem('rol_seleccionado_google');
+        await supabaseClient.auth.signOut();
+    });
 </script>
 </body>
 </html>
