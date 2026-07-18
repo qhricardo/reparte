@@ -15,8 +15,10 @@
         button:hover { background-color: #00b196; }
         .btn-secundario { background-color: #666; }
         .btn-secundario:hover { background-color: #444; }
-        .btn-exito { background-color: #23d160; }
-        .btn-exito:hover { background-color: #20bc56; }
+        
+        /* BOTONES DE ESTADOS */
+        .btn-advertencia { background-color: #ffdd57; color: #3b3103; }
+        .btn-advertencia:hover { background-color: #fcd116; }
         
         /* BOTÓN DE GOOGLE */
         .btn-google {
@@ -27,9 +29,23 @@
         .btn-google:hover { background-color: #f8fafd; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
         .btn-google svg { width: 18px; height: 18px; margin-right: 10px; }
 
-        /* DISEÑO DE LAS VISTAS */
-        .pedido-card { border: 1px solid #ddd; background: #fafafa; padding: 15px; margin-top: 15px; border-radius: 5px; }
-        .pedido-activo { border: 2px solid #23d160; background: #f0fbf4; padding: 15px; margin-top: 15px; border-radius: 5px; }
+        /* TARJETAS DE PEDIDOS (REDiseñadas) */
+        .lista-tarjetas { display: grid; gap: 15px; margin-top: 15px; }
+        
+        /* Estado 1: Disponible (Gris/Blanco elegante) */
+        .tarjeta-pedido { 
+            border-left: 5px solid #00d1b2; background: #ffffff; padding: 18px; 
+            border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+        
+        /* Estado 2: En camino / Tomado (Cambia a Amarillo automáticamente) */
+        .tarjeta-pedido.tomado { 
+            border-left: 5px solid #ffdd57; 
+            background: #fffdf3; 
+            box-shadow: 0 4px 10px rgba(255, 221, 87, 0.25);
+        }
+
         .oculto { display: none !important; }
         .user-info { background: #eef9f8; padding: 15px; border-radius: 4px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
     </style>
@@ -103,17 +119,9 @@
     <!-- PÁGINA 3: INTERFAZ DEL REPARTIDOR          -->
     <!-- ========================================== -->
     <div id="pantallaRepartidor" class="oculto">
-        <!-- SECCIÓN 1: REPARTO ACTUAL -->
-        <div id="seccionPedidoActivo">
-            <!-- Se cargará mediante JavaScript si el repartidor tiene un viaje en proceso -->
-        </div>
-
-        <!-- SECCIÓN 2: RADAR DE PEDIDOS DISPONIBLES -->
-        <div id="seccionRadar">
-            <h2>Pedidos Disponibles en el Radar</h2>
-            <div id="listaPedidos">
-                <p>Conectando con el radar de solicitudes en vivo...</p>
-            </div>
+        <h2>Panel de Envíos Activos</h2>
+        <div id="listaPedidos" class="lista-tarjetas">
+            <p>Sincronizando radar en tiempo real...</p>
         </div>
     </div>
 
@@ -134,17 +142,14 @@
     
     let usuarioActual = null;
 
-    // Recuperar rol de localStorage al iniciar
     const rolTemporal = localStorage.getItem('rol_seleccionado_google');
     if (rolTemporal) {
         document.getElementById('rol').value = rolTemporal;
     }
 
-    // --- ENRUTADOR AUTOMÁTICO AL CAMBIAR DE ESTADO ---
     supabaseClient.auth.onAuthStateChange(async (event, session) => {
         if (session) {
             usuarioActual = session.user;
-            
             let rolElegidoAntesDeGoogle = localStorage.getItem('rol_seleccionado_google');
             let rolGuardadoEnBaseDatos = usuarioActual.user_metadata?.rol;
             let rolFinal = 'cliente';
@@ -158,7 +163,6 @@
 
             document.getElementById('rol').value = rolFinal;
             localStorage.removeItem('rol_seleccionado_google');
-
             redireccionarSegunRol(rolFinal);
         } else {
             usuarioActual = null;
@@ -190,7 +194,6 @@
         pantallaActiva.classList.remove('oculto');
     }
 
-    // --- ACCIÓN: BOTÓN GOOGLE ---
     document.getElementById('btnGoogle').addEventListener('click', async () => {
         const rolSeleccionado = document.getElementById('rol').value;
         localStorage.setItem('rol_seleccionado_google', rolSeleccionado);
@@ -206,7 +209,6 @@
         });
     });
 
-    // --- ACCIÓN: REGISTRO MANUAL ---
     document.getElementById('btnRegistrar').addEventListener('click', async () => {
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
@@ -223,7 +225,6 @@
         else alert("¡Cuenta creada!");
     });
 
-    // --- ACCIÓN: INGRESO MANUAL ---
     document.getElementById('btnIngresar').addEventListener('click', async () => {
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
@@ -234,13 +235,11 @@
         if (error) alert("Error: " + error.message);
     });
 
-    // --- ACCIÓN: SALIR ---
     document.getElementById('btnCerrarSesion').addEventListener('click', async () => {
         localStorage.removeItem('rol_seleccionado_google');
         await supabaseClient.auth.signOut();
     });
 
-    // --- OPERACIÓN: CLIENTE SUBE PEDIDO ---
     const formPedido = document.getElementById('formPedido');
     formPedido.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -255,114 +254,104 @@
         ]);
 
         if (error) alert("Error: " + error.message);
-        else { alert("¡Pedido enviado al mapa!"); formPedido.reset(); }
+        else { formPedido.reset(); }
     });
 
-    // --- OPERACIÓN: REPARTIDOR EN TIEMPO REAL Y FLUJO DE TRABAJO ---
+    // =========================================================================
+    // NUEVA LÓGICA DE RADAR REACTIVO Y TARJETAS EN TIEMPO REAL
+    // =========================================================================
     let canalRealtime = null;
 
     function escucharPedidosRealtime() {
-        refrescarListaVisual();
+        refrescarListaVisual(); // Carga inicial
         if (canalRealtime) return;
 
+        // Oímos cualquier cambio en la tabla de pedidos y repintamos automáticamente
         canalRealtime = supabaseClient
             .channel('public:pedidos') 
             .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
                 refrescarListaVisual();
             })
-            .subscribe((status) => {
-                if (status === 'CHANNEL_ERROR') {
-                    setInterval(refrescarListaVisual, 5000); 
-                }
-            });
+            .subscribe();
     }
 
     async function refrescarListaVisual() {
         if (!usuarioActual) return;
 
-        // 1. Buscamos si ESTE repartidor ya tiene un pedido aceptado ('en_camino')
-        const { data: pedidosActivos } = await supabaseClient
+        // 1. Validamos si este repartidor ya tiene un viaje activo guardado en Supabase
+        const { data: misViajes } = await supabaseClient
             .from('pedidos')
             .select('*')
             .eq('repartidor_id', usuarioActual.id)
             .eq('estado', 'en_camino');
 
-        const seccionPedidoActivo = document.getElementById('seccionPedidoActivo');
-        const seccionRadar = document.getElementById('seccionRadar');
+        const listaPedidosDiv = document.getElementById('listaPedidos');
+        listaPedidosDiv.innerHTML = "";
 
-        // REGLA: Si ya tiene 1 pedido en camino, bloqueamos el radar para que no agarre más
-        if (pedidosActivos && pedidosActivos.length > 0) {
-            const miPedido = pedidosActivos[0];
-            seccionRadar.classList.add('oculto'); // Oculta el mapa/radar
+        // CASO A: El repartidor TIENE un pedido en proceso -> Mostrar tarjeta Amarilla fijada
+        if (misViajes && misViajes.length > 0) {
+            const viajeActivo = misViajes[0];
             
-            seccionPedidoActivo.innerHTML = `
-                <div class="pedido-activo">
-                    <h3 style="color: #23d160; margin-top:0;">🚀 Tienes un reparto en progreso</h3>
-                    <p><strong>📦 Paquete:</strong> ${miPedido.paquete}</p>
-                    <p><strong>📍 Recoger en:</strong> ${miPedido.origen}</p>
-                    <p><strong>🏁 Entregar en:</strong> ${miPedido.destino}</p>
-                    <button class="btn-exito" onclick="entregarPedido(${miPedido.id})">✔ Marcar como Entregado</button>
-                </div>
+            const tarjetaAmarilla = document.createElement('div');
+            tarjetaAmarilla.className = 'tarjeta-pedido tomado';
+            tarjetaAmarilla.innerHTML = `
+                <h3 style="color: #bfa100; margin-top:0;">⚡ Viaje en curso (Asignado a ti)</h3>
+                <p><strong>📦 Paquete:</strong> ${viajeActivo.paquete}</p>
+                <p><strong>📍 Origen:</strong> ${viajeActivo.origen}</p>
+                <p><strong>🏁 Destino:</strong> ${viajeActivo.destino}</p>
+                <button class="btn-advertencia" onclick="entregarPedido(${viajeActivo.id})">Marcar como entregado</button>
             `;
-            return; // Detiene la ejecución aquí para que no cargue la lista general
+            listaPedidosDiv.appendChild(tarjetaAmarilla);
+            return; // Bloqueamos la carga de otros pedidos para respetar la regla de "1 a la vez"
         }
 
-        // 2. Si NO tiene pedidos activos, limpiamos la zona activa y mostramos el radar de disponibles
-        seccionPedidoActivo.innerHTML = "";
-        seccionRadar.classList.remove('oculto');
-
-        const { data: pedidosDisponibles } = await supabaseClient
+        // CASO B: El repartidor está libre -> Mostrar radar de tarjetas disponibles
+        const { data: disponibles } = await supabaseClient
             .from('pedidos')
             .select('*')
             .eq('estado', 'solicitado');
 
-        const listaPedidosDiv = document.getElementById('listaPedidos');
-        listaPedidosDiv.innerHTML = "";
-
-        if (!pedidosDisponibles || pedidosDisponibles.length === 0) {
-            listaPedidosDiv.innerHTML = "<p>No hay envíos pendientes por ahora.</p>";
+        if (!disponibles || disponibles.length === 0) {
+            listaPedidosDiv.innerHTML = "<p style='color: #666; text-align: center; padding: 20px;'>No hay pedidos en el radar por el momento...</p>";
             return;
         }
 
-        pedidosDisponibles.forEach((pedido) => {
-            const card = document.createElement('div');
-            card.className = 'pedido-card';
-            card.innerHTML = `
-                <p><strong>📦 Envío:</strong> ${pedido.paquete}</p>
+        // Renderizar las solicitudes como tarjetas individuales limpias
+        disponibles.forEach((pedido) => {
+            const tarjeta = document.createElement('div');
+            tarjeta.className = 'tarjeta-pedido';
+            tarjeta.innerHTML = `
+                <p style="margin-top: 0;"><strong>📦 Envío disponible:</strong> ${pedido.paquete}</p>
                 <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
                 <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
                 <button onclick="aceptarPedido(${pedido.id})">Tomar este reparto</button>
             `;
-            listaPedidosDiv.appendChild(card);
+            listaPedidosDiv.appendChild(tarjeta);
         });
     }
 
-    // ACCIÓN: El repartidor acepta el pedido
+    // ACCIÓN: Tomar reparto (Pasa a amarillo al instante)
     window.aceptarPedido = async function(idPedido) {
         const { error } = await supabaseClient.from('pedidos')
             .update({ estado: 'en_camino', repartidor_id: usuarioActual.id })
             .eq('id', idPedido);
 
         if (error) {
-            alert("Error al asignar pedido.");
-        } else {
-            alert("¡Pedido asignado! Dirígete a recoger el paquete.");
-            refrescarListaVisual(); // Refresca inmediatamente para ocultar el radar y mostrar el viaje
+            alert("Este pedido ya no está disponible.");
         }
+        // Nota: No hace falta refrescar manualmente; el webhook de Supabase Realtime lo detecta y cambia la tarjeta a amarillo solo.
     };
 
-    // ACCIÓN: El repartidor termina la entrega actual y queda libre para otro
+    // ACCIÓN: Entregar (Desaparece del mapa al instante)
     window.entregarPedido = async function(idPedido) {
         const { error } = await supabaseClient.from('pedidos')
             .update({ estado: 'entregado' })
             .eq('id', idPedido);
 
         if (error) {
-            alert("Error al finalizar la entrega.");
-        } else {
-            alert("¡Excelente trabajo! Pedido completado. Volviendo al radar.");
-            refrescarListaVisual(); // Vuelve a abrir el radar de pedidos disponibles automáticamente
+            alert("Error al procesar la entrega.");
         }
+        // Nota: Realtime detecta que cambió a 'entregado', limpia el espacio y te devuelve al radar automáticamente.
     };
 </script>
 </body>
