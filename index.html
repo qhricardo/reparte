@@ -178,7 +178,7 @@ document.getElementById('btnGoogle').addEventListener('click', async () => {
     const rolSeleccionado = document.getElementById('rol').value;
     
     // Cambia esta dirección por tu URL de producción (ej. de GitHub Pages o tu Live Server)
-    let targetRedirect = "http://127.0.0.1:5500/index.html"; 
+    let targetRedirect = "https://qhricardo.github.io/reparte/"; 
 
     await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
