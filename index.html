@@ -7,6 +7,8 @@
     
     <!-- Hojas de estilos de Leaflet para el Mapa -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Plugin para el enrutamiento por calles -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
     
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; }
@@ -29,11 +31,16 @@
         /* MAPAS */
         #mapa, #mapaRepartidor {
             width: 100%;
-            height: 280px;
+            height: 320px;
             border-radius: 6px;
             border: 2px solid #ddd;
             margin-bottom: 15px;
             background: #e5e3df;
+        }
+        
+        /* Ocultar la caja de texto con las instrucciones paso a paso de Leaflet para que no tape el diseño móvil */
+        .leaflet-routing-container {
+            display: none !important;
         }
         
         /* BOTÓN DE GOOGLE */
@@ -124,7 +131,7 @@
 
         <div class="contenedor-cotizacion">
             <div class="dato-cotizacion">Distancia Estimada<strong id="vistaDistancia">0.00 km</strong></div>
-            <div class="dato-cotizacion">Costo de Envío ($25/km)<strong id="vistaCosto" class="costo-resaltado">$0.00</strong></div>
+            <div class="dato-cotizacion">Costo de Envío<strong id="vistaCosto" class="costo-resaltado">$0.00</strong></div>
         </div>
 
         <form id="formPedido">
@@ -148,9 +155,9 @@
     <div id="pantallaRepartidor" class="oculto">
         <h2>Panel de Envíos Activos</h2>
         
-        <!-- Contenedor dinámico para el mapa del Repartidor (Ruta de entrega) -->
+        <!-- Contenedor dinámico para el mapa del Repartidor (Ruta por Calles) -->
         <div id="contenedorMapaRepartidor" class="oculto">
-            <label>🗺️ Ruta de Entrega Activa:</label>
+            <label>🗺️ Ruta por Calles (Trayecto del Reparto):</label>
             <div id="mapaRepartidor"></div>
         </div>
 
@@ -161,9 +168,10 @@
 
 </div>
 
-<!-- Scripts de Supabase y Leaflet -->
+<!-- Scripts de Supabase, Leaflet y Leaflet Routing Machine -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 
 <script>
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
@@ -185,9 +193,9 @@
     let lngActual = -58.3816;
     let direccionTextoActual = ""; 
 
-    // MAPA REPARTIDOR
+    // MAPA REPARTIDOR Y CONTROL DE RUTA
     let mapaRepartidor = null;
-    let capaRutaLineal = null; 
+    let controlRuta = null;
 
     // VARIABLES DE LOGÍSTICA
     let coordenadasOrigen = null;  
@@ -317,12 +325,17 @@
     }
 
     // =========================================================================
-    // FORMULARIO: GUARDAR VIAJE CON COORDENADAS NUMÉRICAS
+    // FORMULARIO CLIENTE
     // =========================================================================
     const formPedido = document.getElementById('formPedido');
     formPedido.addEventListener('submit', async (e) => {
         e.preventDefault();
         
+        if(!coordenadasOrigen || !coordenadasDestino){
+            alert("Por favor, fija el Origen y el Destino usando los botones del mapa.");
+            return;
+        }
+
         const { error } = await supabaseClient.from('pedidos').insert([
             { 
                 origen: document.getElementById('origen').value, 
@@ -350,45 +363,56 @@
     });
 
     // =========================================================================
-    // MAPA DEL REPARTIDOR Y TRAZADO DE RUTA
+    // MAPA DEL REPARTIDOR (RUTAS EXACTAS POR CALLE)
     // =========================================================================
     function mostrarRutaEnMapaRepartidor(origLat, origLng, destLat, destLng) {
+        // 1. Mostrar contenedor en pantalla
         document.getElementById('contenedorMapaRepartidor').classList.remove('oculto');
 
-        // Si el mapa no está inicializado, lo creamos
-        if (!mapaRepartidor) {
-            mapaRepartidor = L.map('mapaRepartidor');
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaRepartidor);
-        } else {
-            // Limpiar marcadores y líneas previas si el mapa ya existía
-            mapaRepartidor.eachLayer((layer) => {
-                if (!!layer.toGeoJSON && layer instanceof L.Marker || layer instanceof L.Polyline) {
-                    mapaRepartidor.removeLayer(layer);
-                }
-            });
+        // 2. Limpieza estricta de mapas previos para evitar fallos de Leaflet
+        if (mapaRepartidor) {
+            mapaRepartidor.remove();
+            mapaRepartidor = null;
         }
 
-        // Crear marcadores personalizados para Origen y Destino
-        const markerOrigen = L.marker([origLat, origLng]).addTo(mapaRepartidor).bindPopup("📍 Recoger aquí (Origen)").openPopup();
-        const markerDestino = L.marker([destLat, destLng]).addTo(mapaRepartidor).bindPopup("🏁 Entregar aquí (Destino)");
+        // 3. Crear mapa base
+        mapaRepartidor = L.map('mapaRepartidor').setView([origLat, origLng], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaRepartidor);
 
-        // Dibujar línea de ruta (Polyline) de color azul cyan
-        const puntosRuta = [
-            [origLat, origLng],
-            [destLat, destLng]
-        ];
-        capaRutaLineal = L.polyline(puntosRuta, { color: '#00d1b2', weight: 5, opacity: 0.8 }).addTo(mapaRepartidor);
+        // 4. Implementar el motor de enrutamiento por calles reales (OSM Engine)
+        controlRuta = L.Routing.control({
+            waypoints: [
+                L.latLng(origLat, origLng),
+                L.latLng(destLat, destLng)
+            ],
+            lineOptions: {
+                styles: [{ color: '#209cee', opacity: 0.8, weight: 6 }] // Línea azul de ruta urbana
+            },
+            createMarker: function(i, waypoint, n) {
+                // Crear marcadores personalizados e informativos
+                if (i === 0) {
+                    return L.marker(waypoint.latLng).bindPopup("📍 Recoger aquí (Origen)");
+                } else if (i === n - 1) {
+                    return L.marker(waypoint.latLng).bindPopup("🏁 Entregar aquí (Destino)");
+                }
+            },
+            routeWhileDragging: false,
+            addWaypoints: false,
+            fitSelectedRoutes: true
+        }).addTo(mapaRepartidor);
 
-        // Ajustar el zoom automáticamente para que ambos puntos queden visibles en pantalla
-        const limites = L.latLngBounds(puntosRuta);
-        mapaRepartidor.fitBounds(limites, { padding: [40, 40] });
-        
-        // Forzar recalcular tamaño del mapa por si estaba oculto en el DOM
-        setTimeout(() => { mapaRepartidor.invalidateSize(); }, 200);
+        // 5. Ajuste asíncrono para asegurar la correcta escala visual
+        setTimeout(() => { 
+            mapaRepartidor.invalidateSize(); 
+        }, 300);
     }
 
     function ocultarMapaRepartidor() {
         document.getElementById('contenedorMapaRepartidor').classList.add('oculto');
+        if (mapaRepartidor) {
+            mapaRepartidor.remove();
+            mapaRepartidor = null;
+        }
     }
 
     // --- RADAR EN TIEMPO REAL ---
@@ -417,15 +441,10 @@
         if (!listaPedidosDiv) return;
         listaPedidosDiv.innerHTML = "";
 
-        // CASO A: El repartidor YA TIENE un viaje tomado
+        // CASO A: El repartidor ya aceptó un viaje
         if (misViajes && misViajes.length > 0) {
             const viajeActivo = misViajes[0];
             
-            // Pintamos la ruta en el mapa superior de su panel
-            if(viajeActivo.origen_lat && viajeActivo.destino_lat) {
-                mostrarRutaEnMapaRepartidor(viajeActivo.origen_lat, viajeActivo.origen_lng, viajeActivo.destino_lat, viajeActivo.destino_lng);
-            }
-
             const tarjetaAmarilla = document.createElement('div');
             tarjetaAmarilla.className = 'tarjeta-pedido tomado';
             tarjetaAmarilla.innerHTML = `
@@ -444,10 +463,15 @@
             document.getElementById(`btnEntregar-${viajeActivo.id}`).addEventListener('click', () => {
                 entregarPedido(viajeActivo.id);
             });
+
+            // Llama a calcular y trazar el mapa calle por calle
+            if(viajeActivo.origen_lat && viajeActivo.destino_lat) {
+                mostrarRutaEnMapaRepartidor(viajeActivo.origen_lat, viajeActivo.origen_lng, viajeActivo.destino_lat, viajeActivo.destino_lng);
+            }
             return; 
         }
 
-        // CASO B: El repartidor está libre, ocultamos mapa y mostramos radar general
+        // CASO B: El repartidor está libre
         ocultarMapaRepartidor();
 
         const { data: disponibles } = await supabaseClient
@@ -495,7 +519,7 @@
         refrescarListaVisual(); 
     };
 
-    // --- ACCIONES SECUNDARIAS DE AUTH ---
+    // --- ACCIONES DE AUTENTICACIÓN ---
     document.getElementById('btnGoogle').addEventListener('click', async () => {
         const rolSeleccionado = document.getElementById('rol').value;
         localStorage.setItem('rol_seleccionado_google', rolSeleccionado);
@@ -513,7 +537,7 @@
     document.getElementById('btnIngresar').addEventListener('click', async () => {
         const email = document.getElementById('email').value; const password = document.getElementById('password').value;
         if(!email || !password) return alert("Ingresa datos.");
-        const { error } = await supabaseClient.signInWithPassword({ email, password });
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) alert(error.message);
     });
     document.getElementById('btnCerrarSesion').addEventListener('click', async () => {
