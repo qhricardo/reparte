@@ -44,7 +44,6 @@
         }
 
         .pedido-card { border: 1px solid #ddd; background: #fafafa; padding: 15px; margin-top: 15px; border-radius: 5px; }
-        .estado-solicitado { color: orange; font-weight: bold; }
         .oculto { display: none; }
         .user-info { background: #eef9f8; padding: 10px; border-radius: 4px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
     </style>
@@ -55,7 +54,7 @@
     <!-- 1. SECCIÓN DE AUTENTICACIÓN (LOGIN / REGISTRO) -->
     <div id="seccionAuth">
         <h2>Iniciar Sesión / Registrarse</h2>
-        <form id="formAuth">
+        <form id="formAuth" onsubmit="return false;">
             <label for="email">Correo Electrónico:</label>
             <input type="email" id="email" placeholder="correo@ejemplo.com" required>
 
@@ -71,7 +70,6 @@
             <button type="button" id="btnIngresar">Iniciar Sesión</button>
             <button type="button" id="btnRegistrar" class="btn-secundario">Crear Cuenta Nueva</button>
             
-            <!-- BOTÓN CON LOGO Y COLORES OFICIALES DE GOOGLE -->
             <button type="button" id="btnGoogle" class="btn-google">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
                     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -84,7 +82,7 @@
         </form>
     </div>
 
-    <!-- 2. CONTENIDO PRINCIPAL DE LA APP (OCULTO HASTA HACER LOGIN) -->
+    <!-- 2. CONTENIDO PRINCIPAL DE LA APP -->
     <div id="seccionApp" class="oculto">
         <div class="user-info">
             <div>
@@ -125,11 +123,12 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
-    // CONFIGURACIÓN
+    // CONFIGURACIÓN (Corregido el método de creación de cliente)
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit";
 
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // CORRECCIÓN AQUÍ: Se usa window.supabase.createClient para evitar conflictos de variables
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // Elementos del DOM
     const seccionAuth = document.getElementById('seccionAuth');
@@ -141,7 +140,7 @@
     let rolActual = null;
 
     // --- ESCUCHAR CAMBIOS DE SESIÓN ---
-    supabase.auth.onAuthStateChange((event, session) => {
+    supabaseClient.auth.onAuthStateChange((event, session) => {
         if (session) {
             usuarioActual = session.user;
             rolActual = usuarioActual.user_metadata.rol || 'cliente';
@@ -180,16 +179,16 @@
         const password = document.getElementById('password').value;
         const rol = document.getElementById('rol').value;
 
-        if(!email || !password) return alert("Completa los campos");
+        if(!email || !password) return alert("Por favor ingresa correo y contraseña.");
 
-        const { data, error } = await supabase.auth.signUp({
+        const { data, error } = await supabaseClient.auth.signUp({
             email: email,
             password: password,
             options: { data: { rol: rol } }
         });
 
         if (error) alert("Error al registrar: " + error.message);
-        else alert("¡Cuenta creada con éxito!");
+        else alert("¡Cuenta creada con éxito! Revisa tu correo por si Supabase te envió un email de confirmación.");
     });
 
     // --- BOTÓN: INICIAR SESIÓN ---
@@ -197,9 +196,9 @@
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
 
-        if(!email || !password) return alert("Completa los campos");
+        if(!email || !password) return alert("Por favor ingresa tu correo y contraseña.");
 
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
             email: email,
             password: password
         });
@@ -209,29 +208,23 @@
 
     // --- BOTÓN: CERRAR SESIÓN ---
     document.getElementById('btnCerrarSesion').addEventListener('click', async () => {
-        await supabase.auth.signOut();
+        await supabaseClient.auth.signOut();
     });
 
-
-    // --- BOTÓN: INICIAR SESIÓN CON GOOGLE (CORREGIDO) ---
+    // --- BOTÓN: GOOGLE AUTH ---
     document.getElementById('btnGoogle').addEventListener('click', async () => {
         const rol = document.getElementById('rol').value;
 
-        // Validamos si estás abriendo el archivo localmente como file://
         let targetRedirect = window.location.origin + window.location.pathname;
         if (window.location.protocol === 'file:') {
-            alert("⚠️ Alerta de desarrollo: Para probar Google Auth localmente, necesitas correr un servidor local (como Live Server en VSCode) o subir tu código a GitHub Pages. Google bloquea los accesos desde archivos directos 'file://'.");
-            // Intentamos usar localhost como fallback para que no rompa el flujo si tienes un puerto abierto
-            targetRedirect = "http://localhost:5500/index.html"; 
+            alert("⚠️ Recuerda: Google Auth necesita que tu app esté subida a internet (como GitHub Pages) o corriendo en un servidor local. Si abres el archivo directo desde tu carpeta, fallará.");
+            return;
         }
 
-        const { data, error } = await supabase.auth.signInWithOAuth({
+        const { data, error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                queryParams: {
-                    access_type: 'offline',
-                    prompt: 'select_account'
-                },
+                queryParams: { access_type: 'offline', prompt: 'select_account' },
                 data: { rol: rol },
                 redirectTo: targetRedirect
             }
@@ -240,8 +233,7 @@
         if (error) alert("Error al conectar con Google: " + error.message);
     });
 
-    
-    // --- LÓGICA DEL CLIENTE: CREAR PEDIDO ---
+    // --- CLIENTE: CREAR PEDIDO ---
     const formPedido = document.getElementById('formPedido');
     formPedido.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -250,7 +242,7 @@
         const destino = document.getElementById('destino').value;
         const paquete = document.getElementById('paquete').value;
 
-        const { error } = await supabase
+        const { error } = await supabaseClient
             .from('pedidos')
             .insert([
                 { 
@@ -264,12 +256,12 @@
 
         if (error) alert("Error al solicitar: " + error.message);
         else {
-            alert("¡Pedido solicitado!");
+            alert("¡Pedido solicitado con éxito!");
             formPedido.reset();
         }
     });
 
-    // --- LÓGICA DEL REPARTIDOR: ESCUCHAR EN TIEMPO REAL ---
+    // --- REPARTIDOR: ESCUCHAR EN TIEMPO REAL ---
     let canalRealtime = null;
 
     function escucharPedidosRealtime() {
@@ -277,7 +269,7 @@
 
         if (canalRealtime) return;
 
-        canalRealtime = supabase
+        canalRealtime = supabaseClient
             .channel('cambios-pedidos')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
                 refrescarListaVisual();
@@ -286,7 +278,7 @@
     }
 
     async function refrescarListaVisual() {
-        const { data: pedidos, error } = await supabase
+        const { data: pedidos, error } = await supabaseClient
             .from('pedidos')
             .select('*')
             .eq('estado', 'solicitado');
@@ -308,16 +300,15 @@
                 <p><strong>📦 Paquete:</strong> ${pedido.paquete}</p>
                 <p><strong>📍 Origen:</strong> ${pedido.origen}</p>
                 <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
-                <p><strong>💵 Tarifa:</strong> $50</p>
                 <button onclick="aceptarPedido(${pedido.id})">Aceptar Pedido</button>
             `;
             listaPedidosDiv.appendChild(card);
         });
     }
 
-    // --- LÓGICA DEL REPARTIDOR: ACEPTAR PEDIDO ---
+    // --- REPARTIDOR: ACEPTAR PEDIDO ---
     window.aceptarPedido = async function(idPedido) {
-        const { error } = await supabase
+        const { error } = await supabaseClient
             .from('pedidos')
             .update({ 
                 estado: 'en_camino',
@@ -326,7 +317,7 @@
             .eq('id', idPedido);
 
         if (error) alert("Error al aceptar el pedido");
-        else alert("¡Pedido aceptado! Ve por él.");
+        else alert("¡Pedido aceptado!");
     };
 </script>
 
