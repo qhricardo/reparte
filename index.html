@@ -489,13 +489,9 @@
                 <div class="alerta-telefono">
                     📞 **Contacto:** <a href="tel:${viajeActivo.telefono}" style="font-weight: bold; color: #1f1f1f;">${viajeActivo.telefono || 'Sin número'}</a>
                 </div>
-                <button class="btn-advertencia" id="btnEntregar-${viajeActivo.id}">Marcar como entregado</button>
+                <button class="btn-advertencia" onclick="entregarPedido('${viajeActivo.id}')">Marcar como entregado</button>
             `;
             listaPedidosDiv.appendChild(tarjetaAmarilla);
-            
-            document.getElementById(`btnEntregar-${viajeActivo.id}`).addEventListener('click', () => {
-                entregarPedido(viajeActivo.id);
-            });
 
             if(viajeActivo.origen_lat && viajeActivo.destino_lat) {
                 mostrarRutaEnMapaRepartidor(viajeActivo.origen_lat, viajeActivo.origen_lng, viajeActivo.destino_lat, viajeActivo.destino_lng);
@@ -528,28 +524,36 @@
                 ${pedido.mercancia ? `<img src="${pedido.mercancia}" class="foto-mercancia" alt="Foto del paquete">` : ''}
                 <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
                 <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
-                <button id="btnAceptar-${pedido.id}">Tomar este reparto</button>
+                <button onclick="aceptarPedido('${pedido.id}')">Tomar este reparto</button>
             `;
             listaPedidosDiv.appendChild(tarjeta);
-
-            document.getElementById(`btnAceptar-${pedido.id}`).addEventListener('click', () => {
-                aceptarPedido(pedido.id);
-            });
         });
     }
 
     window.aceptarPedido = async function(idPedido) {
-        await supabaseClient.from('pedidos')
-            .update({ estado: 'en_camino', repartidor_id: usuarioActual.id })
-            .eq('id', idPedido);
-        refrescarListaVisual(); 
+        try {
+            const { error } = await supabaseClient.from('pedidos')
+                .update({ estado: 'en_camino', repartidor_id: usuarioActual.id })
+                .eq('id', idPedido);
+            
+            if (error) throw error;
+            refrescarListaVisual(); 
+        } catch (err) {
+            alert("No se pudo tomar el reparto: " + err.message);
+        }
     };
 
     window.entregarPedido = async function(idPedido) {
-        await supabaseClient.from('pedidos')
-            .update({ estado: 'entregado' })
-            .eq('id', idPedido);
-        refrescarListaVisual(); 
+        try {
+            const { error } = await supabaseClient.from('pedidos')
+                .update({ estado: 'entregado' })
+                .eq('id', idPedido);
+            
+            if (error) throw error;
+            refrescarListaVisual(); 
+        } catch (err) {
+            alert("No se pudo finalizar la entrega: " + err.message);
+        }
     };
 
     // --- ACCIONES DE AUTENTICACIÓN ---
