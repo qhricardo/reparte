@@ -242,14 +242,27 @@ document.getElementById('btnGoogle').addEventListener('click', async () => {
     });
 
     // --- OPERACIÓN: REPARTIDOR EN TIEMPO REAL ---
-    let canalRealtime = null;
-    function escucharPedidosRealtime() {
-        refrescarListaVisual();
-        if (canalRealtime) return;
-        canalRealtime = supabaseClient.channel('cambios-pedidos')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => { refrescarListaVisual(); })
-            .subscribe();
-    }
+   let canalRealtime = null;
+
+function escucharPedidosRealtime() {
+    refrescarListaVisual();
+
+    if (canalRealtime) return;
+
+    // Forzamos la conexión limpia a la base de datos pública en internet
+    canalRealtime = supabaseClient
+        .channel('public:pedidos') 
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
+            refrescarListaVisual();
+        })
+        .subscribe((status) => {
+            if (status === 'CHANNEL_ERROR') {
+                console.log("Error de conexión en tiempo real, reintentando por sondeo...");
+                // Alternativa por si el cortafuegos de tu red bloquea WebSockets
+                setInterval(refrescarListaVisual, 5000); 
+            }
+        });
+}
 
     async function refrescarListaVisual() {
         const { data: pedidos } = await supabaseClient.from('pedidos').select('*').eq('estado', 'solicitado');
