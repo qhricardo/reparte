@@ -14,6 +14,7 @@
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         h2 { color: #333; border-bottom: 2px solid #00d1b2; padding-bottom: 10px; margin-top: 10px; }
+        h3 { color: #444; margin-top: 30px; margin-bottom: 10px; border-bottom: 1px dashed #ccc; padding-bottom: 5px; }
         label { display: block; margin: 15px 0 5px; font-weight: bold; }
         input, select { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         
@@ -106,7 +107,10 @@
                 <option value="repartidor">Quiero entregar paquetes (Repartidor)</option>
             </select>
             <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
-            <label for="email">Opcional: Entrar con Correo</label>
+            <label for="nombreRegistro">Tu Nombre (Para cuentas nuevas):</label>
+            <input type="text" id="nombreRegistro" placeholder="Ej. Juan Pérez">
+            
+            <label for="email">Entrar con Correo:</label>
             <input type="email" id="email" placeholder="correo@ejemplo.com">
             <input type="password" id="password" placeholder="Tu contraseña">
             <button type="button" id="btnIngresar">Entrar con Correo</button>
@@ -124,10 +128,10 @@
         </form>
     </div>
 
-    <!-- BARRA DE USUARIO -->
+    <!-- BARRA DE USUARIO (SUPERIOR) -->
     <div id="barraUsuario" class="user-info oculto">
         <div>
-            <span id="txtUsuarioLogueado">...</span><br>
+            Hola, <strong id="txtUsuarioLogueado" style="color:#333;">...</strong><br>
             Rol Activo: <strong id="txtRolUsuario" style="color: #00d1b2;">...</strong>
         </div>
         <button id="btnCerrarSesion" style="width: auto; padding: 8px 15px; font-size: 13px; margin: 0;" class="btn-secundario">Cerrar Sesión</button>
@@ -168,6 +172,12 @@
 
             <button type="submit" id="btnPublicarPedido">Publicar Pedido de Entrega</button>
         </form>
+
+        <!-- SECCIÓN DE SEGUIMIENTO EN TIEMPO REAL PARA EL CLIENTE -->
+        <h3>Mis Pedidos Solicitados</h3>
+        <div id="listaPedidosCliente" class="lista-tarjetas">
+            <p style="color: #666; font-size: 14px;">Cargando tus pedidos...</p>
+        </div>
     </div>        
 
     <!-- PÁGINA 3: INTERFAZ DEL REPARTIDOR -->
@@ -208,8 +218,8 @@
     // MAPA CLIENTE
     let mapa = null;
     let marcador = null;
-    let latActual = 19.5971;
-    let lngActual = -99.8086;
+    let latActual = -34.6037;
+    let lngActual = -58.3816;
     let direccionTextoActual = ""; 
 
     // MAPA REPARTIDOR
@@ -250,13 +260,21 @@
     function redireccionarSegunRol(rol) {
         pantallaAuth.classList.add('oculto');
         barraUsuario.classList.remove('oculto');
-        document.getElementById('txtUsuarioLogueado').innerText = usuarioActual.email || "Usuario de Google";
+        
+        // Extrae el Nombre desde los metadatos o calcula un alias limpio
+        let nombreMostrar = usuarioActual.user_metadata?.full_name || usuarioActual.user_metadata?.nombre || "";
+        if (!nombreMostrar && usuarioActual.email) {
+            nombreMostrar = usuarioActual.email.split('@')[0]; // Si no hay nombre, usa la primera mitad del correo
+        }
+        
+        document.getElementById('txtUsuarioLogueado').innerText = nombreMostrar;
         document.getElementById('txtRolUsuario').innerText = rol.toUpperCase();
 
         if (rol === 'cliente') {
             pantallaCliente.classList.remove('oculto');
             pantallaRepartidor.classList.add('oculto');
             setTimeout(inicializarMapaCliente, 300);
+            escucharPedidosRealtime();
         } else {
             pantallaRepartidor.classList.remove('oculto');
             pantallaCliente.classList.add('oculto');
@@ -405,6 +423,7 @@
             document.getElementById('vistaDistancia').innerText = "0.00 km";
             document.getElementById('vistaCosto').innerText = "$0.00";
             coordenadasOrigen = null; coordenadasDestino = null; costoEnvioFinal = 0;
+            refrescarPedidosCliente();
 
         } catch (error) {
             alert("Error al procesar el pedido: " + error.message);
@@ -443,7 +462,7 @@
         setTimeout(() => { mapaRepartidor.invalidateSize(); }, 300);
     }
 
-    function ocultarMapaRepartidor() {
+    function occultarMapaRepartidor() {
         document.getElementById('contenedorMapaRepartidor').classList.add('oculto');
         if (mapaRepartidor) {
             mapaRepartidor.remove();
@@ -452,17 +471,101 @@
     }
 
     // =========================================================================
-    // RADAR Y LOGÍSTICA REALTIME SIN DUPLICADOS
+    // HISTORIAL DEL CLIENTE (VISTA PROPIA)
+    // =========================================================================
+    async function refrescarPedidosCliente() {
+        if (!usuarioActual) return;
+        
+        const listaClienteDiv = document.getElementById('listaPedidosCliente');
+        if (!listaClienteDiv) return;
+
+        try {
+            const { data: misPedidos, error } = await supabaseClient
+                .from('pedidos')
+                .select('*')
+                .eq('cliente_id', usuarioActual.id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            if (!misPedidos || misPedidos.length === 0) {
+                listaClienteDiv.innerHTML = "<p style='color: #666; font-size: 14px;'>Aún no has realizado ningún pedido.</p>";
+                return;
+            }
+
+            listaClienteDiv.innerHTML = "";
+
+            misPedidos.forEach((pedido) => {
+                const tarjeta = document.createElement('div');
+                tarjeta.className = 'tarjeta-pedido';
+                
+                let textoEstado = "Buscando repartidor... ⏳";
+                
+                if (pedido.estado === 'en_camino') {
+                    tarjeta.className = 'tarjeta-pedido tomado'; 
+                    textoEstado = "¡En camino con el repartidor! 🚀";
+                } else if (pedido.estado === 'entregado') {
+                    tarjeta.style.borderLeft = "5px solid #48c774"; 
+                    tarjeta.style.background = "#f6fdf9";
+                    textoEstado = "Entregado con éxito ✅";
+                }
+
+                tarjeta.innerHTML = `
+                    <p style="margin-top: 0; display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="color: ${pedido.estado === 'entregado' ? '#48c774' : '#333'}">${textoEstado}</strong> 
+                        <span style="background:#eef9f8; padding:4px 8px; border-radius:4px; color:#00d1b2; font-weight:bold;">$${pedido.costo || 0}</span>
+                    </p>
+                    <div class="cuerpo-tarjeta">
+                        <div class="info-paquete">
+                            <p><strong>📦 Paquete:</strong> ${pedido.paquete}</p>
+                            <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
+                            <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
+                        </div>
+                        <div class="contenedor-foto-cliente-${pedido.id}"></div>
+                    </div>
+                `;
+
+                if (pedido.mercancia) {
+                    const img = document.createElement('img');
+                    img.src = pedido.mercancia;
+                    img.className = 'foto-mercancia';
+                    setTimeout(() => {
+                        const contenedor = tarjeta.querySelector(`.contenedor-foto-cliente-${pedido.id}`);
+                        if(contenedor) contenedor.appendChild(img);
+                    }, 0);
+                }
+
+                listaClienteDiv.appendChild(tarjeta);
+            });
+
+        } catch (err) {
+            console.error("Error al cargar los pedidos del cliente:", err);
+        }
+    }
+
+    // =========================================================================
+    // RADAR REPARTIDOR & SINCRO REALTIME MULTIROL
     // =========================================================================
     let canalRealtime = null;
 
     function escucharPedidosRealtime() {
-        refrescarListaVisual(); 
+        const rolActual = usuarioActual.user_metadata?.rol || document.getElementById('rol').value;
+        if (rolActual === 'repartidor') {
+            refrescarListaVisual(); 
+        } else {
+            refrescarPedidosCliente();
+        }
+
         if (!canalRealtime) {
             canalRealtime = supabaseClient
                 .channel('cambios-pedidos') 
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => { 
-                    refrescarListaVisual(); 
+                    const rolEnVivo = usuarioActual.user_metadata?.rol || document.getElementById('rol').value;
+                    if (rolEnVivo === 'repartidor') {
+                        refrescarListaVisual();
+                    } else {
+                        refrescarPedidosCliente();
+                    }
                 })
                 .subscribe();
         }
@@ -478,7 +581,7 @@
             if (!listaPedidosDiv) return;
             listaPedidosDiv.innerHTML = ""; 
 
-            // CASO A: Buscar si ya tienes asignado un pedido activo
+            // CASO A: Asignación activa del repartidor
             const { data: misViajes, error: errorViajes } = await supabaseClient
                 .from('pedidos')
                 .select('*')
@@ -529,7 +632,7 @@
                 return; 
             }
 
-            // CASO B: Repartidor sin pedidos -> Listar radar disponible libre de duplicados
+            // CASO B: Listar el radar libre disponible
             ocultarMapaRepartidor();
 
             const { data: disponibles, error: errorDisp } = await supabaseClient
@@ -544,7 +647,6 @@
                 return;
             }
 
-            // Mapeo estricto por ID para garantizar registros únicos en el DOM
             const mapaPedidosUnicos = new Map();
             disponibles.forEach(p => mapaPedidosUnicos.set(p.id, p));
 
@@ -602,7 +704,6 @@
         }
 
         try {
-            // Comprobación de seguridad local rápida
             const { data: viajesPrevios } = await supabaseClient
                 .from('pedidos')
                 .select('id')
@@ -615,7 +716,6 @@
                 return;
             }
 
-            // Intentar adueñarse del pedido de forma atómica en Supabase
             const { data, error } = await supabaseClient.from('pedidos')
                 .update({ estado: 'en_camino', repartidor_id: usuarioActual.id })
                 .eq('id', idPedido)
@@ -664,18 +764,30 @@
             options: { queryParams: { access_type: 'offline', prompt: 'select_account' }, data: { rol: rolSeleccionado }, redirectTo: "https://qhricardo.github.io/reparte/" }
         });
     });
+    
     document.getElementById('btnRegistrar').addEventListener('click', async () => {
-        const email = document.getElementById('email').value; const password = document.getElementById('password').value; const rolSeleccionado = document.getElementById('rol').value;
-        if(!email || !password) return alert("Ingresa datos.");
-        const { error } = await supabaseClient.auth.signUp({ email, password, options: { data: { rol: rolSeleccionado } } });
-        if (error) alert(error.message); else alert("¡Cuenta creada!");
+        const email = document.getElementById('email').value; 
+        const password = document.getElementById('password').value; 
+        const rolSeleccionado = document.getElementById('rol').value;
+        const nombreIngresado = document.getElementById('nombreRegistro').value;
+
+        if(!email || !password) return alert("Ingresa correo y contraseña.");
+        
+        const { error } = await supabaseClient.auth.signUp({ 
+            email, 
+            password, 
+            options: { data: { rol: rolSeleccionado, nombre: nombreIngresado } } 
+        });
+        if (error) alert(error.message); else alert("¡Cuenta creada exitosamente!");
     });
+    
     document.getElementById('btnIngresar').addEventListener('click', async () => {
         const email = document.getElementById('email').value; const password = document.getElementById('password').value;
         if(!email || !password) return alert("Ingresa datos.");
         const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) alert(error.message);
     });
+    
     document.getElementById('btnCerrarSesion').addEventListener('click', async () => {
         localStorage.removeItem('rol_seleccionado_google');
         await supabaseClient.auth.signOut();
