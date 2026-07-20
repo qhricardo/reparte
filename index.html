@@ -61,7 +61,7 @@
             box-shadow: 0 4px 10px rgba(255, 221, 87, 0.25);
         }
         .foto-mercancia {
-            width: 100%; max-height: 200px; object-fit: cover; border-radius: 6px; margin: 10px 0; border: 1px solid #ddd;
+            width: 100%; max-height: 200px; object-fit: cover; border-radius: 6px; margin: 10px 0; border: 1px solid #ddd; display: block;
         }
 
         .oculto { display: none !important; }
@@ -187,7 +187,7 @@
     const barraUsuario = document.getElementById('barraUsuario');
     
     let usuarioActual = null;
-    let estaCargando = false; // Control de concurrencia para evitar pedidos duplicados
+    let estaCargando = false; 
     
     // MAPA CLIENTE
     let mapa = null;
@@ -436,7 +436,7 @@
     }
 
     // =========================================================================
-    // RADAR Y LOGÍSTICA REALTIME SIN DUPLICADOS
+    // RADAR Y LOGÍSTICA REALTIME COMPLETA
     // =========================================================================
     let canalRealtime = null;
 
@@ -454,7 +454,7 @@
 
     async function refrescarListaVisual() {
         if (!usuarioActual || estaCargando) return;
-        estaCargando = true; // Bloquea llamadas simultáneas
+        estaCargando = true; 
 
         try {
             const { data: misViajes } = await supabaseClient
@@ -466,7 +466,7 @@
             const listaPedidosDiv = document.getElementById('listaPedidos');
             if (!listaPedidosDiv) return;
             
-            listaPedidosDiv.innerHTML = ""; // Limpieza absoluta
+            listaPedidosDiv.innerHTML = ""; 
 
             // CASO A: Viaje activo
             if (misViajes && misViajes.length > 0) {
@@ -477,7 +477,7 @@
                 tarjetaAmarilla.innerHTML = `
                     <h3 style="color: #bfa100; margin-top:0;">⚡ Viaje en curso</h3>
                     <p><strong>📦 Paquete:</strong> ${viajeActivo.paquete}</p>
-                    ${viajeActivo.mercancia ? `<img src="${viajeActivo.mercancia}" class="foto-mercancia" alt="Foto del paquete">` : ''}
+                    <div id="contenedorFotoActivo"></div>
                     <p><strong>💰 Ganancia:</strong> <span style="font-size:18px; color:#14532d; font-weight:bold;">$${viajeActivo.costo || 0}</span></p>
                     <p><strong>📍 Origen:</strong> ${viajeActivo.origen}</p>
                     <p><strong>🏁 Destino:</strong> ${viajeActivo.destino}</p>
@@ -485,6 +485,14 @@
                         📞 <strong>Contacto:</strong> <a href="tel:${viajeActivo.telefono}">${viajeActivo.telefono || 'Sin número'}</a>
                     </div>
                 `;
+
+                // Inyección segura de la foto
+                if (viajeActivo.mercancia) {
+                    const img = document.createElement('img');
+                    img.src = viajeActivo.mercancia;
+                    img.className = 'foto-mercancia';
+                    tarjetaAmarilla.querySelector('#contenedorFotoActivo').appendChild(img);
+                }
 
                 const btnEntregar = document.createElement('button');
                 btnEntregar.className = 'btn-advertencia';
@@ -522,10 +530,17 @@
                         <span style="background:#eef9f8; padding:4px 8px; border-radius:4px; color:#00d1b2; font-weight:bold;">$${pedido.costo || 0}</span>
                     </p>
                     <p><strong>📦 Producto:</strong> ${pedido.paquete}</p>
-                    ${pedido.mercancia ? `<img src="${pedido.mercancia}" class="foto-mercancia" alt="Foto del paquete">` : ''}
+                    <div class="contenedor-foto-radar"></div>
                     <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
                     <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
                 `;
+
+                if (pedido.mercancia) {
+                    const img = document.createElement('img');
+                    img.src = pedido.mercancia;
+                    img.className = 'foto-mercancia';
+                    tarjeta.querySelector('.contenedor-foto-radar').appendChild(img);
+                }
 
                 const btnTomar = document.createElement('button');
                 btnTomar.innerText = 'Tomar este reparto';
@@ -538,7 +553,8 @@
         } catch (err) {
             console.error(err);
         } finally {
-            estaCargando = false; // Libera el bloqueo
+            // CRÍTICO: El semáforo se libera siempre en el finally global
+            estaCargando = false; 
         }
     }
 
@@ -546,7 +562,6 @@
         if (!usuarioActual) return alert("Sesión inválida.");
         
         try {
-            // Validar que no tenga ya un pedido asignado
             const { data: misViajes } = await supabaseClient
                 .from('pedidos')
                 .select('id')
@@ -565,10 +580,9 @@
             
             if (error) throw error;
             
-            // Forzar actualización inmediata de la interfaz
-            setTimeout(refrescarListaVisual, 100);
+            setTimeout(refrescarListaVisual, 200);
         } catch (err) {
-            alert("El pedido ya fue tomado por otro repartidor o expiró.");
+            alert("El pedido ya fue tomado por otro repartidor.");
         }
     }
 
@@ -579,7 +593,7 @@
                 .eq('id', idPedido);
             
             if (error) throw error;
-            setTimeout(refrescarListaVisual, 100);
+            setTimeout(refrescarListaVisual, 200);
         } catch (err) {
             alert("Error al finalizar entrega: " + err.message);
         }
