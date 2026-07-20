@@ -38,7 +38,6 @@
             background: #e5e3df;
         }
         
-        /* Ocultar la caja de texto con las instrucciones de Leaflet */
         .leaflet-routing-container { display: none !important; }
         
         /* BOTÓN DE GOOGLE */
@@ -72,7 +71,7 @@
         .contenedor-cotizacion {
             background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 15px; border-radius: 6px; margin: 15px 0; display: flex; justify-content: space-around; text-align: center;
         }
-        .dato-cotizacion font-size: 14px; color: #166534; }
+        .dato-cotizacion { font-size: 14px; color: #166534; }
         .dato-cotizacion strong { display: block; font-size: 20px; color: #14532d; margin-top: 4px; }
         .costo-resaltado { color: #00d1b2 !important; }
     </style>
@@ -145,7 +144,6 @@
             <label for="paquete">Descripción del paquete:</label>
             <input type="text" id="paquete" placeholder="Ej. Documentos importantes, Hamburguesa con papas" required>
 
-            <!-- NUEVO CAMPO PARA SUBIR FOTO -->
             <label for="fotoInput">Foto de la mercancía (Obligatoria):</label>
             <input type="file" id="fotoInput" accept="image/*" required>
 
@@ -160,7 +158,6 @@
     <div id="pantallaRepartidor" class="oculto">
         <h2>Panel de Envíos Activos</h2>
         
-        <!-- Contenedor dinámico para el mapa del Repartidor (Ruta por Calles) -->
         <div id="contenedorMapaRepartidor" class="oculto">
             <label>🗺️ Ruta por Calles (Trayecto del Reparto):</label>
             <div id="mapaRepartidor"></div>
@@ -190,6 +187,7 @@
     const barraUsuario = document.getElementById('barraUsuario');
     
     let usuarioActual = null;
+    let estaCargando = false; // Control de concurrencia para evitar pedidos duplicados
     
     // MAPA CLIENTE
     let mapa = null;
@@ -198,11 +196,10 @@
     let lngActual = -58.3816;
     let direccionTextoActual = ""; 
 
-    // MAPA REPARTIDOR Y CONTROL DE RUTA
+    // MAPA REPARTIDOR
     let mapaRepartidor = null;
     let controlRuta = null;
 
-    // VARIABLES DE LOGÍSTICA
     let coordenadasOrigen = null;  
     let coordenadasDestino = null; 
     let costoEnvioFinal = 0;
@@ -402,7 +399,7 @@
     });
 
     // =========================================================================
-    // MAPA DEL REPARTIDOR (RUTAS EXACTAS POR CALLE)
+    // MAPA DEL REPARTIDOR
     // =========================================================================
     function mostrarRutaEnMapaRepartidor(origLat, origLng, destLat, destLng) {
         document.getElementById('contenedorMapaRepartidor').classList.remove('oculto');
@@ -416,13 +413,8 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaRepartidor);
 
         controlRuta = L.Routing.control({
-            waypoints: [
-                L.latLng(origLat, origLng),
-                L.latLng(destLat, destLng)
-            ],
-            lineOptions: {
-                styles: [{ color: '#209cee', opacity: 0.8, weight: 6 }]
-            },
+            waypoints: [L.latLng(origLat, origLng), L.latLng(destLat, destLng)],
+            lineOptions: { styles: [{ color: '#209cee', opacity: 0.8, weight: 6 }] },
             createMarker: function(i, waypoint, n) {
                 if (i === 0) return L.marker(waypoint.latLng).bindPopup("📍 Recoger aquí (Origen)");
                 if (i === n - 1) return L.marker(waypoint.latLng).bindPopup("🏁 Entregar aquí (Destino)");
@@ -443,7 +435,9 @@
         }
     }
 
-    // --- RADAR EN TIEMPO REAL ---
+    // =========================================================================
+    // RADAR Y LOGÍSTICA REALTIME SIN DUPLICADOS
+    // =========================================================================
     let canalRealtime = null;
 
     function escucharPedidosRealtime() {
@@ -459,81 +453,100 @@
     }
 
     async function refrescarListaVisual() {
-        if (!usuarioActual) return;
+        if (!usuarioActual || estaCargando) return;
+        estaCargando = true; // Bloquea llamadas simultáneas
 
-        const { data: misViajes } = await supabaseClient
-            .from('pedidos')
-            .select('*')
-            .eq('repartidor_id', usuarioActual.id)
-            .eq('estado', 'en_camino');
+        try {
+            const { data: misViajes } = await supabaseClient
+                .from('pedidos')
+                .select('*')
+                .eq('repartidor_id', usuarioActual.id)
+                .eq('estado', 'en_camino');
 
-        const listaPedidosDiv = document.getElementById('listaPedidos');
-        if (!listaPedidosDiv) return;
-        
-        // Se limpia el contenedor por completo antes de inyectar datos para evitar la duplicidad
-        listaPedidosDiv.innerHTML = "";
-
-        // CASO A: El repartidor ya aceptó un viaje (Muestra la foto de la mercancía)
-        if (misViajes && misViajes.length > 0) {
-            const viajeActivo = misViajes[0];
+            const listaPedidosDiv = document.getElementById('listaPedidos');
+            if (!listaPedidosDiv) return;
             
-            const tarjetaAmarilla = document.createElement('div');
-            tarjetaAmarilla.className = 'tarjeta-pedido tomado';
-            tarjetaAmarilla.innerHTML = `
-                <h3 style="color: #bfa100; margin-top:0;">⚡ Viaje en curso (Asignado a ti)</h3>
-                <p><strong>📦 Paquete:</strong> ${viajeActivo.paquete}</p>
-                ${viajeActivo.mercancia ? `<img src="${viajeActivo.mercancia}" class="foto-mercancia" alt="Foto del paquete">` : ''}
-                <p><strong>💰 Ganancia:</strong> <span style="font-size:18px; color:#14532d; font-weight:bold;">$${viajeActivo.costo || 0}</span></p>
-                <p><strong>📍 Origen:</strong> ${viajeActivo.origen}</p>
-                <p><strong>🏁 Destino:</strong> ${viajeActivo.destino}</p>
-                <div class="alerta-telefono">
-                    📞 <strong>Contacto:</strong> <a href="tel:${viajeActivo.telefono}" style="font-weight: bold; color: #1f1f1f;">${viajeActivo.telefono || 'Sin número'}</a>
-                </div>
-                <button class="btn-advertencia" onclick="entregarPedido('${viajeActivo.id}')">Marcar como entregado</button>
-            `;
-            listaPedidosDiv.appendChild(tarjetaAmarilla);
+            listaPedidosDiv.innerHTML = ""; // Limpieza absoluta
 
-            if(viajeActivo.origen_lat && viajeActivo.destino_lat) {
-                mostrarRutaEnMapaRepartidor(viajeActivo.origen_lat, viajeActivo.origen_lng, viajeActivo.destino_lat, viajeActivo.destino_lng);
+            // CASO A: Viaje activo
+            if (misViajes && misViajes.length > 0) {
+                const viajeActivo = misViajes[0];
+                
+                const tarjetaAmarilla = document.createElement('div');
+                tarjetaAmarilla.className = 'tarjeta-pedido tomado';
+                tarjetaAmarilla.innerHTML = `
+                    <h3 style="color: #bfa100; margin-top:0;">⚡ Viaje en curso</h3>
+                    <p><strong>📦 Paquete:</strong> ${viajeActivo.paquete}</p>
+                    ${viajeActivo.mercancia ? `<img src="${viajeActivo.mercancia}" class="foto-mercancia" alt="Foto del paquete">` : ''}
+                    <p><strong>💰 Ganancia:</strong> <span style="font-size:18px; color:#14532d; font-weight:bold;">$${viajeActivo.costo || 0}</span></p>
+                    <p><strong>📍 Origen:</strong> ${viajeActivo.origen}</p>
+                    <p><strong>🏁 Destino:</strong> ${viajeActivo.destino}</p>
+                    <div class="alerta-telefono">
+                        📞 <strong>Contacto:</strong> <a href="tel:${viajeActivo.telefono}">${viajeActivo.telefono || 'Sin número'}</a>
+                    </div>
+                `;
+
+                const btnEntregar = document.createElement('button');
+                btnEntregar.className = 'btn-advertencia';
+                btnEntregar.innerText = 'Marcar como entregado';
+                btnEntregar.addEventListener('click', () => entregarPedido(viajeActivo.id));
+                
+                tarjetaAmarilla.appendChild(btnEntregar);
+                listaPedidosDiv.appendChild(tarjetaAmarilla);
+
+                if(viajeActivo.origen_lat && viajeActivo.destino_lat) {
+                    mostrarRutaEnMapaRepartidor(viajeActivo.origen_lat, viajeActivo.origen_lng, viajeActivo.destino_lat, viajeActivo.destino_lng);
+                }
+                return; 
             }
-            return; 
+
+            // CASO B: Repartidor Libre
+            ocultarMapaRepartidor();
+
+            const { data: disponibles } = await supabaseClient
+                .from('pedidos')
+                .select('*')
+                .eq('estado', 'solicitado');
+
+            if (!disponibles || disponibles.length === 0) {
+                listaPedidosDiv.innerHTML = "<p style='color: #666; text-align: center; padding: 20px;'>No hay pedidos en el radar por el momento...</p>";
+                return;
+            }
+
+            disponibles.forEach((pedido) => {
+                const tarjeta = document.createElement('div');
+                tarjeta.className = 'tarjeta-pedido';
+                tarjeta.innerHTML = `
+                    <p style="margin-top: 0; display:flex; justify-content:space-between; align-items:center;">
+                        <strong>📦 Envío disponible:</strong> 
+                        <span style="background:#eef9f8; padding:4px 8px; border-radius:4px; color:#00d1b2; font-weight:bold;">$${pedido.costo || 0}</span>
+                    </p>
+                    <p><strong>📦 Producto:</strong> ${pedido.paquete}</p>
+                    ${pedido.mercancia ? `<img src="${pedido.mercancia}" class="foto-mercancia" alt="Foto del paquete">` : ''}
+                    <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
+                    <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
+                `;
+
+                const btnTomar = document.createElement('button');
+                btnTomar.innerText = 'Tomar este reparto';
+                btnTomar.addEventListener('click', () => aceptarPedido(pedido.id));
+
+                tarjeta.appendChild(btnTomar);
+                listaPedidosDiv.appendChild(tarjeta);
+            });
+
+        } catch (err) {
+            console.error(err);
+        } finally {
+            estaCargando = false; // Libera el bloqueo
         }
-
-        // CASO B: El repartidor está libre
-        ocultarMapaRepartidor();
-
-        const { data: disponibles } = await supabaseClient
-            .from('pedidos')
-            .select('*')
-            .eq('estado', 'solicitado');
-
-        if (!disponibles || disponibles.length === 0) {
-            listaPedidosDiv.innerHTML = "<p style='color: #666; text-align: center; padding: 20px;'>No hay pedidos en el radar por el momento...</p>";
-            return;
-        }
-
-        disponibles.forEach((pedido) => {
-            const tarjeta = document.createElement('div');
-            tarjeta.className = 'tarjeta-pedido';
-            tarjeta.innerHTML = `
-                <p style="margin-top: 0; display:flex; justify-content:space-between; align-items:center;">
-                    <strong>📦 Envío disponible:</strong> 
-                    <span style="background:#eef9f8; padding:4px 8px; border-radius:4px; color:#00d1b2; font-weight:bold;">$${pedido.costo || 0}</span>
-                </p>
-                <p><strong>📦 Producto:</strong> ${pedido.paquete}</p>
-                ${pedido.mercancia ? `<img src="${pedido.mercancia}" class="foto-mercancia" alt="Foto del paquete">` : ''}
-                <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
-                <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
-                <button onclick="aceptarPedido('${pedido.id}')">Tomar este reparto</button>
-            `;
-            listaPedidosDiv.appendChild(tarjeta);
-        });
     }
 
-    window.aceptarPedido = async function(idPedido) {
-        if (!usuarioActual) return alert("Sesión inválida. Intente reingresar.");
+    async function aceptarPedido(idPedido) {
+        if (!usuarioActual) return alert("Sesión inválida.");
+        
         try {
-            // Regla de negocio: Validar que no tenga ya un pedido asignado de forma local activa
+            // Validar que no tenga ya un pedido asignado
             const { data: misViajes } = await supabaseClient
                 .from('pedidos')
                 .select('id')
@@ -541,36 +554,38 @@
                 .eq('estado', 'en_camino');
 
             if (misViajes && misViajes.length > 0) {
-                alert("Ya tienes un viaje en curso activo. Termina ese reparto primero.");
+                alert("Ya tienes un viaje activo.");
                 return;
             }
 
             const { error } = await supabaseClient.from('pedidos')
                 .update({ estado: 'en_camino', repartidor_id: usuarioActual.id })
                 .eq('id', idPedido)
-                .eq('estado', 'solicitado'); // Validación atómica extra en base de datos
+                .eq('estado', 'solicitado');
             
             if (error) throw error;
-            refrescarListaVisual(); 
+            
+            // Forzar actualización inmediata de la interfaz
+            setTimeout(refrescarListaVisual, 100);
         } catch (err) {
-            alert("No se pudo tomar el reparto: " + err.message);
+            alert("El pedido ya fue tomado por otro repartidor o expiró.");
         }
-    };
+    }
 
-    window.entregarPedido = async function(idPedido) {
+    async function entregarPedido(idPedido) {
         try {
             const { error } = await supabaseClient.from('pedidos')
                 .update({ estado: 'entregado' })
                 .eq('id', idPedido);
             
             if (error) throw error;
-            refrescarListaVisual(); 
+            setTimeout(refrescarListaVisual, 100);
         } catch (err) {
-            alert("No se pudo finalizar la entrega: " + err.message);
+            alert("Error al finalizar entrega: " + err.message);
         }
-    };
+    }
 
-    // --- ACCIONES DE AUTENTICACIÓN ---
+    // --- AUTENTICACIÓN ---
     document.getElementById('btnGoogle').addEventListener('click', async () => {
         const rolSeleccionado = document.getElementById('rol').value;
         localStorage.setItem('rol_seleccionado_google', rolSeleccionado);
