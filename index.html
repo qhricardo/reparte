@@ -177,7 +177,8 @@
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit";
 
-    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // CORRECCIÓN 1: En v2 se usa directamente el objeto global de la librería cargada
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const pantallaAuth = document.getElementById('pantallaAuth');
     const pantallaCliente = document.getElementById('pantallaCliente');
@@ -212,6 +213,7 @@
             let rolGuardadoEnBaseDatos = usuarioActual.user_metadata?.rol;
             let rolFinal = 'cliente';
 
+            // CORRECCIÓN 2: Sintaxis correcta de Supabase v2 para actualizar la metadata del usuario
             if (rolElegidoAntesDeGoogle && rolElegidoAntesDeGoogle !== rolGuardadoEnBaseDatos) {
                 await supabaseClient.auth.updateUser({ data: { rol: rolElegidoAntesDeGoogle } });
                 rolFinal = rolElegidoAntesDeGoogle;
@@ -232,7 +234,7 @@
     function redireccionarSegunRol(rol) {
         pantallaAuth.classList.add('oculto');
         barraUsuario.classList.remove('oculto');
-        document.getElementById('txtUsuarioLogueado').innerText = usuarioActual.email || "Usuario de Google";
+        document.getElementById('txtUsuarioLogueado').innerText = usuarioActual.email || "Usuario Activo";
         document.getElementById('txtRolUsuario').innerText = rol.toUpperCase();
 
         if (rol === 'cliente') {
@@ -366,30 +368,25 @@
     // MAPA DEL REPARTIDOR (RUTAS EXACTAS POR CALLE)
     // =========================================================================
     function mostrarRutaEnMapaRepartidor(origLat, origLng, destLat, destLng) {
-        // 1. Mostrar contenedor en pantalla
         document.getElementById('contenedorMapaRepartidor').classList.remove('oculto');
 
-        // 2. Limpieza estricta de mapas previos para evitar fallos de Leaflet
         if (mapaRepartidor) {
             mapaRepartidor.remove();
             mapaRepartidor = null;
         }
 
-        // 3. Crear mapa base
         mapaRepartidor = L.map('mapaRepartidor').setView([origLat, origLng], 14);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaRepartidor);
 
-        // 4. Implementar el motor de enrutamiento por calles reales (OSM Engine)
         controlRuta = L.Routing.control({
             waypoints: [
                 L.latLng(origLat, origLng),
                 L.latLng(destLat, destLng)
             ],
             lineOptions: {
-                styles: [{ color: '#209cee', opacity: 0.8, weight: 6 }] // Línea azul de ruta urbana
+                styles: [{ color: '#209cee', opacity: 0.8, weight: 6 }]
             },
             createMarker: function(i, waypoint, n) {
-                // Crear marcadores personalizados e informativos
                 if (i === 0) {
                     return L.marker(waypoint.latLng).bindPopup("📍 Recoger aquí (Origen)");
                 } else if (i === n - 1) {
@@ -401,7 +398,6 @@
             fitSelectedRoutes: true
         }).addTo(mapaRepartidor);
 
-        // 5. Ajuste asíncrono para asegurar la correcta escala visual
         setTimeout(() => { 
             mapaRepartidor.invalidateSize(); 
         }, 300);
@@ -441,7 +437,6 @@
         if (!listaPedidosDiv) return;
         listaPedidosDiv.innerHTML = "";
 
-        // CASO A: El repartidor ya aceptó un viaje
         if (misViajes && misViajes.length > 0) {
             const viajeActivo = misViajes[0];
             
@@ -454,7 +449,7 @@
                 <p><strong>📍 Origen:</strong> ${viajeActivo.origen}</p>
                 <p><strong>🏁 Destino:</strong> ${viajeActivo.destino}</p>
                 <div class="alerta-telefono">
-                    📞 **Contacto:** <a href="tel:${viajeActivo.telefono}" style="font-weight: bold; color: #1f1f1f;">${viajeActivo.telefono || 'Sin número'}</a>
+                    📞 <strong>Contacto:</strong> <a href="tel:${viajeActivo.telefono}" style="font-weight: bold; color: #1f1f1f;">${viajeActivo.telefono || 'Sin número'}</a>
                 </div>
                 <button class="btn-advertencia" id="btnEntregar-${viajeActivo.id}">Marcar como entregado</button>
             `;
@@ -464,14 +459,12 @@
                 entregarPedido(viajeActivo.id);
             });
 
-            // Llama a calcular y trazar el mapa calle por calle
             if(viajeActivo.origen_lat && viajeActivo.destino_lat) {
                 mostrarRutaEnMapaRepartidor(viajeActivo.origen_lat, viajeActivo.origen_lng, viajeActivo.destino_lat, viajeActivo.destino_lng);
             }
             return; 
         }
 
-        // CASO B: El repartidor está libre
         ocultarMapaRepartidor();
 
         const { data: disponibles } = await supabaseClient
@@ -525,21 +518,36 @@
         localStorage.setItem('rol_seleccionado_google', rolSeleccionado);
         await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
-            options: { queryParams: { access_type: 'offline', prompt: 'select_account' }, data: { rol: rolSeleccionado }, redirectTo: "https://qhricardo.github.io/reparte/" }
+            options: { 
+                queryParams: { access_type: 'offline', prompt: 'select_account' }, 
+                redirectTo: "https://qhricardo.github.io/reparte/" 
+            }
         });
     });
+
     document.getElementById('btnRegistrar').addEventListener('click', async () => {
-        const email = document.getElementById('email').value; const password = document.getElementById('password').value; const rolSeleccionado = document.getElementById('rol').value;
+        const email = document.getElementById('email').value; 
+        const password = document.getElementById('password').value; 
+        const rolSeleccionado = document.getElementById('rol').value;
         if(!email || !password) return alert("Ingresa datos.");
-        const { error } = await supabaseClient.auth.signUp({ email, password, options: { data: { rol: rolSeleccionado } } });
-        if (error) alert(error.message); else alert("¡Cuenta creada!");
+        
+        // CORRECCIÓN 3: Envío correcto de metadata de usuario en el registro clásico
+        const { error } = await supabaseClient.auth.signUp({ 
+            email, 
+            password, 
+            options: { data: { rol: rolSeleccionado } } 
+        });
+        if (error) alert(error.message); else alert("¡Cuenta creada! Revisa tu correo o inicia sesión.");
     });
+
     document.getElementById('btnIngresar').addEventListener('click', async () => {
-        const email = document.getElementById('email').value; const password = document.getElementById('password').value;
+        const email = document.getElementById('email').value; 
+        const password = document.getElementById('password').value;
         if(!email || !password) return alert("Ingresa datos.");
         const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) alert(error.message);
     });
+
     document.getElementById('btnCerrarSesion').addEventListener('click', async () => {
         localStorage.removeItem('rol_seleccionado_google');
         await supabaseClient.auth.signOut();
