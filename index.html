@@ -624,6 +624,23 @@
         localStorage.removeItem('rol_seleccionado_google');
         await supabaseClient.auth.signOut();
     });
+    
+    // SOPORTE PARA BOTONES ADICIONALES DE CERRAR SESIÓN
+    const btnCerrarCliente = document.getElementById('btnCerrarSesionCliente');
+    if (btnCerrarCliente) {
+        btnCerrarCliente.addEventListener('click', async () => {
+            localStorage.removeItem('rol_seleccionado_google');
+            await supabaseClient.auth.signOut();
+        });
+    }
+
+    const btnCerrarRepartidor = document.getElementById('btnCerrarSesionRepartidor');
+    if (btnCerrarRepartidor) {
+        btnCerrarRepartidor.addEventListener('click', async () => {
+            localStorage.removeItem('rol_seleccionado_google');
+            await supabaseClient.auth.signOut();
+        });
+    }
 </script>
 </body>
 </html>
