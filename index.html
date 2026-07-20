@@ -38,10 +38,7 @@
             background: #e5e3df;
         }
         
-        /* Ocultar la caja de texto con las instrucciones paso a paso de Leaflet para que no tape el diseño móvil */
-        .leaflet-routing-container {
-            display: none !important;
-        }
+        .leaflet-routing-container { display: none !important; }
         
         /* BOTÓN DE GOOGLE */
         .btn-google {
@@ -52,7 +49,7 @@
         .btn-google:hover { background-color: #f8fafd; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
         .btn-google svg { width: 18px; height: 18px; margin-right: 10px; }
 
-        /* TARJETAS DE PEDIDOS */
+        /* TARJETAS DE PEDIDOS Y FOTOS */
         .lista-tarjetas { display: grid; gap: 15px; margin-top: 15px; }
         .tarjeta-pedido { 
             border-left: 5px solid #00d1b2; background: #ffffff; padding: 18px; 
@@ -62,6 +59,9 @@
             border-left: 5px solid #ffdd57; 
             background: #fffdf3; 
             box-shadow: 0 4px 10px rgba(255, 221, 87, 0.25);
+        }
+        .foto-mercancia {
+            width: 100%; max-height: 200px; object-fit: cover; border-radius: 6px; margin: 10px 0; border: 1px solid #ddd; display: block;
         }
 
         .oculto { display: none !important; }
@@ -141,13 +141,16 @@
             <label for="destino">¿A dónde lo llevamos? (Destino):</label>
             <input type="text" id="destino" placeholder="Usa el mapa de arriba para fijar el destino" required readonly>
 
-            <label for="paquete">¿Qué mercancía envías?:</label>
-            <input type="text" id="paquete" placeholder="Ej. Documentos, Comida, Llaves" required>
+            <label for="paquete">Descripción del paquete:</label>
+            <input type="text" id="paquete" placeholder="Ej. Documentos importantes, Hamburguesa con papas" required>
+
+            <label for="fotoInput">Foto de la mercancía (Obligatoria):</label>
+            <input type="file" id="fotoInput" accept="image/*" required>
 
             <label for="telefono">Número telefónico de contacto:</label>
             <input type="tel" id="telefono" placeholder="Ej. 11 1234-5678" required>
 
-            <button type="submit">Publicar Pedido de Entrega</button>
+            <button type="submit" id="btnPublicarPedido">Publicar Pedido de Entrega</button>
         </form>
     </div>        
 
@@ -155,7 +158,6 @@
     <div id="pantallaRepartidor" class="oculto">
         <h2>Panel de Envíos Activos</h2>
         
-        <!-- Contenedor dinámico para el mapa del Repartidor (Ruta por Calles) -->
         <div id="contenedorMapaRepartidor" class="oculto">
             <label>🗺️ Ruta por Calles (Trayecto del Reparto):</label>
             <div id="mapaRepartidor"></div>
@@ -177,8 +179,7 @@
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit";
 
-    // CORRECCIÓN 1: En v2 se usa directamente el objeto global de la librería cargada
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const pantallaAuth = document.getElementById('pantallaAuth');
     const pantallaCliente = document.getElementById('pantallaCliente');
@@ -186,19 +187,19 @@
     const barraUsuario = document.getElementById('barraUsuario');
     
     let usuarioActual = null;
+    let estaCargando = false; 
     
     // MAPA CLIENTE
     let mapa = null;
     let marcador = null;
-    let latActual = 19.5971;
-    let lngActual = -99.8086;
+    let latActual = -34.6037;
+    let lngActual = -58.3816;
     let direccionTextoActual = ""; 
 
-    // MAPA REPARTIDOR Y CONTROL DE RUTA
+    // MAPA REPARTIDOR
     let mapaRepartidor = null;
     let controlRuta = null;
 
-    // VARIABLES DE LOGÍSTICA
     let coordenadasOrigen = null;  
     let coordenadasDestino = null; 
     let costoEnvioFinal = 0;
@@ -213,7 +214,6 @@
             let rolGuardadoEnBaseDatos = usuarioActual.user_metadata?.rol;
             let rolFinal = 'cliente';
 
-            // CORRECCIÓN 2: Sintaxis correcta de Supabase v2 para actualizar la metadata del usuario
             if (rolElegidoAntesDeGoogle && rolElegidoAntesDeGoogle !== rolGuardadoEnBaseDatos) {
                 await supabaseClient.auth.updateUser({ data: { rol: rolElegidoAntesDeGoogle } });
                 rolFinal = rolElegidoAntesDeGoogle;
@@ -234,7 +234,7 @@
     function redireccionarSegunRol(rol) {
         pantallaAuth.classList.add('oculto');
         barraUsuario.classList.remove('oculto');
-        document.getElementById('txtUsuarioLogueado').innerText = usuarioActual.email || "Usuario Activo";
+        document.getElementById('txtUsuarioLogueado').innerText = usuarioActual.email || "Usuario de Google";
         document.getElementById('txtRolUsuario').innerText = rol.toUpperCase();
 
         if (rol === 'cliente') {
@@ -327,9 +327,11 @@
     }
 
     // =========================================================================
-    // FORMULARIO CLIENTE
+    // ENVIAR FORMULARIO CON SUBIDA DE IMAGEN
     // =========================================================================
     const formPedido = document.getElementById('formPedido');
+    const btnPublicarPedido = document.getElementById('btnPublicarPedido');
+
     formPedido.addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -338,34 +340,66 @@
             return;
         }
 
-        const { error } = await supabaseClient.from('pedidos').insert([
-            { 
-                origen: document.getElementById('origen').value, 
-                destino: document.getElementById('destino').value, 
-                origen_lat: coordenadasOrigen.lat,
-                origen_lng: coordenadasOrigen.lng,
-                destino_lat: coordenadasDestino.lat,
-                destino_lng: coordenadasDestino.lng,
-                paquete: document.getElementById('paquete').value, 
-                telefono: document.getElementById('telefono').value,
-                costo: costoEnvioFinal, 
-                estado: 'solicitado',
-                cliente_id: usuarioActual.id
-            }
-        ]);
+        const fotoFile = document.getElementById('fotoInput').files[0];
+        if(!fotoFile) {
+            alert("Por favor, selecciona una foto de la mercancía.");
+            return;
+        }
 
-        if (error) alert("Error: " + error.message);
-        else { 
+        btnPublicarPedido.innerText = "Subiendo imagen y publicando...";
+        btnPublicarPedido.disabled = true;
+
+        try {
+            const extension = fotoFile.name.split('.').pop();
+            const nombreArchivo = `${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
+
+            const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                .from('fotos-mercancia')
+                .upload(nombreArchivo, fotoFile);
+
+            if (uploadError) throw uploadError;
+
+            const { data: publicUrlData } = supabaseClient.storage
+                .from('fotos-mercancia')
+                .getPublicUrl(nombreArchivo);
+
+            const fotoUrlFinal = publicUrlData.publicUrl;
+
+            const { error: insertError } = await supabaseClient.from('pedidos').insert([
+                { 
+                    origen: document.getElementById('origen').value, 
+                    destino: document.getElementById('destino').value, 
+                    origen_lat: coordenadasOrigen.lat,
+                    origen_lng: coordenadasOrigen.lng,
+                    destino_lat: coordenadasDestino.lat,
+                    destino_lng: coordenadasDestino.lng,
+                    paquete: document.getElementById('paquete').value, 
+                    mercancia: fotoUrlFinal, 
+                    telefono: document.getElementById('telefono').value,
+                    costo: costoEnvioFinal, 
+                    estado: 'solicitado',
+                    cliente_id: usuarioActual.id
+                }
+            ]);
+
+            if (insertError) throw insertError;
+
             alert("¡Pedido creado con éxito!");
             formPedido.reset();
             document.getElementById('vistaDistancia').innerText = "0.00 km";
             document.getElementById('vistaCosto').innerText = "$0.00";
             coordenadasOrigen = null; coordenadasDestino = null; costoEnvioFinal = 0;
+
+        } catch (error) {
+            alert("Error al procesar el pedido: " + error.message);
+        } finally {
+            btnPublicarPedido.innerText = "Publicar Pedido de Entrega";
+            btnPublicarPedido.disabled = false;
         }
     });
 
     // =========================================================================
-    // MAPA DEL REPARTIDOR (RUTAS EXACTAS POR CALLE)
+    // MAPA DEL REPARTIDOR
     // =========================================================================
     function mostrarRutaEnMapaRepartidor(origLat, origLng, destLat, destLng) {
         document.getElementById('contenedorMapaRepartidor').classList.remove('oculto');
@@ -379,28 +413,18 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaRepartidor);
 
         controlRuta = L.Routing.control({
-            waypoints: [
-                L.latLng(origLat, origLng),
-                L.latLng(destLat, destLng)
-            ],
-            lineOptions: {
-                styles: [{ color: '#209cee', opacity: 0.8, weight: 6 }]
-            },
+            waypoints: [L.latLng(origLat, origLng), L.latLng(destLat, destLng)],
+            lineOptions: { styles: [{ color: '#209cee', opacity: 0.8, weight: 6 }] },
             createMarker: function(i, waypoint, n) {
-                if (i === 0) {
-                    return L.marker(waypoint.latLng).bindPopup("📍 Recoger aquí (Origen)");
-                } else if (i === n - 1) {
-                    return L.marker(waypoint.latLng).bindPopup("🏁 Entregar aquí (Destino)");
-                }
+                if (i === 0) return L.marker(waypoint.latLng).bindPopup("📍 Recoger aquí (Origen)");
+                if (i === n - 1) return L.marker(waypoint.latLng).bindPopup("🏁 Entregar aquí (Destino)");
             },
             routeWhileDragging: false,
             addWaypoints: false,
             fitSelectedRoutes: true
         }).addTo(mapaRepartidor);
 
-        setTimeout(() => { 
-            mapaRepartidor.invalidateSize(); 
-        }, 300);
+        setTimeout(() => { mapaRepartidor.invalidateSize(); }, 300);
     }
 
     function ocultarMapaRepartidor() {
@@ -411,7 +435,9 @@
         }
     }
 
-    // --- RADAR EN TIEMPO REAL ---
+    // =========================================================================
+    // RADAR Y LOGÍSTICA REALTIME COMPLETA
+    // =========================================================================
     let canalRealtime = null;
 
     function escucharPedidosRealtime() {
@@ -419,135 +445,181 @@
         if (!canalRealtime) {
             canalRealtime = supabaseClient
                 .channel('cambios-pedidos') 
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => { refrescarListaVisual(); })
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => { 
+                    refrescarListaVisual(); 
+                })
                 .subscribe();
         }
     }
 
     async function refrescarListaVisual() {
-        if (!usuarioActual) return;
+        if (!usuarioActual || estaCargando) return;
+        estaCargando = true; 
 
-        const { data: misViajes } = await supabaseClient
-            .from('pedidos')
-            .select('*')
-            .eq('repartidor_id', usuarioActual.id)
-            .eq('estado', 'en_camino');
+        try {
+            const { data: misViajes } = await supabaseClient
+                .from('pedidos')
+                .select('*')
+                .eq('repartidor_id', usuarioActual.id)
+                .eq('estado', 'en_camino');
 
-        const listaPedidosDiv = document.getElementById('listaPedidos');
-        if (!listaPedidosDiv) return;
-        listaPedidosDiv.innerHTML = "";
-
-        if (misViajes && misViajes.length > 0) {
-            const viajeActivo = misViajes[0];
+            const listaPedidosDiv = document.getElementById('listaPedidos');
+            if (!listaPedidosDiv) return;
             
-            const tarjetaAmarilla = document.createElement('div');
-            tarjetaAmarilla.className = 'tarjeta-pedido tomado';
-            tarjetaAmarilla.innerHTML = `
-                <h3 style="color: #bfa100; margin-top:0;">⚡ Viaje en curso (Asignado a ti)</h3>
-                <p><strong>📦 Paquete:</strong> ${viajeActivo.paquete}</p>
-                <p><strong>💰 Ganancia:</strong> <span style="font-size:18px; color:#14532d; font-weight:bold;">$${viajeActivo.costo || 0}</span></p>
-                <p><strong>📍 Origen:</strong> ${viajeActivo.origen}</p>
-                <p><strong>🏁 Destino:</strong> ${viajeActivo.destino}</p>
-                <div class="alerta-telefono">
-                    📞 <strong>Contacto:</strong> <a href="tel:${viajeActivo.telefono}" style="font-weight: bold; color: #1f1f1f;">${viajeActivo.telefono || 'Sin número'}</a>
-                </div>
-                <button class="btn-advertencia" id="btnEntregar-${viajeActivo.id}">Marcar como entregado</button>
-            `;
-            listaPedidosDiv.appendChild(tarjetaAmarilla);
-            
-            document.getElementById(`btnEntregar-${viajeActivo.id}`).addEventListener('click', () => {
-                entregarPedido(viajeActivo.id);
-            });
+            listaPedidosDiv.innerHTML = ""; 
 
-            if(viajeActivo.origen_lat && viajeActivo.destino_lat) {
-                mostrarRutaEnMapaRepartidor(viajeActivo.origen_lat, viajeActivo.origen_lng, viajeActivo.destino_lat, viajeActivo.destino_lng);
+            // CASO A: Viaje activo
+            if (misViajes && misViajes.length > 0) {
+                const viajeActivo = misViajes[0];
+                
+                const tarjetaAmarilla = document.createElement('div');
+                tarjetaAmarilla.className = 'tarjeta-pedido tomado';
+                tarjetaAmarilla.innerHTML = `
+                    <h3 style="color: #bfa100; margin-top:0;">⚡ Viaje en curso</h3>
+                    <p><strong>📦 Paquete:</strong> ${viajeActivo.paquete}</p>
+                    <div id="contenedorFotoActivo"></div>
+                    <p><strong>💰 Ganancia:</strong> <span style="font-size:18px; color:#14532d; font-weight:bold;">$${viajeActivo.costo || 0}</span></p>
+                    <p><strong>📍 Origen:</strong> ${viajeActivo.origen}</p>
+                    <p><strong>🏁 Destino:</strong> ${viajeActivo.destino}</p>
+                    <div class="alerta-telefono">
+                        📞 <strong>Contacto:</strong> <a href="tel:${viajeActivo.telefono}">${viajeActivo.telefono || 'Sin número'}</a>
+                    </div>
+                `;
+
+                // Inyección segura de la foto
+                if (viajeActivo.mercancia) {
+                    const img = document.createElement('img');
+                    img.src = viajeActivo.mercancia;
+                    img.className = 'foto-mercancia';
+                    tarjetaAmarilla.querySelector('#contenedorFotoActivo').appendChild(img);
+                }
+
+                const btnEntregar = document.createElement('button');
+                btnEntregar.className = 'btn-advertencia';
+                btnEntregar.innerText = 'Marcar como entregado';
+                btnEntregar.addEventListener('click', () => entregarPedido(viajeActivo.id));
+                
+                tarjetaAmarilla.appendChild(btnEntregar);
+                listaPedidosDiv.appendChild(tarjetaAmarilla);
+
+                if(viajeActivo.origen_lat && viajeActivo.destino_lat) {
+                    mostrarRutaEnMapaRepartidor(viajeActivo.origen_lat, viajeActivo.origen_lng, viajeActivo.destino_lat, viajeActivo.destino_lng);
+                }
+                return; 
             }
-            return; 
-        }
 
-        ocultarMapaRepartidor();
+            // CASO B: Repartidor Libre
+            ocultarMapaRepartidor();
 
-        const { data: disponibles } = await supabaseClient
-            .from('pedidos')
-            .select('*')
-            .eq('estado', 'solicitado');
+            const { data: disponibles } = await supabaseClient
+                .from('pedidos')
+                .select('*')
+                .eq('estado', 'solicitado');
 
-        if (!disponibles || disponibles.length === 0) {
-            listaPedidosDiv.innerHTML = "<p style='color: #666; text-align: center; padding: 20px;'>No hay pedidos en el radar por el momento...</p>";
-            return;
-        }
+            if (!disponibles || disponibles.length === 0) {
+                listaPedidosDiv.innerHTML = "<p style='color: #666; text-align: center; padding: 20px;'>No hay pedidos en el radar por el momento...</p>";
+                return;
+            }
 
-        disponibles.forEach((pedido) => {
-            const tarjeta = document.createElement('div');
-            tarjeta.className = 'tarjeta-pedido';
-            tarjeta.innerHTML = `
-                <p style="margin-top: 0; display:flex; justify-content:space-between; align-items:center;">
-                    <strong>📦 Envío disponible:</strong> 
-                    <span style="background:#eef9f8; padding:4px 8px; border-radius:4px; color:#00d1b2; font-weight:bold;">$${pedido.costo || 0}</span>
-                </p>
-                <p><strong>📦 Producto:</strong> ${pedido.paquete}</p>
-                <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
-                <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
-                <button id="btnAceptar-${pedido.id}">Tomar este reparto</button>
-            `;
-            listaPedidosDiv.appendChild(tarjeta);
+            disponibles.forEach((pedido) => {
+                const tarjeta = document.createElement('div');
+                tarjeta.className = 'tarjeta-pedido';
+                tarjeta.innerHTML = `
+                    <p style="margin-top: 0; display:flex; justify-content:space-between; align-items:center;">
+                        <strong>📦 Envío disponible:</strong> 
+                        <span style="background:#eef9f8; padding:4px 8px; border-radius:4px; color:#00d1b2; font-weight:bold;">$${pedido.costo || 0}</span>
+                    </p>
+                    <p><strong>📦 Producto:</strong> ${pedido.paquete}</p>
+                    <div class="contenedor-foto-radar"></div>
+                    <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
+                    <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
+                `;
 
-            document.getElementById(`btnAceptar-${pedido.id}`).addEventListener('click', () => {
-                aceptarPedido(pedido.id);
+                if (pedido.mercancia) {
+                    const img = document.createElement('img');
+                    img.src = pedido.mercancia;
+                    img.className = 'foto-mercancia';
+                    tarjeta.querySelector('.contenedor-foto-radar').appendChild(img);
+                }
+
+                const btnTomar = document.createElement('button');
+                btnTomar.innerText = 'Tomar este reparto';
+                btnTomar.addEventListener('click', () => aceptarPedido(pedido.id));
+
+                tarjeta.appendChild(btnTomar);
+                listaPedidosDiv.appendChild(tarjeta);
             });
-        });
+
+        } catch (err) {
+            console.error(err);
+        } finally {
+            // CRÍTICO: El semáforo se libera siempre en el finally global
+            estaCargando = false; 
+        }
     }
 
-    window.aceptarPedido = async function(idPedido) {
-        await supabaseClient.from('pedidos')
-            .update({ estado: 'en_camino', repartidor_id: usuarioActual.id })
-            .eq('id', idPedido);
-        refrescarListaVisual(); 
-    };
+    async function aceptarPedido(idPedido) {
+        if (!usuarioActual) return alert("Sesión inválida.");
+        
+        try {
+            const { data: misViajes } = await supabaseClient
+                .from('pedidos')
+                .select('id')
+                .eq('repartidor_id', usuarioActual.id)
+                .eq('estado', 'en_camino');
 
-    window.entregarPedido = async function(idPedido) {
-        await supabaseClient.from('pedidos')
-            .update({ estado: 'entregado' })
-            .eq('id', idPedido);
-        refrescarListaVisual(); 
-    };
+            if (misViajes && misViajes.length > 0) {
+                alert("Ya tienes un viaje activo.");
+                return;
+            }
 
-    // --- ACCIONES DE AUTENTICACIÓN ---
+            const { error } = await supabaseClient.from('pedidos')
+                .update({ estado: 'en_camino', repartidor_id: usuarioActual.id })
+                .eq('id', idPedido)
+                .eq('estado', 'solicitado');
+            
+            if (error) throw error;
+            
+            setTimeout(refrescarListaVisual, 200);
+        } catch (err) {
+            alert("El pedido ya fue tomado por otro repartidor.");
+        }
+    }
+
+    async function entregarPedido(idPedido) {
+        try {
+            const { error } = await supabaseClient.from('pedidos')
+                .update({ estado: 'entregado' })
+                .eq('id', idPedido);
+            
+            if (error) throw error;
+            setTimeout(refrescarListaVisual, 200);
+        } catch (err) {
+            alert("Error al finalizar entrega: " + err.message);
+        }
+    }
+
+    // --- AUTENTICACIÓN ---
     document.getElementById('btnGoogle').addEventListener('click', async () => {
         const rolSeleccionado = document.getElementById('rol').value;
         localStorage.setItem('rol_seleccionado_google', rolSeleccionado);
         await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
-            options: { 
-                queryParams: { access_type: 'offline', prompt: 'select_account' }, 
-                redirectTo: "https://qhricardo.github.io/reparte/" 
-            }
+            options: { queryParams: { access_type: 'offline', prompt: 'select_account' }, data: { rol: rolSeleccionado }, redirectTo: "https://qhricardo.github.io/reparte/" }
         });
     });
-
     document.getElementById('btnRegistrar').addEventListener('click', async () => {
-        const email = document.getElementById('email').value; 
-        const password = document.getElementById('password').value; 
-        const rolSeleccionado = document.getElementById('rol').value;
+        const email = document.getElementById('email').value; const password = document.getElementById('password').value; const rolSeleccionado = document.getElementById('rol').value;
         if(!email || !password) return alert("Ingresa datos.");
-        
-        // CORRECCIÓN 3: Envío correcto de metadata de usuario en el registro clásico
-        const { error } = await supabaseClient.auth.signUp({ 
-            email, 
-            password, 
-            options: { data: { rol: rolSeleccionado } } 
-        });
-        if (error) alert(error.message); else alert("¡Cuenta creada! Revisa tu correo o inicia sesión.");
+        const { error } = await supabaseClient.auth.signUp({ email, password, options: { data: { rol: rolSeleccionado } } });
+        if (error) alert(error.message); else alert("¡Cuenta creada!");
     });
-
     document.getElementById('btnIngresar').addEventListener('click', async () => {
-        const email = document.getElementById('email').value; 
-        const password = document.getElementById('password').value;
+        const email = document.getElementById('email').value; const password = document.getElementById('password').value;
         if(!email || !password) return alert("Ingresa datos.");
         const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) alert(error.message);
     });
-
     document.getElementById('btnCerrarSesion').addEventListener('click', async () => {
         localStorage.removeItem('rol_seleccionado_google');
         await supabaseClient.auth.signOut();
