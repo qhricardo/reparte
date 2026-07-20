@@ -402,7 +402,8 @@
     // MAPA DEL REPARTIDOR
     // =========================================================================
     function mostrarRutaEnMapaRepartidor(origLat, origLng, destLat, destLng) {
-        document.getElementById('contenedorMapaRepartidor').classList.remove('oculto');
+        const divMapa = document.getElementById('contenedorMapaRepartidor');
+        if (divMapa) divMapa.classList.remove('oculto');
 
         if (mapaRepartidor) {
             mapaRepartidor.remove();
@@ -428,7 +429,8 @@
     }
 
     function ocultarMapaRepartidor() {
-        document.getElementById('contenedorMapaRepartidor').classList.add('oculto');
+        const divMapa = document.getElementById('contenedorMapaRepartidor');
+        if (divMapa) divMapa.classList.add('oculto');
         if (mapaRepartidor) {
             mapaRepartidor.remove();
             mapaRepartidor = null;
@@ -453,7 +455,10 @@
     }
 
     async function refrescarListaVisual() {
-        if (!usuarioActual || estaCargando) return;
+        if (!usuarioActual) return;
+        
+        // Si ya se está haciendo una consulta asíncrona, evitamos duplicarla
+        if (estaCargando) return;
         estaCargando = true; 
 
         try {
@@ -468,7 +473,7 @@
             
             listaPedidosDiv.innerHTML = ""; 
 
-            // CASO A: Viaje activo
+            // CASO A: Viaje activo asignado al repartidor
             if (misViajes && misViajes.length > 0) {
                 const viajeActivo = misViajes[0];
                 
@@ -477,7 +482,7 @@
                 tarjetaAmarilla.innerHTML = `
                     <h3 style="color: #bfa100; margin-top:0;">⚡ Viaje en curso</h3>
                     <p><strong>📦 Paquete:</strong> ${viajeActivo.paquete}</p>
-                    <div id="contenedorFotoActivo"></div>
+                    <div class="contenedor-foto-activo"></div>
                     <p><strong>💰 Ganancia:</strong> <span style="font-size:18px; color:#14532d; font-weight:bold;">$${viajeActivo.costo || 0}</span></p>
                     <p><strong>📍 Origen:</strong> ${viajeActivo.origen}</p>
                     <p><strong>🏁 Destino:</strong> ${viajeActivo.destino}</p>
@@ -486,12 +491,14 @@
                     </div>
                 `;
 
-                // Inyección segura de la foto
+                // Inyección segura de la foto guardada por el cliente
                 if (viajeActivo.mercancia) {
                     const img = document.createElement('img');
                     img.src = viajeActivo.mercancia;
                     img.className = 'foto-mercancia';
-                    tarjetaAmarilla.querySelector('#contenedorFotoActivo').appendChild(img);
+                    img.style.maxWidth = '100%';
+                    img.style.borderRadius = '8px';
+                    tarjetaAmarilla.querySelector('.contenedor-foto-activo').appendChild(img);
                 }
 
                 const btnEntregar = document.createElement('button');
@@ -508,7 +515,7 @@
                 return; 
             }
 
-            // CASO B: Repartidor Libre
+            // CASO B: Repartidor Libre, busca viajes disponibles en el radar
             ocultarMapaRepartidor();
 
             const { data: disponibles } = await supabaseClient
@@ -539,6 +546,8 @@
                     const img = document.createElement('img');
                     img.src = pedido.mercancia;
                     img.className = 'foto-mercancia';
+                    img.style.maxWidth = '100%';
+                    img.style.borderRadius = '8px';
                     tarjeta.querySelector('.contenedor-foto-radar').appendChild(img);
                 }
 
@@ -553,7 +562,6 @@
         } catch (err) {
             console.error(err);
         } finally {
-            // CRÍTICO: El semáforo se libera siempre en el finally global
             estaCargando = false; 
         }
     }
@@ -573,6 +581,7 @@
                 return;
             }
 
+            // Transacción segura: Sólo se puede tomar si sigue 'solicitado'
             const { error } = await supabaseClient.from('pedidos')
                 .update({ estado: 'en_camino', repartidor_id: usuarioActual.id })
                 .eq('id', idPedido)
@@ -580,7 +589,7 @@
             
             if (error) throw error;
             
-            setTimeout(refrescarListaVisual, 200);
+            // CORRECCIÓN ELIMINADA: Quitamos el setTimeout. Realtime hace el refresco limpio sin colisiones de código.
         } catch (err) {
             alert("El pedido ya fue tomado por otro repartidor.");
         }
@@ -593,7 +602,7 @@
                 .eq('id', idPedido);
             
             if (error) throw error;
-            setTimeout(refrescarListaVisual, 200);
+            // CORRECCIÓN ELIMINADA: Quitamos el setTimeout.
         } catch (err) {
             alert("Error al finalizar entrega: " + err.message);
         }
