@@ -61,7 +61,6 @@
             box-shadow: 0 4px 10px rgba(255, 221, 87, 0.25);
         }
         
-        /* Contenedor flexible para alinear texto e imagen pequeña */
         .cuerpo-tarjeta {
             display: flex;
             gap: 15px;
@@ -70,7 +69,6 @@
         }
         .info-paquete { flex: 1; }
         
-        /* Recuadro de la foto del producto más pequeño */
         .foto-mercancia {
             width: 100%;
             max-width: 140px;
@@ -88,7 +86,7 @@
         .contenedor-cotizacion {
             background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 15px; border-radius: 6px; margin: 15px 0; display: flex; justify-content: space-around; text-align: center;
         }
-        .dato-cotizacion font-size: 14px; color: #166534; }
+        .dato-cotizacion { font-size: 14px; color: #166534; }
         .dato-cotizacion strong { display: block; font-size: 20px; color: #14532d; margin-top: 4px; }
         .costo-resaltado { color: #00d1b2 !important; }
     </style>
@@ -209,8 +207,8 @@
     // MAPA CLIENTE
     let mapa = null;
     let marcador = null;
-    let latActual = -34.6037;
-    let lngActual = -58.3816;
+    let latActual = 19.5971;
+    let lngActual = -99.8086;
     let direccionTextoActual = ""; 
 
     // MAPA REPARTIDOR
@@ -453,7 +451,7 @@
     }
 
     // =========================================================================
-    // RADAR Y LOGÍSTICA REALTIME COMPLETA
+    // RADAR Y LOGÍSTICA REALTIME SIN DUPLICADOS
     // =========================================================================
     let canalRealtime = null;
 
@@ -475,18 +473,18 @@
         estaCargando = true; 
 
         try {
+            // Limpieza absoluta de la interfaz antes de inyectar datos
+            const listaPedidosDiv = document.getElementById('listaPedidos');
+            if (!listaPedidosDiv) return;
+            listaPedidosDiv.innerHTML = ""; 
+
+            // CASO A: Verificar de inmediato si el repartidor logueado ya tiene un pedido asignado
             const { data: misViajes } = await supabaseClient
                 .from('pedidos')
                 .select('*')
                 .eq('repartidor_id', usuarioActual.id)
                 .eq('estado', 'en_camino');
 
-            const listaPedidosDiv = document.getElementById('listaPedidos');
-            if (!listaPedidosDiv) return;
-            
-            listaPedidosDiv.innerHTML = ""; 
-
-            // CASO A: Viaje activo
             if (misViajes && misViajes.length > 0) {
                 const viajeActivo = misViajes[0];
                 
@@ -508,7 +506,6 @@
                     </div>
                 `;
 
-                // Inyección segura y limpia de la foto compacta
                 if (viajeActivo.mercancia) {
                     const img = document.createElement('img');
                     img.src = viajeActivo.mercancia;
@@ -527,10 +524,10 @@
                 if(viajeActivo.origen_lat && viajeActivo.destino_lat) {
                     mostrarRutaEnMapaRepartidor(viajeActivo.origen_lat, viajeActivo.origen_lng, viajeActivo.destino_lat, viajeActivo.destino_lng);
                 }
-                return; 
+                return; // Cortamos el flujo: si tiene viaje activo, no busca disponibles.
             }
 
-            // CASO B: Repartidor Libre (Si entra aquí, removemos mapa previo)
+            // CASO B: Si no tiene pedidos activos, limpiamos el mapa anterior y listamos radar
             ocultarMapaRepartidor();
 
             const { data: disponibles } = await supabaseClient
@@ -543,7 +540,11 @@
                 return;
             }
 
-            disponibles.forEach((pedido) => {
+            // Filtro con Map para asegurar que ningún ID de pedido se dibuje dos veces
+            const mapaPedidosUnicos = new Map();
+            disponibles.forEach(p => mapaPedidosUnicos.set(p.id, p));
+
+            mapaPedidosUnicos.forEach((pedido) => {
                 const tarjeta = document.createElement('div');
                 tarjeta.className = 'tarjeta-pedido';
                 tarjeta.innerHTML = `
@@ -555,7 +556,7 @@
                         <div class="info-paquete">
                             <p><strong>📦 Producto:</strong> ${pedido.paquete}</p>
                         </div>
-                        <div class="contenedor-foto-radar"></div>
+                        <div class="contenedor-foto-radar-${pedido.id}"></div>
                     </div>
                     <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
                     <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
@@ -565,7 +566,11 @@
                     const img = document.createElement('img');
                     img.src = pedido.mercancia;
                     img.className = 'foto-mercancia';
-                    tarjeta.querySelector('.contenedor-foto-radar').appendChild(img);
+                    // Timeout mínimo para asegurar el render del nodo del DOM
+                    setTimeout(() => {
+                        const contenedor = tarjeta.querySelector(`.contenedor-foto-radar-${pedido.id}`);
+                        if(contenedor) contenedor.appendChild(img);
+                    }, 0);
                 }
 
                 const btnTomar = document.createElement('button');
@@ -587,14 +592,15 @@
         if (!usuarioActual) return alert("Sesión inválida.");
         
         try {
-            const { data: misViajes } = await supabaseClient
+            // Verificación redundante antes de mutar
+            const { data: viajesPrevios } = await supabaseClient
                 .from('pedidos')
                 .select('id')
                 .eq('repartidor_id', usuarioActual.id)
                 .eq('estado', 'en_camino');
 
-            if (misViajes && misViajes.length > 0) {
-                alert("Ya tienes un viaje activo.");
+            if (viajesPrevios && viajesPrevios.length > 0) {
+                alert("Ya tienes un viaje activo actualmente.");
                 return;
             }
 
@@ -605,11 +611,10 @@
             
             if (error) throw error;
             
-            // Forzamos limpieza inmediata de la bandera bloqueante para refrescar sin problemas
             estaCargando = false;
             refrescarListaVisual();
         } catch (err) {
-            alert("El pedido ya fue tomado por otro repartidor o hubo un error de sincronización.");
+            alert("El pedido ya fue tomado o la conexión falló. Actualizando radar...");
             estaCargando = false;
             refrescarListaVisual();
         }
