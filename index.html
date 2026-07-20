@@ -72,7 +72,7 @@
         .contenedor-cotizacion {
             background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 15px; border-radius: 6px; margin: 15px 0; display: flex; justify-content: space-around; text-align: center;
         }
-        .dato-cotizacion { font-size: 14px; color: #166534; }
+        .dato-cotizacion font-size: 14px; color: #166534; }
         .dato-cotizacion strong { display: block; font-size: 20px; color: #14532d; margin-top: 4px; }
         .costo-resaltado { color: #00d1b2 !important; }
     </style>
@@ -353,25 +353,21 @@
         btnPublicarPedido.disabled = true;
 
         try {
-            // Generar un nombre único para la foto
             const extension = fotoFile.name.split('.').pop();
             const nombreArchivo = `${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
 
-            // Subir al bucket 'fotos-mercancia'
             const { data: uploadData, error: uploadError } = await supabaseClient.storage
                 .from('fotos-mercancia')
                 .upload(nombreArchivo, fotoFile);
 
             if (uploadError) throw uploadError;
 
-            // Obtener la URL pública del archivo subido
             const { data: publicUrlData } = supabaseClient.storage
                 .from('fotos-mercancia')
                 .getPublicUrl(nombreArchivo);
 
             const fotoUrlFinal = publicUrlData.publicUrl;
 
-            // Insertar el registro del pedido en la tabla incluyendo la columna "mercancia" con el link
             const { error: insertError } = await supabaseClient.from('pedidos').insert([
                 { 
                     origen: document.getElementById('origen').value, 
@@ -381,7 +377,7 @@
                     destino_lat: coordenadasDestino.lat,
                     destino_lng: coordenadasDestino.lng,
                     paquete: document.getElementById('paquete').value, 
-                    mercancia: fotoUrlFinal, // Aquí se guarda la URL de la imagen en tu base de datos
+                    mercancia: fotoUrlFinal, 
                     telefono: document.getElementById('telefono').value,
                     costo: costoEnvioFinal, 
                     estado: 'solicitado',
@@ -455,7 +451,9 @@
         if (!canalRealtime) {
             canalRealtime = supabaseClient
                 .channel('cambios-pedidos') 
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => { refrescarListaVisual(); })
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => { 
+                    refrescarListaVisual(); 
+                })
                 .subscribe();
         }
     }
@@ -471,6 +469,8 @@
 
         const listaPedidosDiv = document.getElementById('listaPedidos');
         if (!listaPedidosDiv) return;
+        
+        // Se limpia el contenedor por completo antes de inyectar datos para evitar la duplicidad
         listaPedidosDiv.innerHTML = "";
 
         // CASO A: El repartidor ya aceptó un viaje (Muestra la foto de la mercancía)
@@ -487,7 +487,7 @@
                 <p><strong>📍 Origen:</strong> ${viajeActivo.origen}</p>
                 <p><strong>🏁 Destino:</strong> ${viajeActivo.destino}</p>
                 <div class="alerta-telefono">
-                    📞 **Contacto:** <a href="tel:${viajeActivo.telefono}" style="font-weight: bold; color: #1f1f1f;">${viajeActivo.telefono || 'Sin número'}</a>
+                    📞 <strong>Contacto:</strong> <a href="tel:${viajeActivo.telefono}" style="font-weight: bold; color: #1f1f1f;">${viajeActivo.telefono || 'Sin número'}</a>
                 </div>
                 <button class="btn-advertencia" onclick="entregarPedido('${viajeActivo.id}')">Marcar como entregado</button>
             `;
@@ -531,10 +531,24 @@
     }
 
     window.aceptarPedido = async function(idPedido) {
+        if (!usuarioActual) return alert("Sesión inválida. Intente reingresar.");
         try {
+            // Regla de negocio: Validar que no tenga ya un pedido asignado de forma local activa
+            const { data: misViajes } = await supabaseClient
+                .from('pedidos')
+                .select('id')
+                .eq('repartidor_id', usuarioActual.id)
+                .eq('estado', 'en_camino');
+
+            if (misViajes && misViajes.length > 0) {
+                alert("Ya tienes un viaje en curso activo. Termina ese reparto primero.");
+                return;
+            }
+
             const { error } = await supabaseClient.from('pedidos')
                 .update({ estado: 'en_camino', repartidor_id: usuarioActual.id })
-                .eq('id', idPedido);
+                .eq('id', idPedido)
+                .eq('estado', 'solicitado'); // Validación atómica extra en base de datos
             
             if (error) throw error;
             refrescarListaVisual(); 
