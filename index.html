@@ -19,6 +19,7 @@
         
         button { background-color: #00d1b2; color: white; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; margin-bottom: 10px; }
         button:hover { background-color: #00b196; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
         .btn-secundario { background-color: #666; }
         .btn-secundario:hover { background-color: #444; }
         
@@ -207,8 +208,8 @@
     // MAPA CLIENTE
     let mapa = null;
     let marcador = null;
-    let latActual = 19.5971;
-    let lngActual = -99.8086;
+    let latActual = -34.6037;
+    let lngActual = -58.3816;
     let direccionTextoActual = ""; 
 
     // MAPA REPARTIDOR
@@ -473,17 +474,18 @@
         estaCargando = true; 
 
         try {
-            // Limpieza absoluta de la interfaz antes de inyectar datos
             const listaPedidosDiv = document.getElementById('listaPedidos');
             if (!listaPedidosDiv) return;
             listaPedidosDiv.innerHTML = ""; 
 
-            // CASO A: Verificar de inmediato si el repartidor logueado ya tiene un pedido asignado
-            const { data: misViajes } = await supabaseClient
+            // CASO A: Buscar si ya tienes asignado un pedido activo
+            const { data: misViajes, error: errorViajes } = await supabaseClient
                 .from('pedidos')
                 .select('*')
                 .eq('repartidor_id', usuarioActual.id)
                 .eq('estado', 'en_camino');
+
+            if (errorViajes) throw errorViajes;
 
             if (misViajes && misViajes.length > 0) {
                 const viajeActivo = misViajes[0];
@@ -524,23 +526,25 @@
                 if(viajeActivo.origen_lat && viajeActivo.destino_lat) {
                     mostrarRutaEnMapaRepartidor(viajeActivo.origen_lat, viajeActivo.origen_lng, viajeActivo.destino_lat, viajeActivo.destino_lng);
                 }
-                return; // Cortamos el flujo: si tiene viaje activo, no busca disponibles.
+                return; 
             }
 
-            // CASO B: Si no tiene pedidos activos, limpiamos el mapa anterior y listamos radar
+            // CASO B: Repartidor sin pedidos -> Listar radar disponible libre de duplicados
             ocultarMapaRepartidor();
 
-            const { data: disponibles } = await supabaseClient
+            const { data: disponibles, error: errorDisp } = await supabaseClient
                 .from('pedidos')
                 .select('*')
                 .eq('estado', 'solicitado');
+
+            if (errorDisp) throw errorDisp;
 
             if (!disponibles || disponibles.length === 0) {
                 listaPedidosDiv.innerHTML = "<p style='color: #666; text-align: center; padding: 20px;'>No hay pedidos en el radar por el momento...</p>";
                 return;
             }
 
-            // Filtro con Map para asegurar que ningún ID de pedido se dibuje dos veces
+            // Mapeo estricto por ID para garantizar registros únicos en el DOM
             const mapaPedidosUnicos = new Map();
             disponibles.forEach(p => mapaPedidosUnicos.set(p.id, p));
 
@@ -566,7 +570,6 @@
                     const img = document.createElement('img');
                     img.src = pedido.mercancia;
                     img.className = 'foto-mercancia';
-                    // Timeout mínimo para asegurar el render del nodo del DOM
                     setTimeout(() => {
                         const contenedor = tarjeta.querySelector(`.contenedor-foto-radar-${pedido.id}`);
                         if(contenedor) contenedor.appendChild(img);
@@ -574,6 +577,7 @@
                 }
 
                 const btnTomar = document.createElement('button');
+                btnTomar.id = `btn-tomar-${pedido.id}`;
                 btnTomar.innerText = 'Tomar este reparto';
                 btnTomar.addEventListener('click', () => aceptarPedido(pedido.id));
 
@@ -582,7 +586,7 @@
             });
 
         } catch (err) {
-            console.error(err);
+            console.error("Error cargando el radar:", err);
         } finally {
             estaCargando = false; 
         }
@@ -591,8 +595,14 @@
     async function aceptarPedido(idPedido) {
         if (!usuarioActual) return alert("Sesión inválida.");
         
+        const botonSeleccionado = document.getElementById(`btn-tomar-${idPedido}`);
+        if(botonSeleccionado) {
+            botonSeleccionado.disabled = true;
+            botonSeleccionado.innerText = "Procesando...";
+        }
+
         try {
-            // Verificación redundante antes de mutar
+            // Comprobación de seguridad local rápida
             const { data: viajesPrevios } = await supabaseClient
                 .from('pedidos')
                 .select('id')
@@ -601,20 +611,30 @@
 
             if (viajesPrevios && viajesPrevios.length > 0) {
                 alert("Ya tienes un viaje activo actualmente.");
+                if(botonSeleccionado) { botonSeleccionado.disabled = false; botonSeleccionado.innerText = "Tomar este reparto"; }
                 return;
             }
 
-            const { error } = await supabaseClient.from('pedidos')
+            // Intentar adueñarse del pedido de forma atómica en Supabase
+            const { data, error } = await supabaseClient.from('pedidos')
                 .update({ estado: 'en_camino', repartidor_id: usuarioActual.id })
                 .eq('id', idPedido)
-                .eq('estado', 'solicitado');
+                .eq('estado', 'solicitado')
+                .select();
             
             if (error) throw error;
+
+            if(!data || data.length === 0) {
+                alert("Este pedido ya fue tomado por otro repartidor.");
+            } else {
+                alert("¡Pedido asignado exitosamente!");
+            }
             
             estaCargando = false;
             refrescarListaVisual();
         } catch (err) {
-            alert("El pedido ya fue tomado o la conexión falló. Actualizando radar...");
+            alert("No se pudo tomar el reparto. Verifica tus políticas RLS en Supabase.");
+            if(botonSeleccionado) { botonSeleccionado.disabled = false; botonSeleccionado.innerText = "Tomar este reparto"; }
             estaCargando = false;
             refrescarListaVisual();
         }
