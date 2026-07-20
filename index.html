@@ -681,6 +681,502 @@
                 const btnTomar = document.createElement('button');
                 btnTomar.id = `btn-tomar-${pedido.id}`;
                 btnTomar.innerText = 'Tomar este reparto';
+                btnTomar.<!-- Scripts de Supabase, Leaflet y Leaflet Routing Machine -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+<script>
+    const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
+    // Asegúrate de asegurar tus políticas RLS en la consola de Supabase
+    const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit";
+
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const pantallaAuth = document.getElementById('pantallaAuth');
+    const pantallaCliente = document.getElementById('pantallaCliente');
+    const pantallaRepartidor = document.getElementById('pantallaRepartidor');
+    const barraUsuario = document.getElementById('barraUsuario');
+    
+    let usuarioActual = null;
+    let estaCargando = false; 
+    
+    // MAPA CLIENTE
+    let mapa = null;
+    let marcador = null;
+    let latActual = 19.5971;
+    let lngActual = -99.8086;
+    let direccionTextoActual = ""; 
+    let debounceTimer = null;
+
+    // MAPA REPARTIDOR
+    let mapaRepartidor = null;
+    let controlRuta = null;
+
+    let coordenadasOrigen = null;  
+    let coordenadasDestino = null; 
+    let costoEnvioFinal = 0;
+
+    const rolTemporal = localStorage.getItem('rol_seleccionado_google');
+    if (rolTemporal) document.getElementById('rol').value = rolTemporal;
+
+    supabaseClient.auth.onAuthStateChange(async (event, session) => {
+        if (session) {
+            usuarioActual = session.user;
+            let rolElegidoAntesDeGoogle = localStorage.getItem('rol_seleccionado_google');
+            let rolGuardadoEnBaseDatos = usuarioActual.user_metadata?.rol;
+            let rolFinal = 'cliente';
+
+            if (rolElegidoAntesDeGoogle && rolElegidoAntesDeGoogle !== rolGuardadoEnBaseDatos) {
+                await supabaseClient.auth.updateUser({ data: { rol: rolElegidoAntesDeGoogle } });
+                rolFinal = rolElegidoAntesDeGoogle;
+            } else {
+                rolFinal = rolGuardadoEnBaseDatos || document.getElementById('rol').value || 'cliente';
+            }
+
+            document.getElementById('rol').value = rolFinal;
+            localStorage.removeItem('rol_seleccionado_google');
+            redireccionarSegunRol(rolFinal);
+        } else {
+            usuarioActual = null;
+            mostrarSoloPantalla(pantallaAuth);
+            barraUsuario.classList.add('oculto');
+        }
+    });
+
+    function redireccionarSegunRol(rol) {
+        pantallaAuth.classList.add('oculto');
+        barraUsuario.classList.remove('oculto');
+        
+        let nombreMostrar = usuarioActual.user_metadata?.full_name || usuarioActual.user_metadata?.nombre || "";
+        if (!nombreMostrar && usuarioActual.email) {
+            nombreMostrar = usuarioActual.email.split('@')[0];
+        }
+        
+        document.getElementById('txtUsuarioLogueado').innerText = nombreMostrar;
+        document.getElementById('txtRolUsuario').innerText = rol.toUpperCase();
+
+        if (rol === 'cliente') {
+            pantallaCliente.classList.remove('oculto');
+            pantallaRepartidor.classList.add('oculto');
+            setTimeout(inicializarMapaCliente, 300);
+            escucharPedidosRealtime();
+        } else {
+            pantallaRepartidor.classList.remove('oculto');
+            pantallaCliente.classList.add('oculto');
+            escucharPedidosRealtime();
+        }
+    }
+
+    function mostrarSoloPantalla(pantallaActiva) {
+        pantallaAuth.classList.add('oculto');
+        pantallaCliente.classList.add('oculto');
+        pantallaRepartidor.classList.add('oculto');
+        pantallaActiva.classList.remove('oculto');
+    }
+
+    // =========================================================================
+    // MAPA DEL CLIENTE
+    // =========================================================================
+    function inicializarMapaCliente() {
+        if (mapa) { mapa.invalidateSize(); return; }
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((position) => {
+                latActual = position.coords.latitude;
+                lngActual = position.coords.longitude;
+                crearElementosMapa();
+            }, () => { crearElementosMapa(); });
+        } else { crearElementosMapa(); }
+    }
+
+    function crearElementosMapa() {
+        mapa = L.map('mapa').setView([latActual, lngActual], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapa);
+        marcador = L.marker([latActual, lngActual], { draggable: true }).addTo(mapa);
+        
+        direccionTextoActual = `${latActual.toFixed(5)}, ${lngActual.toFixed(5)}`;
+        buscarDireccionTexto(latActual, lngActual);
+
+        marcador.on('dragend', function () {
+            const posicion = marcador.getLatLng();
+            latActual = posicion.lat; lngActual = posicion.lng;
+            buscarDireccionTextoDebounced(latActual, lngActual);
+        });
+
+        mapa.on('click', function(e) {
+            latActual = e.latlng.lat; lngActual = e.latlng.lng;
+            marcador.setLatLng([latActual, lngActual]);
+            buscarDireccionTextoDebounced(latActual, lngActual);
+        });
+    }
+
+    // Control de peticiones excesivas (Debounce) para Nominatim
+    function buscarDireccionTextoDebounced(lat, lng) {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            buscarDireccionTexto(lat, lng);
+        }, 500);
+    }
+
+    async function buscarDireccionTexto(lat, lng) {
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+            const data = await response.json();
+            if (data && data.display_name) direccionTextoActual = data.display_name;
+        } catch (e) { console.warn("Servidor de mapas ocupado."); }
+    }
+
+    document.getElementById('btnFijarOrigen').addEventListener('click', () => {
+        document.getElementById('origen').value = direccionTextoActual;
+        coordenadasOrigen = { lat: latActual, lng: lngActual };
+        calcularTarifaEnvio();
+    });
+
+    document.getElementById('btnFijarDestino').addEventListener('click', () => {
+        document.getElementById('destino').value = direccionTextoActual;
+        coordenadasDestino = { lat: latActual, lng: lngActual };
+        calcularTarifaEnvio();
+    });
+
+    function calcularTarifaEnvio() {
+        if (!coordenadasOrigen || !coordenadasDestino) return;
+
+        const R = 6371; 
+        const dLat = (coordenadasDestino.lat - coordenadasOrigen.lat) * Math.PI / 180;
+        const dLng = (coordenadasDestino.lng - coordenadasOrigen.lng) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(coordenadasOrigen.lat * Math.PI / 180) * Math.cos(coordenadasDestino.lat * Math.PI / 180) * Math.sin(dLng/2) * Math.sin(dLng/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const distanciaKm = R * c; 
+
+        costoEnvioFinal = Math.max(30, Math.round(distanciaKm * 25)); // Tarifa mínima de 30
+        document.getElementById('vistaDistancia').innerText = `${distanciaKm.toFixed(2)} km`;
+        document.getElementById('vistaCosto').innerText = `$${costoEnvioFinal.toLocaleString()}`;
+    }
+
+    // =========================================================================
+    // ENVIAR FORMULARIO CON SUBIDA DE IMAGEN
+    // =========================================================================
+    const formPedido = document.getElementById('formPedido');
+    const btnPublicarPedido = document.getElementById('btnPublicarPedido');
+
+    formPedido.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        if(!coordenadasOrigen || !coordenadasDestino){
+            alert("Por favor, fija el Origen y el Destino usando los botones del mapa.");
+            return;
+        }
+
+        const fotoFile = document.getElementById('fotoInput').files[0];
+        if(!fotoFile) {
+            alert("Por favor, selecciona una foto de la mercancía.");
+            return;
+        }
+
+        btnPublicarPedido.innerText = "Subiendo imagen y publicando...";
+        btnPublicarPedido.disabled = true;
+
+        try {
+            const extension = fotoFile.name.split('.').pop();
+            const nombreArchivo = `${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
+
+            const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                .from('fotos-mercancia')
+                .upload(nombreArchivo, fotoFile);
+
+            if (uploadError) throw uploadError;
+
+            const { data: publicUrlData } = supabaseClient.storage
+                .from('fotos-mercancia')
+                .getPublicUrl(nombreArchivo);
+
+            const fotoUrlFinal = publicUrlData.publicUrl;
+
+            const { error: insertError } = await supabaseClient.from('pedidos').insert([
+                { 
+                    origen: document.getElementById('origen').value, 
+                    destino: document.getElementById('destino').value, 
+                    origen_lat: coordenadasOrigen.lat,
+                    origen_lng: coordenadasOrigen.lng,
+                    destino_lat: coordenadasDestino.lat,
+                    destino_lng: coordenadasDestino.lng,
+                    paquete: document.getElementById('paquete').value, 
+                    mercancia: fotoUrlFinal, 
+                    telefono: document.getElementById('telefono').value,
+                    costo: costoEnvioFinal, 
+                    estado: 'solicitado',
+                    cliente_id: usuarioActual.id
+                }
+            ]);
+
+            if (insertError) throw insertError;
+
+            alert("¡Pedido creado con éxito!");
+            formPedido.reset();
+            document.getElementById('vistaDistancia').innerText = "0.00 km";
+            document.getElementById('vistaCosto').innerText = "$0.00";
+            coordenadasOrigen = null; coordenadasDestino = null; costoEnvioFinal = 0;
+            refrescarPedidosCliente();
+
+        } catch (error) {
+            alert("Error al procesar el pedido: " + error.message);
+        } finally {
+            btnPublicarPedido.innerText = "Publicar Pedido de Entrega";
+            btnPublicarPedido.disabled = false;
+        }
+    });
+
+    // =========================================================================
+    // MAPA DEL REPARTIDOR
+    // =========================================================================
+    function mostrarRutaEnMapaRepartidor(origLat, origLng, destLat, destLng) {
+        document.getElementById('contenedorMapaRepartidor').classList.remove('oculto');
+
+        if (mapaRepartidor) {
+            mapaRepartidor.remove();
+            mapaRepartidor = null;
+        }
+
+        mapaRepartidor = L.map('mapaRepartidor').setView([origLat, origLng], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaRepartidor);
+
+        controlRuta = L.Routing.control({
+            waypoints: [L.latLng(origLat, origLng), L.latLng(destLat, destLng)],
+            lineOptions: { styles: [{ color: '#209cee', opacity: 0.8, weight: 6 }] },
+            createMarker: function(i, waypoint, n) {
+                if (i === 0) return L.marker(waypoint.latLng).bindPopup("📍 Recoger aquí (Origen)");
+                if (i === n - 1) return L.marker(waypoint.latLng).bindPopup("🏁 Entregar aquí (Destino)");
+            },
+            routeWhileDragging: false,
+            addWaypoints: false,
+            fitSelectedRoutes: true
+        }).addTo(mapaRepartidor);
+
+        setTimeout(() => { mapaRepartidor.invalidateSize(); }, 300);
+    }
+
+    // Nombre corregido (sin doble 'c')
+    function ocultarMapaRepartidor() {
+        const elem = document.getElementById('contenedorMapaRepartidor');
+        if (elem) elem.classList.add('oculto');
+        if (mapaRepartidor) {
+            mapaRepartidor.remove();
+            mapaRepartidor = null;
+        }
+    }
+
+    // =========================================================================
+    // HISTORIAL DEL CLIENTE (VISTA PROPIA)
+    // =========================================================================
+    async function refrescarPedidosCliente() {
+        if (!usuarioActual) return;
+        
+        const listaClienteDiv = document.getElementById('listaPedidosCliente');
+        if (!listaClienteDiv) return;
+
+        try {
+            const { data: misPedidos, error } = await supabaseClient
+                .from('pedidos')
+                .select('*')
+                .eq('cliente_id', usuarioActual.id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            if (!misPedidos || misPedidos.length === 0) {
+                listaClienteDiv.innerHTML = "<p style='color: #666; font-size: 14px;'>Aún no has realizado ningún pedido.</p>";
+                return;
+            }
+
+            listaClienteDiv.innerHTML = "";
+
+            misPedidos.forEach((pedido) => {
+                const tarjeta = document.createElement('div');
+                tarjeta.className = 'tarjeta-pedido';
+                
+                let textoEstado = "Buscando repartidor... ⏳";
+                
+                if (pedido.estado === 'en_camino') {
+                    tarjeta.className = 'tarjeta-pedido tomado'; 
+                    textoEstado = "¡En camino con el repartidor! 🚀";
+                } else if (pedido.estado === 'entregado') {
+                    tarjeta.style.borderLeft = "5px solid #48c774"; 
+                    tarjeta.style.background = "#f6fdf9";
+                    textoEstado = "Entregado con éxito ✅";
+                }
+
+                tarjeta.innerHTML = `
+                    <p style="margin-top: 0; display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="color: ${pedido.estado === 'entregado' ? '#48c774' : '#333'}">${textoEstado}</strong> 
+                        <span style="background:#eef9f8; padding:4px 8px; border-radius:4px; color:#00d1b2; font-weight:bold;">$${pedido.costo || 0}</span>
+                    </p>
+                    <div class="cuerpo-tarjeta">
+                        <div class="info-paquete">
+                            <p><strong>📦 Paquete:</strong> ${pedido.paquete}</p>
+                            <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
+                            <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
+                        </div>
+                        <div class="contenedor-foto-cliente-${pedido.id}"></div>
+                    </div>
+                `;
+
+                if (pedido.mercancia) {
+                    const img = document.createElement('img');
+                    img.src = pedido.mercancia;
+                    img.className = 'foto-mercancia';
+                    setTimeout(() => {
+                        const contenedor = tarjeta.querySelector(`.contenedor-foto-cliente-${pedido.id}`);
+                        if(contenedor) contenedor.appendChild(img);
+                    }, 0);
+                }
+
+                listaClienteDiv.appendChild(tarjeta);
+            });
+
+        } catch (err) {
+            console.error("Error al cargar los pedidos del cliente:", err);
+        }
+    }
+
+    // =========================================================================
+    // RADAR REPARTIDOR & SINCRO REALTIME MULTIROL
+    // =========================================================================
+    let canalRealtime = null;
+
+    function escucharPedidosRealtime() {
+        const rolActual = usuarioActual.user_metadata?.rol || document.getElementById('rol').value;
+        if (rolActual === 'repartidor') {
+            refrescarListaVisual(); 
+        } else {
+            refrescarPedidosCliente();
+        }
+
+        if (!canalRealtime) {
+            canalRealtime = supabaseClient
+                .channel('cambios-pedidos') 
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => { 
+                    const rolEnVivo = usuarioActual.user_metadata?.rol || document.getElementById('rol').value;
+                    if (rolEnVivo === 'repartidor') {
+                        refrescarListaVisual();
+                    } else {
+                        refrescarPedidosCliente();
+                    }
+                })
+                .subscribe();
+        }
+    }
+
+    async function refrescarListaVisual() {
+        if (!usuarioActual) return;
+        if (estaCargando) return;
+        estaCargando = true; 
+
+        try {
+            const listaPedidosDiv = document.getElementById('listaPedidos');
+            if (!listaPedidosDiv) return;
+            listaPedidosDiv.innerHTML = ""; 
+
+            // CASO A: Asignación activa del repartidor
+            const { data: misViajes, error: errorViajes } = await supabaseClient
+                .from('pedidos')
+                .select('*')
+                .eq('repartidor_id', usuarioActual.id)
+                .eq('estado', 'en_camino');
+
+            if (errorViajes) throw errorViajes;
+
+            if (misViajes && misViajes.length > 0) {
+                const viajeActivo = misViajes[0];
+                
+                const tarjetaAmarilla = document.createElement('div');
+                tarjetaAmarilla.className = 'tarjeta-pedido tomado';
+                tarjetaAmarilla.innerHTML = `
+                    <h3 style="color: #bfa100; margin-top:0;">⚡ Viaje en curso</h3>
+                    <div class="cuerpo-tarjeta">
+                        <div class="info-paquete">
+                            <p><strong>📦 Paquete:</strong> ${viajeActivo.paquete}</p>
+                            <p><strong>💰 Ganancia:</strong> <span style="font-size:18px; color:#14532d; font-weight:bold;">$${viajeActivo.costo || 0}</span></p>
+                        </div>
+                        <div id="contenedorFotoActivo"></div>
+                    </div>
+                    <p><strong>📍 Origen:</strong> ${viajeActivo.origen}</p>
+                    <p><strong>🏁 Destino:</strong> ${viajeActivo.destino}</p>
+                    <div class="alerta-telefono">
+                        📞 <strong>Contacto:</strong> <a href="tel:${viajeActivo.telefono}">${viajeActivo.telefono || 'Sin número'}</a>
+                    </div>
+                `;
+
+                if (viajeActivo.mercancia) {
+                    const img = document.createElement('img');
+                    img.src = viajeActivo.mercancia;
+                    img.className = 'foto-mercancia';
+                    tarjetaAmarilla.querySelector('#contenedorFotoActivo').appendChild(img);
+                }
+
+                const btnEntregar = document.createElement('button');
+                btnEntregar.className = 'btn-advertencia';
+                btnEntregar.innerText = 'Marcar como entregado';
+                btnEntregar.addEventListener('click', () => entregarPedido(viajeActivo.id));
+                
+                tarjetaAmarilla.appendChild(btnEntregar);
+                listaPedidosDiv.appendChild(tarjetaAmarilla);
+
+                if(viajeActivo.origen_lat && viajeActivo.destino_lat) {
+                    mostrarRutaEnMapaRepartidor(viajeActivo.origen_lat, viajeActivo.origen_lng, viajeActivo.destino_lat, viajeActivo.destino_lng);
+                }
+                return; 
+            }
+
+            // CASO B: Listar el radar libre disponible
+            ocultarMapaRepartidor();
+
+            const { data: disponibles, error: errorDisp } = await supabaseClient
+                .from('pedidos')
+                .select('*')
+                .eq('estado', 'solicitado');
+
+            if (errorDisp) throw errorDisp;
+
+            if (!disponibles || disponibles.length === 0) {
+                listaPedidosDiv.innerHTML = "<p style='color: #666; text-align: center; padding: 20px;'>No hay pedidos en el radar por el momento...</p>";
+                return;
+            }
+
+            const mapaPedidosUnicos = new Map();
+            disponibles.forEach(p => mapaPedidosUnicos.set(p.id, p));
+
+            mapaPedidosUnicos.forEach((pedido) => {
+                const tarjeta = document.createElement('div');
+                tarjeta.className = 'tarjeta-pedido';
+                tarjeta.innerHTML = `
+                    <p style="margin-top: 0; display:flex; justify-content:space-between; align-items:center;">
+                        <strong>📦 Envío disponible:</strong> 
+                        <span style="background:#eef9f8; padding:4px 8px; border-radius:4px; color:#00d1b2; font-weight:bold;">$${pedido.costo || 0}</span>
+                    </p>
+                    <div class="cuerpo-tarjeta">
+                        <div class="info-paquete">
+                            <p><strong>📦 Producto:</strong> ${pedido.paquete}</p>
+                        </div>
+                        <div class="contenedor-foto-radar-${pedido.id}"></div>
+                    </div>
+                    <p><strong>📍 Recogida:</strong> ${pedido.origen}</p>
+                    <p><strong>🏁 Destino:</strong> ${pedido.destino}</p>
+                `;
+
+                if (pedido.mercancia) {
+                    const img = document.createElement('img');
+                    img.src = pedido.mercancia;
+                    img.className = 'foto-mercancia';
+                    setTimeout(() => {
+                        const contenedor = tarjeta.querySelector(`.contenedor-foto-radar-${pedido.id}`);
+                        if(contenedor) contenedor.appendChild(img);
+                    }, 0);
+                }
+
+                const btnTomar = document.createElement('button');
+                btnTomar.id = `btn-tomar-${pedido.id}`;
+                btnTomar.innerText = 'Tomar este reparto';
                 btnTomar.addEventListener('click', () => aceptarPedido(pedido.id));
 
                 tarjeta.appendChild(btnTomar);
@@ -761,7 +1257,11 @@
         localStorage.setItem('rol_seleccionado_google', rolSeleccionado);
         await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
-            options: { queryParams: { access_type: 'offline', prompt: 'select_account' }, data: { rol: rolSeleccionado }, redirectTo: "https://qhricardo.github.io/reparte/" }
+            options: { 
+                queryParams: { access_type: 'offline', prompt: 'select_account' }, 
+                data: { rol: rolSeleccionado }, 
+                redirectTo: window.location.origin + window.location.pathname
+            }
         });
     });
     
