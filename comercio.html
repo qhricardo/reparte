@@ -144,27 +144,31 @@
     let usuarioActual = null;
     let miComercio = null;
 
-    async function verificarSesion() {
-        const { data: { session } } = await supabaseClient.auth.getSession();
+    // Escuchar el estado de autenticación en tiempo real
+    supabaseClient.auth.onAuthStateChange((event, session) => {
         if (session) {
             usuarioActual = session.user;
             document.getElementById('barraUsuario').classList.remove('oculto');
             document.getElementById('labelUsuario').innerText = usuarioActual.email;
             document.getElementById('pantallaLogin').classList.add('oculto');
-            
-            await verificarSiEsDuenio();
+            verificarSiEsDuenio();
         } else {
+            usuarioActual = null;
+            miComercio = null;
             ocultarTodasLasPantallas();
             document.getElementById('pantallaLogin').classList.remove('oculto');
             document.getElementById('barraUsuario').classList.add('oculto');
         }
-    }
+    });
 
     async function loginConGoogle() {
-        await supabaseClient.auth.signInWithOAuth({
+        const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
-            options: { redirectTo: window.location.href }
+            options: { 
+                redirectTo: window.location.href 
+            }
         });
+        if (error) alert("Error al iniciar sesión: " + error.message);
     }
 
     async function cerrarSesion() {
@@ -173,17 +177,20 @@
     }
 
     async function verificarSiEsDuenio() {
-        const { data } = await supabaseClient
+        if (!usuarioActual) return;
+
+        const { data, error } = await supabaseClient
             .from('comercios')
             .select('*')
             .eq('usuario_id', usuarioActual.id)
-            .single();
+            .maybeSingle();
 
         if (data) {
             miComercio = data;
             document.getElementById('badgeRol').innerText = "Dueño de Comercio";
             cargarPanelDuenio();
         } else {
+            miComercio = null;
             document.getElementById('badgeRol').innerText = "Cliente";
             cargarComerciosCliente();
         }
@@ -191,7 +198,10 @@
 
     function ocultarTodasLasPantallas() {
         ['pantallaLogin', 'pantallaClienteComercios', 'pantallaClienteProductos', 'pantallaRegistroComercio', 'pantallaDuenio']
-            .forEach(id => document.getElementById(id).classList.add('oculto'));
+            .forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('oculto');
+            });
     }
 
     async function cargarComerciosCliente() {
@@ -313,7 +323,7 @@
                 <div class="info-producto">
                     <h4>${p.nombre}</h4>
                     <div class="precio">$${Number(p.precio).toFixed(2)}</div>
-                    <button class="btn btn-danger" style="width:100%;" onclick="eliminarProducto(${p.id})">Eliminar</button>
+                    <button class="btn btn-danger" style="width:100%;" onclick="eliminarProducto('${p.id}')">Eliminar</button>
                 </div>
             `;
             lista.appendChild(card);
@@ -365,8 +375,6 @@
             alert("¡Pedido realizado con éxito! El repartidor ya lo puede ver.");
         }
     }
-
-    verificarSesion();
 </script>
 
 </body>
