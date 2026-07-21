@@ -144,31 +144,41 @@
     let usuarioActual = null;
     let miComercio = null;
 
-    // Escuchar el estado de autenticación en tiempo real
-    supabaseClient.auth.onAuthStateChange((event, session) => {
+    // Verificar sesión al cargar
+    document.addEventListener("DOMContentLoaded", async () => {
+        console.log("Cargando aplicación...");
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        
+        if (error) {
+            console.error("Error al obtener sesión:", error);
+            return;
+        }
+
         if (session) {
+            console.log("Sesión detectada para:", session.user.email);
             usuarioActual = session.user;
-            document.getElementById('barraUsuario').classList.remove('oculto');
-            document.getElementById('labelUsuario').innerText = usuarioActual.email;
-            document.getElementById('pantallaLogin').classList.add('oculto');
-            verificarSiEsDuenio();
+            mostrarBarraUsuario();
+            await verificarSiEsDuenio();
         } else {
-            usuarioActual = null;
-            miComercio = null;
+            console.log("No hay sesión activa.");
             ocultarTodasLasPantallas();
             document.getElementById('pantallaLogin').classList.remove('oculto');
-            document.getElementById('barraUsuario').classList.add('oculto');
         }
     });
 
     async function loginConGoogle() {
+        console.log("Iniciando login con Google...");
         const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
-            options: { 
-                redirectTo: window.location.href 
-            }
+            options: { redirectTo: window.location.href }
         });
-        if (error) alert("Error al iniciar sesión: " + error.message);
+        if (error) alert("Error de Login: " + error.message);
+    }
+
+    function mostrarBarraUsuario() {
+        document.getElementById('barraUsuario').classList.remove('oculto');
+        document.getElementById('labelUsuario').innerText = usuarioActual.email;
+        document.getElementById('pantallaLogin').classList.add('oculto');
     }
 
     async function cerrarSesion() {
@@ -177,19 +187,28 @@
     }
 
     async function verificarSiEsDuenio() {
-        if (!usuarioActual) return;
-
+        console.log("Verificando si el usuario es dueño de comercio...");
+        
         const { data, error } = await supabaseClient
             .from('comercios')
             .select('*')
-            .eq('usuario_id', usuarioActual.id)
-            .maybeSingle();
+            .eq('usuario_id', usuarioActual.id);
 
-        if (data) {
-            miComercio = data;
+        if (error) {
+            console.error("Error al consultar comercios:", error);
+            // Si hay error, asumimos rol cliente para no bloquear la pantalla
+            document.getElementById('badgeRol').innerText = "Cliente";
+            cargarComerciosCliente();
+            return;
+        }
+
+        if (data && data.length > 0) {
+            console.log("Comercio encontrado:", data[0]);
+            miComercio = data[0];
             document.getElementById('badgeRol').innerText = "Dueño de Comercio";
             cargarPanelDuenio();
         } else {
+            console.log("No se encontró comercio registrado para este usuario.");
             miComercio = null;
             document.getElementById('badgeRol').innerText = "Cliente";
             cargarComerciosCliente();
