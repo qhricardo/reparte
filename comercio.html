@@ -138,48 +138,64 @@
 
 <script>
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit";
+    const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; // Reemplazar por la clave anon pública (JWT)
     
-    // Inicialización del cliente
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+    let supabase;
     let usuarioActual = null;
     let miComercio = null;
 
-    // Verificar sesión al cargar
+    // Verificar inicio e inicializar Supabase
     document.addEventListener("DOMContentLoaded", async () => {
-        console.log("Cargando aplicación...");
+        console.log("Iniciando app...");
+        
+        if (!window.supabase) {
+            alert("Error: No se pudo cargar la librería de Supabase desde la CDN.");
+            return;
+        }
+
+        try {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } catch (e) {
+            console.error("Error inicializando Supabase:", e);
+            alert("Error de configuración con Supabase.");
+            return;
+        }
+
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
-            console.error("Error al obtener sesión:", error);
+            console.error("Error obteniendo sesión:", error);
             return;
         }
 
         if (session) {
-            console.log("Sesión detectada para:", session.user.email);
+            console.log("Sesión activa:", session.user.email);
             usuarioActual = session.user;
             mostrarBarraUsuario();
             await verificarSiEsDuenio();
         } else {
-            console.log("No hay sesión activa.");
+            console.log("Sin sesión activa.");
             ocultarTodasLasPantallas();
             document.getElementById('pantallaLogin').classList.remove('oculto');
         }
     });
 
     async function loginConGoogle() {
-        console.log("Iniciando login con Google...");
-        try {
-            const { error } = await supabase.auth.signInWithOAuth({
-                provider: 'google',
-                options: { 
-                    redirectTo: window.location.origin + window.location.pathname 
-                }
-            });
-            if (error) alert("Error de Login: " + error.message);
-        } catch (err) {
-            alert("Excepción al conectar con Supabase: " + err.message);
+        if (window.location.protocol === 'file:') {
+            alert("Atención: El inicio de sesión con Google NO funciona si abres el archivo localmente como file://. Usa un servidor local (ej. Live Server en VS Code).");
+            return;
+        }
+
+        console.log("Redirigiendo a Google OAuth...");
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.href
+            }
+        });
+
+        if (error) {
+            alert("Error al iniciar sesión con Google: " + error.message);
         }
     }
 
@@ -195,27 +211,23 @@
     }
 
     async function verificarSiEsDuenio() {
-        console.log("Verificando si el usuario es dueño de comercio...");
-        
         const { data, error } = await supabase
             .from('comercios')
             .select('*')
             .eq('usuario_id', usuarioActual.id);
 
         if (error) {
-            console.error("Error al consultar comercios:", error);
+            console.error("Error consultando comercios:", error);
             document.getElementById('badgeRol').innerText = "Cliente";
             cargarComerciosCliente();
             return;
         }
 
         if (data && data.length > 0) {
-            console.log("Comercio encontrado:", data[0]);
             miComercio = data[0];
             document.getElementById('badgeRol').innerText = "Dueño de Comercio";
             cargarPanelDuenio();
         } else {
-            console.log("No se encontró comercio registrado para este usuario.");
             miComercio = null;
             document.getElementById('badgeRol').innerText = "Cliente";
             cargarComerciosCliente();
@@ -234,9 +246,14 @@
         ocultarTodasLasPantallas();
         document.getElementById('pantallaClienteComercios').classList.remove('oculto');
 
-        const { data: comercios } = await supabase.from('comercios').select('*');
+        const { data: comercios, error } = await supabase.from('comercios').select('*');
         const lista = document.getElementById('listaComercios');
         lista.innerHTML = "";
+
+        if (error) {
+            lista.innerHTML = `<p style="color:red;">Error al cargar comercios: ${error.message}</p>`;
+            return;
+        }
 
         if (!comercios || comercios.length === 0) {
             lista.innerHTML = "<p>Aún no hay comercios registrados.</p>";
@@ -261,13 +278,18 @@
         document.getElementById('pantallaClienteProductos').classList.remove('oculto');
         document.getElementById('tituloComercioSeleccionado').innerText = `Productos de ${nombreComercio}`;
 
-        const { data: productos } = await supabase
+        const { data: productos, error } = await supabase
             .from('productos')
             .select('*')
             .eq('comercio_id', comercioId);
 
         const lista = document.getElementById('listaProductosCliente');
         lista.innerHTML = "";
+
+        if (error) {
+            lista.innerHTML = `<p style="color:red;">Error al cargar productos: ${error.message}</p>`;
+            return;
+        }
 
         if (!productos || productos.length === 0) {
             lista.innerHTML = "<p>Este comercio no tiene productos disponibles por el momento.</p>";
@@ -328,13 +350,18 @@
     }
 
     async function cargarProductosDuenio() {
-        const { data: productos } = await supabase
+        const { data: productos, error } = await supabase
             .from('productos')
             .select('*')
             .eq('comercio_id', miComercio.id);
 
         const lista = document.getElementById('listaProductosDuenio');
         lista.innerHTML = "";
+
+        if (error) {
+            lista.innerHTML = `<p style="color:red;">Error: ${error.message}</p>`;
+            return;
+        }
 
         if (!productos || productos.length === 0) {
             lista.innerHTML = "<p>Aún no has publicado productos.</p>";
