@@ -139,14 +139,13 @@
 <script>
     // Variables globales
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
-    // IMPORTANTE: Recuerda colocar tu Anon Key pública completa (JWT largo que empieza con eyJ...)
-    const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
+    // REEMPLAZA ESTA CADENA CON TU ANON KEY DE SUPABASE (Empieza con "eyJ...")
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."; 
     
     let supabase;
     let usuarioActual = null;
     let miComercio = null;
 
-    // Asignamos las funciones directamente al objeto 'window' para garantizar alcance global
     window.loginConGoogle = async function() {
         if (window.location.protocol === 'file:') {
             alert("Aviso: Google OAuth no funciona abriendo el archivo como file://. Debes usar un servidor local (Ej: Live Server).");
@@ -171,11 +170,8 @@
         window.location.reload();
     };
 
-    // Inicialización al cargar la página
     document.addEventListener("DOMContentLoaded", async () => {
-        console.log("Cargando scripts y configurando eventos...");
-
-        // Asignación de Listeners directos en lugar de atributos HTML
+        // Event Listeners
         document.getElementById('btnLoginGoogle').addEventListener('click', window.loginConGoogle);
         document.getElementById('btnCerrarSesion').addEventListener('click', window.cerrarSesion);
         document.getElementById('btnIrCrearComercio').addEventListener('click', mostrarFormularioCrearComercio);
@@ -187,24 +183,27 @@
             return;
         }
 
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        try {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            const { data: { session }, error } = await supabase.auth.getSession();
+            
+            if (error) {
+                console.error("Error de Supabase:", error.message);
+                alert("Error de autenticación con Supabase: " + error.message);
+                return;
+            }
 
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-            console.error("Error al obtener sesión:", error);
-            return;
-        }
-
-        if (session) {
-            console.log("Sesión detectada:", session.user.email);
-            usuarioActual = session.user;
-            mostrarBarraUsuario();
-            await verificarSiEsDuenio();
-        } else {
-            console.log("No hay sesión activa.");
-            ocultarTodasLasPantallas();
-            document.getElementById('pantallaLogin').classList.remove('oculto');
+            if (session) {
+                usuarioActual = session.user;
+                mostrarBarraUsuario();
+                await verificarSiEsDuenio();
+            } else {
+                ocultarTodasLasPantallas();
+                document.getElementById('pantallaLogin').classList.remove('oculto');
+            }
+        } catch (err) {
+            console.error("Excepción al conectar con Supabase:", err);
+            alert("Hubo un error al inicializar Supabase. Asegúrate de haber colocado la anon key correcta.");
         }
     });
 
