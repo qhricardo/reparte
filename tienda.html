@@ -11,7 +11,6 @@
         .contenedor { max-width: 900px; margin: 0 auto; }
         .oculto { display: none !important; }
         
-        /* Header y navegación */
         .encabezado { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
         .btn-volver { background: #7f8c8d; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
         
@@ -33,6 +32,15 @@
         .precio { color: #27ae60; font-weight: bold; font-size: 16px; margin-bottom: 10px; }
         .btn-pedir { background: #e67e22; color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
         .btn-pedir:hover { background: #d35400; }
+
+        /* Modal / Ventana emergente para confirmar pedido */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
+        .modal-contenido { background: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 400px; }
+        .modal-contenido h3 { margin-top: 0; color: #2c3e50; }
+        .modal-contenido input { width: 100%; padding: 10px; margin: 8px 0 15px 0; border: 1px solid #ccc; border-radius: 5px; }
+        .acciones-modal { display: flex; justify-content: flex-end; gap: 10px; }
+        .btn-cancelar { background: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
+        .btn-confirmar { background: #27ae60; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -62,6 +70,25 @@
 
 </div>
 
+<!-- MODAL CONFIRMAR PEDIDO -->
+<div id="modalPedido" class="modal oculto">
+    <div class="modal-contenido">
+        <h3>Confirmar Pedido</h3>
+        <p id="resumenProducto" style="font-weight: bold; color: #27ae60;"></p>
+        
+        <label>Tu Nombre:</label>
+        <input type="text" id="nombreCliente" placeholder="Ej. Ana García">
+
+        <label>Dirección de Entrega:</label>
+        <input type="text" id="direccionCliente" placeholder="Ej. Av. Principal #123">
+
+        <div class="acciones-modal">
+            <button class="btn-cancelar" onclick="cerrarModal()">Cancelar</button>
+            <button class="btn-confirmar" onclick="confirmarPedido()">Enviar Pedido</button>
+        </div>
+    </div>
+</div>
+
 <script>
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit";
@@ -72,29 +99,26 @@
     const listaComercios = document.getElementById('listaComercios');
     const listaProductos = document.getElementById('listaProductos');
     const tituloComercio = document.getElementById('tituloComercio');
+    const modalPedido = document.getElementById('modalPedido');
+    const resumenProducto = document.getElementById('resumenProducto');
 
-    // Cargar comercios al iniciar la página
+    let productoSeleccionado = null;
+
+    // Cargar comercios al iniciar
     cargarComercios();
 
     async function cargarComercios() {
-        listaComercios.innerHTML = "<p>Cargando comercios registrados...</p>";
+        listaComercios.innerHTML = "<p>Cargando comercios...</p>";
 
-        // Obtenemos todos los productos agrupándolos por comercio_id
         const { data: productos, error } = await supabaseClient
             .from('productos')
             .select('comercio_id');
 
-        if (error) {
-            listaComercios.innerHTML = "<p>Error al cargar comercios.</p>";
-            return;
-        }
-
-        if (!productos || productos.length === 0) {
+        if (error || !productos || productos.length === 0) {
             listaComercios.innerHTML = "<p>Aún no hay comercios con productos disponibles.</p>";
             return;
         }
 
-        // Obtener lista de IDs de comercios únicos que tienen productos cargados
         const idsComerciosUnicos = [...new Set(productos.map(p => p.comercio_id))];
 
         listaComercios.innerHTML = "";
@@ -123,12 +147,7 @@
             .eq('comercio_id', comercioId)
             .order('created_at', { ascending: false });
 
-        if (error) {
-            listaProductos.innerHTML = "<p>Error al cargar el menú del comercio.</p>";
-            return;
-        }
-
-        if (!productos || productos.length === 0) {
+        if (error || !productos || productos.length === 0) {
             listaProductos.innerHTML = "<p>Este comercio no tiene productos cargados actualmente.</p>";
             return;
         }
@@ -145,8 +164,8 @@
                         <p>${prod.descripcion || 'Sin descripción'}</p>
                     </div>
                     <div>
-                        <div class="precio">$${prod.precio.toFixed(2)}</div>
-                        <button class="btn-pedir" onclick="solicitarPedido('${prod.nombre}', ${prod.precio})">Pedir ahora</button>
+                        <div class="precio">$${Number(prod.precio).toFixed(2)}</div>
+                        <button class="btn-pedir" onclick="abrirModalPedido('${prod.nombre}', ${prod.precio}, '${prod.comercio_id}')">Pedir ahora</button>
                     </div>
                 </div>
             `;
@@ -159,9 +178,45 @@
         vistaComercios.classList.remove('oculto');
     }
 
-    function solicitarPedido(nombreProducto, precio) {
-        alert(`¡Elegiste: ${nombreProducto} ($${precio.toFixed(2)})!\n\nEste producto se enviará a la pantalla de solicitudes del repartidor.`);
-        // Aquí conectaremos la orden directamente con la tabla de pedidos que atiende el repartidor.
+    function abrirModalPedido(nombre, precio, comercioId) {
+        productoSeleccionado = { nombre, precio, comercioId };
+        resumenProducto.innerText = `${nombre} - $${Number(precio).toFixed(2)}`;
+        modalPedido.classList.remove('oculto');
+    }
+
+    function cerrarModal() {
+        modalPedido.classList.add('oculto');
+        productoSeleccionado = null;
+    }
+
+    async function confirmarPedido() {
+        const cliente_nombre = document.getElementById('nombreCliente').value.trim();
+        const direccion_entrega = document.getElementById('direccionCliente').value.trim();
+
+        if (!cliente_nombre || !direccion_entrega) {
+            alert('Por favor completa tu nombre y dirección de entrega.');
+            return;
+        }
+
+        const nuevoPedido = {
+            cliente_nombre,
+            direccion_entrega,
+            producto_nombre: productoSeleccionado.nombre,
+            precio: productoSeleccionado.precio,
+            comercio_id: productoSeleccionado.comercioId,
+            estado: 'pendiente'
+        };
+
+        const { error } = await supabaseClient.from('pedidos').insert([nuevoPedido]);
+
+        if (error) {
+            alert('Error al enviar el pedido: ' + error.message);
+        } else {
+            alert('¡Tu pedido ha sido enviado con éxito! El repartidor ya lo puede ver.');
+            cerrarModal();
+            document.getElementById('nombreCliente').value = '';
+            document.getElementById('direccionCliente').value = '';
+        }
     }
 </script>
 
