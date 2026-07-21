@@ -139,7 +139,9 @@
 <script>
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit";
-    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    // Inicialización del cliente
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let usuarioActual = null;
     let miComercio = null;
@@ -147,7 +149,7 @@
     // Verificar sesión al cargar
     document.addEventListener("DOMContentLoaded", async () => {
         console.log("Cargando aplicación...");
-        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
             console.error("Error al obtener sesión:", error);
@@ -168,11 +170,17 @@
 
     async function loginConGoogle() {
         console.log("Iniciando login con Google...");
-        const { error } = await supabaseClient.auth.signInWithOAuth({
-            provider: 'google',
-            options: { redirectTo: window.location.href }
-        });
-        if (error) alert("Error de Login: " + error.message);
+        try {
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: { 
+                    redirectTo: window.location.origin + window.location.pathname 
+                }
+            });
+            if (error) alert("Error de Login: " + error.message);
+        } catch (err) {
+            alert("Excepción al conectar con Supabase: " + err.message);
+        }
     }
 
     function mostrarBarraUsuario() {
@@ -182,21 +190,20 @@
     }
 
     async function cerrarSesion() {
-        await supabaseClient.auth.signOut();
+        await supabase.auth.signOut();
         window.location.reload();
     }
 
     async function verificarSiEsDuenio() {
         console.log("Verificando si el usuario es dueño de comercio...");
         
-        const { data, error } = await supabaseClient
+        const { data, error } = await supabase
             .from('comercios')
             .select('*')
             .eq('usuario_id', usuarioActual.id);
 
         if (error) {
             console.error("Error al consultar comercios:", error);
-            // Si hay error, asumimos rol cliente para no bloquear la pantalla
             document.getElementById('badgeRol').innerText = "Cliente";
             cargarComerciosCliente();
             return;
@@ -227,7 +234,7 @@
         ocultarTodasLasPantallas();
         document.getElementById('pantallaClienteComercios').classList.remove('oculto');
 
-        const { data: comercios } = await supabaseClient.from('comercios').select('*');
+        const { data: comercios } = await supabase.from('comercios').select('*');
         const lista = document.getElementById('listaComercios');
         lista.innerHTML = "";
 
@@ -254,7 +261,7 @@
         document.getElementById('pantallaClienteProductos').classList.remove('oculto');
         document.getElementById('tituloComercioSeleccionado').innerText = `Productos de ${nombreComercio}`;
 
-        const { data: productos } = await supabaseClient
+        const { data: productos } = await supabase
             .from('productos')
             .select('*')
             .eq('comercio_id', comercioId);
@@ -302,7 +309,7 @@
             logo_url: document.getElementById('logoComercioReg').value
         };
 
-        const { error } = await supabaseClient.from('comercios').insert([nuevoComercio]);
+        const { error } = await supabase.from('comercios').insert([nuevoComercio]);
         if (error) {
             alert("Error al registrar comercio: " + error.message);
         } else {
@@ -321,7 +328,7 @@
     }
 
     async function cargarProductosDuenio() {
-        const { data: productos } = await supabaseClient
+        const { data: productos } = await supabase
             .from('productos')
             .select('*')
             .eq('comercio_id', miComercio.id);
@@ -359,7 +366,7 @@
             imagen: document.getElementById('prodImagen').value
         };
 
-        const { error } = await supabaseClient.from('productos').insert([producto]);
+        const { error } = await supabase.from('productos').insert([producto]);
         if (error) {
             alert("Error al guardar producto: " + error.message);
         } else {
@@ -370,7 +377,7 @@
 
     async function eliminarProducto(id) {
         if (confirm("¿Estás seguro de eliminar este producto?")) {
-            await supabaseClient.from('productos').delete().eq('id', id);
+            await supabase.from('productos').delete().eq('id', id);
             cargarProductosDuenio();
         }
     }
@@ -379,7 +386,7 @@
         const direccion = prompt("Ingresa tu dirección de entrega:");
         if (!direccion) return;
 
-        const { error } = await supabaseClient.from('pedidos').insert([{
+        const { error } = await supabase.from('pedidos').insert([{
             cliente_nombre: usuarioActual.email,
             direccion_entrega: direccion,
             producto_nombre: nombre,
