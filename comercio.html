@@ -24,7 +24,7 @@
         label { font-weight: bold; font-size: 14px; color: #333; display: block; margin-top: 10px; }
         input, textarea { width: 100%; padding: 10px; margin: 5px 0 12px 0; border: 1px solid #ccc; border-radius: 6px; }
 
-        /* Grillas de Comercios y Productos */
+        /* Grillas */
         .grid-comercios { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-top: 15px; }
         .tarjeta-comercio { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer; text-align: center; }
         .tarjeta-comercio img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; }
@@ -48,14 +48,14 @@
             <span id="labelUsuario" style="font-weight: bold;"></span>
             <span id="badgeRol" style="font-size: 12px; background: #e0e0e0; padding: 3px 8px; border-radius: 10px; margin-left: 5px;"></span>
         </div>
-        <button class="btn btn-danger" onclick="cerrarSesion()">Cerrar Sesión</button>
+        <button id="btnCerrarSesion" class="btn btn-danger">Cerrar Sesión</button>
     </div>
 
     <!-- 1. PANTALLA DE LOGIN -->
     <div id="pantallaLogin" class="card" style="text-align: center;">
         <h2>🛒 Bienvenido a la Plataforma</h2>
         <p>Inicia sesión con Google para explorar comercios o gestionar tu negocio.</p>
-        <button class="btn btn-google" onclick="loginConGoogle()">
+        <button id="btnLoginGoogle" class="btn btn-google">
             <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.616z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
             Ingresar con Google
         </button>
@@ -65,7 +65,7 @@
     <div id="pantallaClienteComercios" class="oculto">
         <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
             <h2>🏬 Comercios Disponibles</h2>
-            <button class="btn btn-primary" onclick="mostrarFormularioCrearComercio()">+ Registrar mi Comercio</button>
+            <button class="btn btn-primary" id="btnIrCrearComercio">+ Registrar mi Comercio</button>
         </div>
         <div id="listaComercios" class="grid-comercios"></div>
     </div>
@@ -73,7 +73,7 @@
     <!-- 3. PANTALLA CLIENTE: PRODUCTOS DEL COMERCIO -->
     <div id="pantallaClienteProductos" class="oculto">
         <div class="card">
-            <button class="btn btn-secundario" onclick="mostrarComerciosCliente()">← Volver a Comercios</button>
+            <button class="btn btn-secundario" id="btnVolverComercios">← Volver a Comercios</button>
             <h2 id="tituloComercioSeleccionado" style="margin-top: 15px;"></h2>
             <div id="listaProductosCliente" class="grid-productos"></div>
         </div>
@@ -96,7 +96,7 @@
             <input type="url" id="logoComercioReg" placeholder="https://ejemplo.com/logo.png">
 
             <div style="margin-top: 15px;">
-                <button type="button" class="btn btn-secundario" onclick="mostrarComerciosCliente()">Cancelar</button>
+                <button type="button" class="btn btn-secundario" id="btnCancelarRegistro">Cancelar</button>
                 <button type="submit" class="btn btn-primary">Guardar Comercio</button>
             </div>
         </form>
@@ -137,77 +137,81 @@
 </div>
 
 <script>
+    // Variables globales
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; // Reemplazar por la clave anon pública (JWT)
+    // IMPORTANTE: Recuerda colocar tu Anon Key pública completa (JWT largo que empieza con eyJ...)
+    const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
     
     let supabase;
     let usuarioActual = null;
     let miComercio = null;
 
-    // Verificar inicio e inicializar Supabase
-    document.addEventListener("DOMContentLoaded", async () => {
-        console.log("Iniciando app...");
-        
-        if (!window.supabase) {
-            alert("Error: No se pudo cargar la librería de Supabase desde la CDN.");
+    // Asignamos las funciones directamente al objeto 'window' para garantizar alcance global
+    window.loginConGoogle = async function() {
+        if (window.location.protocol === 'file:') {
+            alert("Aviso: Google OAuth no funciona abriendo el archivo como file://. Debes usar un servidor local (Ej: Live Server).");
             return;
         }
 
-        try {
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        } catch (e) {
-            console.error("Error inicializando Supabase:", e);
-            alert("Error de configuración con Supabase.");
+        console.log("Iniciando OAuth con Google...");
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin + window.location.pathname
+            }
+        });
+
+        if (error) {
+            alert("Error de autenticación: " + error.message);
+        }
+    };
+
+    window.cerrarSesion = async function() {
+        await supabase.auth.signOut();
+        window.location.reload();
+    };
+
+    // Inicialización al cargar la página
+    document.addEventListener("DOMContentLoaded", async () => {
+        console.log("Cargando scripts y configurando eventos...");
+
+        // Asignación de Listeners directos en lugar de atributos HTML
+        document.getElementById('btnLoginGoogle').addEventListener('click', window.loginConGoogle);
+        document.getElementById('btnCerrarSesion').addEventListener('click', window.cerrarSesion);
+        document.getElementById('btnIrCrearComercio').addEventListener('click', mostrarFormularioCrearComercio);
+        document.getElementById('btnVolverComercios').addEventListener('click', () => cargarComerciosCliente());
+        document.getElementById('btnCancelarRegistro').addEventListener('click', () => cargarComerciosCliente());
+
+        if (!window.supabase) {
+            alert("Error: La librería de Supabase no cargó correctamente desde el CDN.");
             return;
         }
+
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
-            console.error("Error obteniendo sesión:", error);
+            console.error("Error al obtener sesión:", error);
             return;
         }
 
         if (session) {
-            console.log("Sesión activa:", session.user.email);
+            console.log("Sesión detectada:", session.user.email);
             usuarioActual = session.user;
             mostrarBarraUsuario();
             await verificarSiEsDuenio();
         } else {
-            console.log("Sin sesión activa.");
+            console.log("No hay sesión activa.");
             ocultarTodasLasPantallas();
             document.getElementById('pantallaLogin').classList.remove('oculto');
         }
     });
 
-    async function loginConGoogle() {
-        if (window.location.protocol === 'file:') {
-            alert("Atención: El inicio de sesión con Google NO funciona si abres el archivo localmente como file://. Usa un servidor local (ej. Live Server en VS Code).");
-            return;
-        }
-
-        console.log("Redirigiendo a Google OAuth...");
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: window.location.href
-            }
-        });
-
-        if (error) {
-            alert("Error al iniciar sesión con Google: " + error.message);
-        }
-    }
-
     function mostrarBarraUsuario() {
         document.getElementById('barraUsuario').classList.remove('oculto');
         document.getElementById('labelUsuario').innerText = usuarioActual.email;
         document.getElementById('pantallaLogin').classList.add('oculto');
-    }
-
-    async function cerrarSesion() {
-        await supabase.auth.signOut();
-        window.location.reload();
     }
 
     async function verificarSiEsDuenio() {
@@ -217,7 +221,7 @@
             .eq('usuario_id', usuarioActual.id);
 
         if (error) {
-            console.error("Error consultando comercios:", error);
+            console.error("Error al verificar comercio:", error);
             document.getElementById('badgeRol').innerText = "Cliente";
             cargarComerciosCliente();
             return;
@@ -246,14 +250,9 @@
         ocultarTodasLasPantallas();
         document.getElementById('pantallaClienteComercios').classList.remove('oculto');
 
-        const { data: comercios, error } = await supabase.from('comercios').select('*');
+        const { data: comercios } = await supabase.from('comercios').select('*');
         const lista = document.getElementById('listaComercios');
         lista.innerHTML = "";
-
-        if (error) {
-            lista.innerHTML = `<p style="color:red;">Error al cargar comercios: ${error.message}</p>`;
-            return;
-        }
 
         if (!comercios || comercios.length === 0) {
             lista.innerHTML = "<p>Aún no hay comercios registrados.</p>";
@@ -278,18 +277,13 @@
         document.getElementById('pantallaClienteProductos').classList.remove('oculto');
         document.getElementById('tituloComercioSeleccionado').innerText = `Productos de ${nombreComercio}`;
 
-        const { data: productos, error } = await supabase
+        const { data: productos } = await supabase
             .from('productos')
             .select('*')
             .eq('comercio_id', comercioId);
 
         const lista = document.getElementById('listaProductosCliente');
         lista.innerHTML = "";
-
-        if (error) {
-            lista.innerHTML = `<p style="color:red;">Error al cargar productos: ${error.message}</p>`;
-            return;
-        }
 
         if (!productos || productos.length === 0) {
             lista.innerHTML = "<p>Este comercio no tiene productos disponibles por el momento.</p>";
@@ -310,10 +304,6 @@
             `;
             lista.appendChild(card);
         });
-    }
-
-    function mostrarComerciosCliente() {
-        cargarComerciosCliente();
     }
 
     function mostrarFormularioCrearComercio() {
@@ -350,18 +340,13 @@
     }
 
     async function cargarProductosDuenio() {
-        const { data: productos, error } = await supabase
+        const { data: productos } = await supabase
             .from('productos')
             .select('*')
             .eq('comercio_id', miComercio.id);
 
         const lista = document.getElementById('listaProductosDuenio');
         lista.innerHTML = "";
-
-        if (error) {
-            lista.innerHTML = `<p style="color:red;">Error: ${error.message}</p>`;
-            return;
-        }
 
         if (!productos || productos.length === 0) {
             lista.innerHTML = "<p>Aún no has publicado productos.</p>";
@@ -402,14 +387,14 @@
         }
     });
 
-    async function eliminarProducto(id) {
+    window.eliminarProducto = async function(id) {
         if (confirm("¿Estás seguro de eliminar este producto?")) {
             await supabase.from('productos').delete().eq('id', id);
             cargarProductosDuenio();
         }
-    }
+    };
 
-    async function hacerPedido(nombre, precio, comercioId) {
+    window.hacerPedido = async function(nombre, precio, comercioId) {
         const direccion = prompt("Ingresa tu dirección de entrega:");
         if (!direccion) return;
 
@@ -425,9 +410,9 @@
         if (error) {
             alert("Error al enviar el pedido: " + error.message);
         } else {
-            alert("¡Pedido realizado con éxito! El repartidor ya lo puede ver.");
+            alert("¡Pedido realizado con éxito!");
         }
-    }
+    };
 </script>
 
 </body>
