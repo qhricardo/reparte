@@ -142,21 +142,19 @@
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
     
-    let supabase = null;
+    let supabaseClient = null; // 🟢 Cambio de nombre para evitar conflictos
     let usuarioActual = null;
     let miComercio = null;
 
-    // Métodos de autenticación expuestos globalmente
     window.loginConGoogle = async function() {
         if (window.location.protocol === 'file:') {
             alert("Aviso: Google OAuth requiere ejecutarse desde un servidor web o Live Server (no como archivo local file://).");
             return;
         }
 
-        // Se redirige dinámicamente a la URL exacta donde se encuentra el usuario
         const redirectTarget = window.location.origin + window.location.pathname;
 
-        const { error } = await supabase.auth.signInWithOAuth({
+        const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: {
                 redirectTo: redirectTarget
@@ -169,15 +167,13 @@
     };
 
     window.cerrarSesion = async function() {
-        if (supabase) {
-            await supabase.auth.signOut();
+        if (supabaseClient) {
+            await supabaseClient.auth.signOut();
             window.location.reload();
         }
     };
 
-    // Inicialización del DOM
     document.addEventListener("DOMContentLoaded", async () => {
-        // Asignación de manejadores de eventos
         document.getElementById('btnLoginGoogle').addEventListener('click', window.loginConGoogle);
         document.getElementById('btnCerrarSesion').addEventListener('click', window.cerrarSesion);
         document.getElementById('btnIrCrearComercio').addEventListener('click', mostrarFormularioCrearComercio);
@@ -189,10 +185,10 @@
             return;
         }
 
-        // Instanciación única del cliente Supabase
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // Inicializamos el cliente sobre la nueva variable
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
         
         if (error) {
             console.error("Error al obtener la sesión de usuario:", error);
@@ -216,7 +212,7 @@
     }
 
     async function verificarSiEsDuenio() {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('comercios')
             .select('*')
             .eq('usuario_id', usuarioActual.id);
@@ -251,7 +247,7 @@
         ocultarTodasLasPantallas();
         document.getElementById('pantallaClienteComercios').classList.remove('oculto');
 
-        const { data: comercios } = await supabase.from('comercios').select('*');
+        const { data: comercios } = await supabaseClient.from('comercios').select('*');
         const lista = document.getElementById('listaComercios');
         lista.innerHTML = "";
 
@@ -278,7 +274,7 @@
         document.getElementById('pantallaClienteProductos').classList.remove('oculto');
         document.getElementById('tituloComercioSeleccionado').innerText = `Productos de ${nombreComercio}`;
 
-        const { data: productos } = await supabase
+        const { data: productos } = await supabaseClient
             .from('productos')
             .select('*')
             .eq('comercio_id', comercioId);
@@ -322,7 +318,7 @@
             logo_url: document.getElementById('logoComercioReg').value
         };
 
-        const { error } = await supabase.from('comercios').insert([nuevoComercio]);
+        const { error } = await supabaseClient.from('comercios').insert([nuevoComercio]);
         if (error) {
             alert("Error al registrar comercio: " + error.message);
         } else {
@@ -341,7 +337,7 @@
     }
 
     async function cargarProductosDuenio() {
-        const { data: productos } = await supabase
+        const { data: productos } = await supabaseClient
             .from('productos')
             .select('*')
             .eq('comercio_id', miComercio.id);
@@ -379,7 +375,7 @@
             imagen: document.getElementById('prodImagen').value
         };
 
-        const { error } = await supabase.from('productos').insert([producto]);
+        const { error } = await supabaseClient.from('productos').insert([producto]);
         if (error) {
             alert("Error al guardar producto: " + error.message);
         } else {
@@ -390,7 +386,7 @@
 
     window.eliminarProducto = async function(id) {
         if (confirm("¿Estás seguro de eliminar este producto?")) {
-            await supabase.from('productos').delete().eq('id', id);
+            await supabaseClient.from('productos').delete().eq('id', id);
             cargarProductosDuenio();
         }
     };
@@ -399,7 +395,7 @@
         const direccion = prompt("Ingresa tu dirección de entrega:");
         if (!direccion) return;
 
-        const { error } = await supabase.from('pedidos').insert([{
+        const { error } = await supabaseClient.from('pedidos').insert([{
             cliente_nombre: usuarioActual.email,
             direccion_entrega: direccion,
             producto_nombre: nombre,
