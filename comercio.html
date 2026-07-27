@@ -46,10 +46,10 @@
         /* Barra Flotante Carrito */
         #barraCarrito { position: fixed; bottom: 0; left: 0; right: 0; background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; z-index: 1000; box-shadow: 0 -4px 10px rgba(0,0,0,0.2); }
         
-        /* Modal Mapa */
+        /* Modal y Mapas */
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 2000; }
         .modal-contenido { background: white; width: 90%; max-width: 600px; padding: 20px; border-radius: 12px; max-height: 90vh; overflow-y: auto; }
-        #mapaEntrega { width: 100%; height: 250px; border-radius: 8px; margin: 10px 0; }
+        #mapaEntrega, #mapaComercioReg { width: 100%; height: 250px; border-radius: 8px; margin: 10px 0; }
 
         /* Notificación Toast */
         .notificacion-toast { position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 3000; font-weight: bold; animation: popup 0.3s ease-out; }
@@ -100,17 +100,23 @@
         </div>
     </div>
 
-    <!-- 4. REGISTRAR COMERCIO -->
+    <!-- 4. REGISTRAR COMERCIO CON MAPA -->
     <div id="pantallaRegistroComercio" class="card oculto">
         <h2>🏬 Registrar mi Comercio</h2>
         <form id="formComercio">
             <label>Nombre del Comercio:</label>
             <input type="text" id="nombreComercioReg" required placeholder="Ej. Pizzería Don Pepe">
 
-            <label>Dirección:</label>
-            <input type="text" id="direccionComercioReg" placeholder="Ej. Av. Hidalgo #45">
+            <label>Ubicación / Dirección del Comercio:</label>
+            <div style="display: flex; gap: 8px; margin-bottom: 5px;">
+                <input type="text" id="direccionComercioReg" style="margin:0;" required placeholder="Ej. Av. Hidalgo #45, CDMX">
+                <button type="button" class="btn btn-modo" style="margin:0; white-space:nowrap;" onclick="buscarUbicacionComercio()">🔍 Buscar</button>
+            </div>
+            
+            <div id="mapaComercioReg"></div>
+            <small style="color: #666;">Haz clic o arrastra el pin verde a la ubicación exacta de tu negocio.</small>
 
-            <label>Horario de Atención:</label>
+            <label style="margin-top: 15px;">Horario de Atención:</label>
             <input type="text" id="horarioComercioReg" placeholder="Ej. 10:00 AM - 10:00 PM">
 
             <label>URL del Logo / Imagen:</label>
@@ -128,6 +134,7 @@
         <div class="card">
             <h2 id="nombreComercioDuenio">Mi Comercio</h2>
             <p id="infoComercioDuenio" style="color: #666;"></p>
+            <button class="btn btn-danger" style="margin-top: 10px;" onclick="eliminarMiComercio()">🗑️ Eliminar mi Comercio</button>
         </div>
 
         <div class="card">
@@ -212,14 +219,20 @@
     let comercioSeleccionadoId = null;
     let modoActual = 'duenio';
 
-    // Estado del Carrito
+    // Carrito
     let carrito = [];
-    let mapa = null;
+    
+    // Mapas
+    let mapaEntrega = null;
     let marcadorCliente = null;
-    let coordsEntrega = { lat: 19.4326, lng: -99.1332 }; // Default CDMX
-    const COORD_COMERCIO_DEFAULT = { lat: 19.4380, lng: -99.1380 }; // Coordenadas ficticias del comercio para cálculo de distancia
-    const PRECIO_BASE_ENVIO = 20; // $20 costo base
-    const PRECIO_KM = 8; // $8 por kilómetro
+    let coordsEntrega = { lat: 19.4326, lng: -99.1332 };
+
+    let mapaRegComercio = null;
+    let marcadorComercioReg = null;
+    let coordsComercioRegistro = { lat: 19.4326, lng: -99.1332 };
+
+    const PRECIO_BASE_ENVIO = 20;
+    const PRECIO_KM = 8;
 
     window.loginConGoogle = async function() {
         if (window.location.protocol === 'file:') {
@@ -273,7 +286,7 @@
     }
 
     async function verificarSiEsDuenio() {
-        const { data, error } = await supabaseClient
+        const { data } = await supabaseClient
             .from('comercios')
             .select('*')
             .eq('usuario_id', usuarioActual.id);
@@ -392,14 +405,85 @@
         });
     }
 
-    // LÓGICA DE CARRITO
+    // REGISTRAR COMERCIO CON MAPA
+    function mostrarFormularioCrearComercio() {
+        ocultarTodasLasPantallas();
+        document.getElementById('pantallaRegistroComercio').classList.remove('oculto');
+
+        // Inicializar Mapa de Registro
+        setTimeout(() => {
+            if (!mapaRegComercio) {
+                mapaRegComercio = L.map('mapaComercioReg').setView([coordsComercioRegistro.lat, coordsComercioRegistro.lng], 14);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaRegComercio);
+
+                marcadorComercioReg = L.marker([coordsComercioRegistro.lat, coordsComercioRegistro.lng], { draggable: true }).addTo(mapaRegComercio);
+
+                marcadorComercioReg.on('dragend', function (e) {
+                    const pos = e.target.getLatLng();
+                    coordsComercioRegistro = { lat: pos.lat, lng: pos.lng };
+                    obtenerNombreDireccion(pos.lat, pos.lng, 'direccionComercioReg');
+                });
+
+                mapaRegComercio.on('click', function(e) {
+                    marcadorComercioReg.setLatLng(e.latlng);
+                    coordsComercioRegistro = { lat: e.latlng.lat, lng: e.latlng.lng };
+                    obtenerNombreDireccion(e.latlng.lat, e.latlng.lng, 'direccionComercioReg');
+                });
+            } else {
+                mapaRegComercio.invalidateSize();
+            }
+        }, 300);
+    }
+
+    async function buscarUbicacionComercio() {
+        const dir = document.getElementById('direccionComercioReg').value;
+        if (!dir.trim()) return;
+
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(dir)}`);
+            const results = await res.json();
+            if (results && results.length > 0) {
+                const lat = parseFloat(results[0].lat);
+                const lon = parseFloat(results[0].lon);
+                coordsComercioRegistro = { lat, lng: lon };
+                
+                if (mapaRegComercio && marcadorComercioReg) {
+                    mapaRegComercio.setView([lat, lon], 15);
+                    marcadorComercioReg.setLatLng([lat, lon]);
+                }
+            } else {
+                alert("Ubicación no encontrada.");
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    document.getElementById('formComercio').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const textoDir = document.getElementById('direccionComercioReg').value;
+        
+        const nuevoComercio = {
+            usuario_id: usuarioActual.id,
+            nombre: document.getElementById('nombreComercioReg').value,
+            direccion: `${textoDir} (GPS: ${coordsComercioRegistro.lat.toFixed(4)}, ${coordsComercioRegistro.lng.toFixed(4)})`,
+            horario: document.getElementById('horarioComercioReg').value,
+            logo_url: document.getElementById('logoComercioReg').value
+        };
+
+        const { error } = await supabaseClient.from('comercios').insert([nuevoComercio]);
+        if (error) alert("Error: " + error.message);
+        else {
+            alert("¡Comercio registrado con éxito!");
+            verificarSiEsDuenio();
+        }
+    });
+
+    // CARRITO Y CHECKOUT CON MAPA
     function agregarAlCarrito(id, nombre, precio) {
         const existente = carrito.find(item => item.id === id);
-        if (existente) {
-            existente.cantidad++;
-        } else {
-            carrito.push({ id, nombre, precio, cantidad: 1 });
-        }
+        if (existente) existente.cantidad++;
+        else carrito.push({ id, nombre, precio, cantidad: 1 });
         actualizarBarraCarrito();
     }
 
@@ -417,39 +501,34 @@
         }
     }
 
-    // CHECKOUT Y MAPA LEAFLET
     function abrirModalCheckout() {
         document.getElementById('modalCheckout').classList.remove('oculto');
         
-        // Renderizar resumen
         const contenedorResumen = document.getElementById('resumenItemsCarrito');
         contenedorResumen.innerHTML = carrito.map(i => `<p style="margin: 4px 0;"><b>${i.cantidad}x</b> ${i.nombre} - $${(i.precio * i.cantidad).toFixed(2)}</p>`).join('');
 
-        // Inicializar mapa Leaflet
         setTimeout(() => {
-            if (!mapa) {
-                mapa = L.map('mapaEntrega').setView([coordsEntrega.lat, coordsEntrega.lng], 14);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap'
-                }).addTo(mapa);
+            if (!mapaEntrega) {
+                mapaEntrega = L.map('mapaEntrega').setView([coordsEntrega.lat, coordsEntrega.lng], 14);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaEntrega);
 
-                marcadorCliente = L.marker([coordsEntrega.lat, coordsEntrega.lng], { draggable: true }).addTo(mapa);
+                marcadorCliente = L.marker([coordsEntrega.lat, coordsEntrega.lng], { draggable: true }).addTo(mapaEntrega);
 
                 marcadorCliente.on('dragend', function (e) {
                     const pos = e.target.getLatLng();
                     coordsEntrega = { lat: pos.lat, lng: pos.lng };
-                    obtenerDireccionDesdeCoords(pos.lat, pos.lng);
+                    obtenerNombreDireccion(pos.lat, pos.lng, 'direccionEscrita');
                     recalcularTotales();
                 });
 
-                mapa.on('click', function(e) {
+                mapaEntrega.on('click', function(e) {
                     marcadorCliente.setLatLng(e.latlng);
                     coordsEntrega = { lat: e.latlng.lat, lng: e.latlng.lng };
-                    obtenerDireccionDesdeCoords(e.latlng.lat, e.latlng.lng);
+                    obtenerNombreDireccion(e.latlng.lat, e.latlng.lng, 'direccionEscrita');
                     recalcularTotales();
                 });
             } else {
-                mapa.invalidateSize();
+                mapaEntrega.invalidateSize();
             }
             recalcularTotales();
         }, 300);
@@ -459,7 +538,6 @@
         document.getElementById('modalCheckout').classList.add('oculto');
     }
 
-    // BÚSQUEDA Y GEOCODIFICACIÓN DE DIRECCIONES
     async function buscarDireccionEnMapa() {
         const direccion = document.getElementById('direccionEscrita').value;
         if (!direccion.trim()) return;
@@ -472,41 +550,40 @@
                 const lon = parseFloat(results[0].lon);
                 coordsEntrega = { lat, lng: lon };
                 
-                if (mapa && marcadorCliente) {
-                    mapa.setView([lat, lon], 15);
+                if (mapaEntrega && marcadorCliente) {
+                    mapaEntrega.setView([lat, lon], 15);
                     marcadorCliente.setLatLng([lat, lon]);
                 }
                 recalcularTotales();
             } else {
-                alert("No se encontró la dirección especificada en el mapa.");
+                alert("No se encontró la dirección especificada.");
             }
         } catch (err) {
-            console.error("Error al buscar dirección:", err);
+            console.error(err);
         }
     }
 
-    async function obtenerDireccionDesdeCoords(lat, lng) {
+    async function obtenerNombreDireccion(lat, lng, elementIdInput) {
         try {
             const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
             const data = await response.json();
             if (data && data.display_name) {
-                document.getElementById('direccionEscrita').value = data.display_name;
+                document.getElementById(elementIdInput).value = data.display_name;
             }
         } catch (err) {
-            console.error("Error al obtener nombre de dirección:", err);
+            console.error(err);
         }
     }
 
-    // CÁLCULO DE DISTANCIA Y ENVÍO (Haversine Formula)
     function recalcularTotales() {
         const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
         
-        // Distancia en km
+        // Distancia ficticia basada en el centro por simplicidad
         const R = 6371;
-        const dLat = (coordsEntrega.lat - COORD_COMERCIO_DEFAULT.lat) * Math.PI / 180;
-        const dLon = (coordsEntrega.lng - COORD_COMERCIO_DEFAULT.lng) * Math.PI / 180;
+        const dLat = (coordsEntrega.lat - 19.4380) * Math.PI / 180;
+        const dLon = (coordsEntrega.lng - -99.1380) * Math.PI / 180;
         const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(COORD_COMERCIO_DEFAULT.lat * Math.PI / 180) * Math.cos(coordsEntrega.lat * Math.PI / 180) *
+                  Math.cos(19.4380 * Math.PI / 180) * Math.cos(coordsEntrega.lat * Math.PI / 180) *
                   Math.sin(dLon/2) * Math.sin(dLon/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         const distanciaKm = R * c;
@@ -522,14 +599,10 @@
 
     async function procesarPedidoFinal() {
         const direccionText = document.getElementById('direccionEscrita').value;
-        if (!direccionText.trim()) {
-            alert("Por favor ingresa una referencia o dirección escrita.");
-            return;
-        }
+        if (!direccionText.trim()) return alert("Ingresa tu dirección.");
 
         const btn = document.getElementById('btnEnviarPedidoFinal');
         btn.disabled = true;
-        btn.innerText = "Procesando...";
 
         const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
         const costoEnvio = parseFloat(document.getElementById('txtCostoEnvio').innerText);
@@ -545,24 +618,43 @@
             estado: 'pendiente'
         }]);
 
-        if (error) {
-            alert("Error al procesar el pedido: " + error.message);
-            btn.disabled = false;
-            btn.innerText = "Hacer Pedido";
-        } else {
+        if (error) alert("Error: " + error.message);
+        else {
             alert("¡Pedido enviado con éxito!");
             carrito = [];
             actualizarBarraCarrito();
             cerrarModalCheckout();
-            btn.disabled = false;
-            btn.innerText = "Hacer Pedido";
         }
+        btn.disabled = false;
     }
 
-    // NOTIFICACIONES EN TIEMPO REAL PARA EL DUEÑO
+    // PANEL DE DUEÑO Y ELIMINACIÓN
+    async function cargarPanelDuenio() {
+        ocultarTodasLasPantallas();
+        document.getElementById('pantallaDuenio').classList.remove('oculto');
+        document.getElementById('nombreComercioDuenio').innerText = `🏬 ${miComercio.nombre}`;
+        document.getElementById('infoComercioDuenio').innerText = `Dirección: ${miComercio.direccion || 'N/A'} | Horario: ${miComercio.horario || 'N/A'}`;
+        cargarProductosDuenio();
+    }
+
+    window.eliminarMiComercio = async function() {
+        if (!miComercio) return;
+        if (confirm("⚠️ ¿Deseas ELIMINAR tu comercio por completo y todos sus productos?")) {
+            try {
+                await supabaseClient.from('productos').delete().eq('comercio_id', miComercio.id);
+                const { error } = await supabaseClient.from('comercios').delete().eq('id', miComercio.id);
+                if (error) throw error;
+                alert("Tu comercio ha sido eliminado.");
+                miComercio = null;
+                await verificarSiEsDuenio();
+            } catch (err) {
+                alert("Error: " + err.message);
+            }
+        }
+    };
+
     function activarEscuchaPedidosEnTiempoReal() {
         if (!miComercio) return;
-
         cargarPedidosInicialesDuenio();
 
         supabaseClient
@@ -596,56 +688,22 @@
             <div style="background: #f8f9fa; padding: 12px; border-left: 4px solid #27ae60; margin-bottom: 10px; border-radius: 4px;">
                 <p style="margin:2px 0;"><b>Cliente:</b> ${p.cliente_nombre}</p>
                 <p style="margin:2px 0;"><b>Productos:</b> ${p.producto_nombre}</p>
-                <p style="margin:2px 0;"><b>Dirección/Mapa:</b> ${p.direccion_entrega}</p>
-                <p style="margin:2px 0; color:#27ae60;"><b>Total a Cobrar:</b> $${Number(p.precio).toFixed(2)}</p>
+                <p style="margin:2px 0;"><b>Ubicación:</b> ${p.direccion_entrega}</p>
+                <p style="margin:2px 0; color:#27ae60;"><b>Total:</b> $${Number(p.precio).toFixed(2)}</p>
             </div>
         `).join('');
     }
 
     function lanzarNotificacionDuenio(nuevoPedido) {
-        // Notificación Toast en pantalla
         const toast = document.createElement('div');
         toast.className = 'notificacion-toast';
         toast.innerHTML = `🔔 ¡Nuevo Pedido de $${Number(nuevoPedido.precio).toFixed(2)}!`;
         document.body.appendChild(toast);
 
-        // Sonido de alerta
         const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
         audio.play().catch(() => {});
 
         setTimeout(() => toast.remove(), 5000);
-    }
-
-    // MÉTODOS DEL PANEL DUEÑO
-    function mostrarFormularioCrearComercio() {
-        ocultarTodasLasPantallas();
-        document.getElementById('pantallaRegistroComercio').classList.remove('oculto');
-    }
-
-    document.getElementById('formComercio').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const nuevoComercio = {
-            usuario_id: usuarioActual.id,
-            nombre: document.getElementById('nombreComercioReg').value,
-            direccion: document.getElementById('direccionComercioReg').value,
-            horario: document.getElementById('horarioComercioReg').value,
-            logo_url: document.getElementById('logoComercioReg').value
-        };
-
-        const { error } = await supabaseClient.from('comercios').insert([nuevoComercio]);
-        if (error) alert("Error: " + error.message);
-        else {
-            alert("¡Comercio registrado!");
-            verificarSiEsDuenio();
-        }
-    });
-
-    async function cargarPanelDuenio() {
-        ocultarTodasLasPantallas();
-        document.getElementById('pantallaDuenio').classList.remove('oculto');
-        document.getElementById('nombreComercioDuenio').innerText = `🏬 ${miComercio.nombre}`;
-        document.getElementById('infoComercioDuenio').innerText = `Dirección: ${miComercio.direccion || 'N/A'} | Horario: ${miComercio.horario || 'N/A'}`;
-        cargarProductosDuenio();
     }
 
     async function cargarProductosDuenio() {
@@ -721,7 +779,7 @@
     });
 
     window.eliminarProducto = async function(id) {
-        if (confirm("¿Estás seguro de eliminar este producto?")) {
+        if (confirm("¿Eliminar este producto?")) {
             await supabaseClient.from('productos').delete().eq('id', id);
             cargarProductosDuenio();
         }
