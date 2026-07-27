@@ -51,7 +51,6 @@
             <span id="badgeRol" style="font-size: 12px; background: #e0e0e0; padding: 3px 8px; border-radius: 10px; margin-left: 5px;"></span>
         </div>
         <div>
-            <!-- Botón dinámico para cambiar de modo si eres dueño -->
             <button id="btnCambiarModo" class="btn btn-modo oculto">🛒 Modo Comprador</button>
             <button id="btnCerrarSesion" class="btn btn-danger">Cerrar Sesión</button>
         </div>
@@ -127,10 +126,11 @@
                 <label>Descripción:</label>
                 <textarea id="prodDescripcion" rows="2" placeholder="Ingredientes o características..."></textarea>
 
-                <label>URL de la Imagen:</label>
-                <input type="url" id="prodImagen" required placeholder="https://ejemplo.com/pizza.jpg">
+                <!-- CAMBIO AQUÍ: Campo de tipo archivo para seleccionar/tomar foto -->
+                <label>Foto del Producto (Galería o Cámara):</label>
+                <input type="file" id="prodImagenArchivo" accept="image/*" required>
 
-                <button type="submit" class="btn btn-primary">Publicar Producto</button>
+                <button type="submit" id="btnGuardarProducto" class="btn btn-primary">Publicar Producto</button>
             </form>
         </div>
 
@@ -150,7 +150,7 @@
     let supabaseClient = null;
     let usuarioActual = null;
     let miComercio = null;
-    let modoActual = 'duenio'; // 'duenio' o 'cliente'
+    let modoActual = 'duenio';
 
     // Métodos de autenticación
     window.loginConGoogle = async function() {
@@ -194,7 +194,6 @@
             return;
         }
 
-        // Instanciación del cliente Supabase
         supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const { data: { session }, error } = await supabaseClient.auth.getSession();
@@ -240,7 +239,6 @@
             miComercio = data[0];
             document.getElementById('badgeRol').innerText = "Dueño de Comercio";
             
-            // Si es dueño, activamos la opción para cambiar entre comprador y panel
             if (btnCambiar) {
                 btnCambiar.classList.remove('oculto');
                 btnCambiar.innerText = "🛒 Modo Comprador";
@@ -282,7 +280,6 @@
         ocultarTodasLasPantallas();
         document.getElementById('pantallaClienteComercios').classList.remove('oculto');
 
-        // Si ya tiene un comercio, ocultamos el botón de "Registrar mi comercio" en la vista cliente
         const btnIrCrear = document.getElementById('btnIrCrearComercio');
         if (miComercio) {
             btnIrCrear.classList.add('oculto');
@@ -408,22 +405,72 @@
         });
     }
 
+    // NUEVO PROCESO: Subida de archivo a Storage + Guardado en tabla 'productos'
     document.getElementById('formProducto').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const producto = {
-            comercio_id: miComercio.id,
-            nombre: document.getElementById('prodNombre').value,
-            precio: parseFloat(document.getElementById('prodPrecio').value),
-            descripcion: document.getElementById('prodDescripcion').value,
-            imagen: document.getElementById('prodImagen').value
-        };
 
-        const { error } = await supabaseClient.from('productos').insert([producto]);
-        if (error) {
-            alert("Error al guardar producto: " + error.message);
-        } else {
+        const btnGuardar = document.getElementById('btnGuardarProducto');
+        const inputArchivo = document.getElementById('prodImagenArchivo');
+        const archivo = inputArchivo.files[0];
+
+        if (!archivo) {
+            alert("Por favor selecciona una imagen.");
+            return;
+        }
+
+        try {
+            btnGuardar.disabled = true;
+            btnGuardar.innerText = "Subiendo imagen...";
+
+            // 1. Generar un nombre único para evitar sobreescribir imágenes
+            const extension = archivo.name.split('.').pop();
+            const nombreArchivo = `${miComercio.id}/${Date.now()}.${extension}`;
+
+            // 2. Subir el archivo al bucket 'productos'
+            const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                .from('productos')
+                .upload(nombreArchivo, archivo, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+
+            if (uploadError) {
+                throw new Error("Error al subir imagen a Storage: " + uploadError.message);
+            }
+
+            // 3. Obtener la URL pública de la imagen recién subida
+            const { data: publicUrlData } = supabaseClient.storage
+                .from('productos')
+                .getPublicUrl(nombreArchivo);
+
+            const urlPublicaImagen = publicUrlData.publicUrl;
+
+            // 4. Guardar los datos en la tabla 'productos' con la URL pública
+            const producto = {
+                comercio_id: miComercio.id,
+                nombre: document.getElementById('prodNombre').value,
+                precio: parseFloat(document.getElementById('prodPrecio').value),
+                descripcion: document.getElementById('prodDescripcion').value,
+                imagen: urlPublicaImagen
+            };
+
+            const { error: insertError } = await supabaseClient.from('productos').insert([producto]);
+            
+            if (insertError) {
+                throw new Error("Error al guardar producto en base de datos: " + insertError.message);
+            }
+
+            // Éxito: Limpiar formulario y recargar
             document.getElementById('formProducto').reset();
+            alert("¡Producto publicado con éxito!");
             cargarProductosDuenio();
+
+        } catch (err) {
+            alert(err.message);
+            console.error(err);
+        } finally {
+            btnGuardar.disabled = false;
+            btnGuardar.innerText = "Publicar Producto";
         }
     });
 
