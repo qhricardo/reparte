@@ -20,6 +20,7 @@
         .btn-primary:hover { background: #219150; }
         .btn-danger { background: #e74c3c; color: white; }
         .btn-secundario { background: #7f8c8d; color: white; }
+        .btn-modo { background: #2980b9; color: white; margin-right: 10px; }
         
         /* Formularios */
         label { font-weight: bold; font-size: 14px; color: #333; display: block; margin-top: 10px; }
@@ -49,7 +50,11 @@
             <span id="labelUsuario" style="font-weight: bold;"></span>
             <span id="badgeRol" style="font-size: 12px; background: #e0e0e0; padding: 3px 8px; border-radius: 10px; margin-left: 5px;"></span>
         </div>
-        <button id="btnCerrarSesion" class="btn btn-danger">Cerrar Sesión</button>
+        <div>
+            <!-- Botón dinámico para cambiar de modo si eres dueño -->
+            <button id="btnCambiarModo" class="btn btn-modo oculto">🛒 Modo Comprador</button>
+            <button id="btnCerrarSesion" class="btn btn-danger">Cerrar Sesión</button>
+        </div>
     </div>
 
     <!-- 1. PANTALLA DE LOGIN -->
@@ -142,10 +147,12 @@
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
     
-    let supabaseClient = null; // 🟢 Cambio de nombre para evitar conflictos
+    let supabaseClient = null;
     let usuarioActual = null;
     let miComercio = null;
+    let modoActual = 'duenio'; // 'duenio' o 'cliente'
 
+    // Métodos de autenticación
     window.loginConGoogle = async function() {
         if (window.location.protocol === 'file:') {
             alert("Aviso: Google OAuth requiere ejecutarse desde un servidor web o Live Server (no como archivo local file://).");
@@ -173,9 +180,11 @@
         }
     };
 
+    // Inicialización del DOM
     document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById('btnLoginGoogle').addEventListener('click', window.loginConGoogle);
         document.getElementById('btnCerrarSesion').addEventListener('click', window.cerrarSesion);
+        document.getElementById('btnCambiarModo').addEventListener('click', alternarModoVista);
         document.getElementById('btnIrCrearComercio').addEventListener('click', mostrarFormularioCrearComercio);
         document.getElementById('btnVolverComercios').addEventListener('click', () => cargarComerciosCliente());
         document.getElementById('btnCancelarRegistro').addEventListener('click', () => cargarComerciosCliente());
@@ -185,7 +194,7 @@
             return;
         }
 
-        // Inicializamos el cliente sobre la nueva variable
+        // Instanciación del cliente Supabase
         supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const { data: { session }, error } = await supabaseClient.auth.getSession();
@@ -217,9 +226,12 @@
             .select('*')
             .eq('usuario_id', usuarioActual.id);
 
+        const btnCambiar = document.getElementById('btnCambiarModo');
+
         if (error) {
             console.error("Error al consultar perfil de comercio:", error);
             document.getElementById('badgeRol').innerText = "Cliente";
+            if (btnCambiar) btnCambiar.classList.add('oculto');
             cargarComerciosCliente();
             return;
         }
@@ -227,11 +239,34 @@
         if (data && data.length > 0) {
             miComercio = data[0];
             document.getElementById('badgeRol').innerText = "Dueño de Comercio";
+            
+            // Si es dueño, activamos la opción para cambiar entre comprador y panel
+            if (btnCambiar) {
+                btnCambiar.classList.remove('oculto');
+                btnCambiar.innerText = "🛒 Modo Comprador";
+            }
+
+            modoActual = 'duenio';
             cargarPanelDuenio();
         } else {
             miComercio = null;
             document.getElementById('badgeRol').innerText = "Cliente";
+            if (btnCambiar) btnCambiar.classList.add('oculto');
             cargarComerciosCliente();
+        }
+    }
+
+    function alternarModoVista() {
+        const btnCambiar = document.getElementById('btnCambiarModo');
+
+        if (modoActual === 'duenio') {
+            modoActual = 'cliente';
+            btnCambiar.innerText = "🏬 Mi Panel de Comercio";
+            cargarComerciosCliente();
+        } else {
+            modoActual = 'duenio';
+            btnCambiar.innerText = "🛒 Modo Comprador";
+            cargarPanelDuenio();
         }
     }
 
@@ -246,6 +281,14 @@
     async function cargarComerciosCliente() {
         ocultarTodasLasPantallas();
         document.getElementById('pantallaClienteComercios').classList.remove('oculto');
+
+        // Si ya tiene un comercio, ocultamos el botón de "Registrar mi comercio" en la vista cliente
+        const btnIrCrear = document.getElementById('btnIrCrearComercio');
+        if (miComercio) {
+            btnIrCrear.classList.add('oculto');
+        } else {
+            btnIrCrear.classList.remove('oculto');
+        }
 
         const { data: comercios } = await supabaseClient.from('comercios').select('*');
         const lista = document.getElementById('listaComercios');
