@@ -179,13 +179,16 @@
         <h2>🛍️ Confirmar Pedido</h2>
         <div id="resumenItemsCarrito" style="max-height: 120px; overflow-y: auto; border-bottom: 1px solid #ddd; margin-bottom: 10px;"></div>
         
-        <label>Selecciona tu ubicación de entrega en el mapa:</label>
+        <label>Escribe tu dirección o búscala en el mapa:</label>
+        <div style="display: flex; gap: 8px; margin-bottom: 5px;">
+            <input type="text" id="direccionEscrita" style="margin:0;" required placeholder="Ej. Av. Insurgentes Sur 123, CDMX">
+            <button type="button" class="btn btn-modo" style="margin:0; white-space:nowrap;" onclick="buscarDireccionEnMapa()">🔍 Buscar</button>
+        </div>
+
         <div id="mapaEntrega"></div>
 
-        <label>Referencia / Dirección escrita:</label>
-        <input type="text" id="direccionEscrita" required placeholder="Ej. Casa blanca de 2 pisos, timbre con sticker">
-
         <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin: 10px 0;">
+            <p style="margin: 4px 0;">Distancia estimada: <b><span id="txtDistancia">0.0</span> km</b></p>
             <p style="margin: 4px 0;">Subtotal Productos: <b>$<span id="txtSubtotal">0.00</span></b></p>
             <p style="margin: 4px 0;">Costo de Envío: <b>$<span id="txtCostoEnvio">25.00</span></b></p>
             <hr>
@@ -435,12 +438,14 @@
                 marcadorCliente.on('dragend', function (e) {
                     const pos = e.target.getLatLng();
                     coordsEntrega = { lat: pos.lat, lng: pos.lng };
+                    obtenerDireccionDesdeCoords(pos.lat, pos.lng);
                     recalcularTotales();
                 });
 
                 mapa.on('click', function(e) {
                     marcadorCliente.setLatLng(e.latlng);
                     coordsEntrega = { lat: e.latlng.lat, lng: e.latlng.lng };
+                    obtenerDireccionDesdeCoords(e.latlng.lat, e.latlng.lng);
                     recalcularTotales();
                 });
             } else {
@@ -452,6 +457,44 @@
 
     function cerrarModalCheckout() {
         document.getElementById('modalCheckout').classList.add('oculto');
+    }
+
+    // BÚSQUEDA Y GEOCODIFICACIÓN DE DIRECCIONES
+    async function buscarDireccionEnMapa() {
+        const direccion = document.getElementById('direccionEscrita').value;
+        if (!direccion.trim()) return;
+
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion)}`);
+            const results = await response.json();
+            if (results && results.length > 0) {
+                const lat = parseFloat(results[0].lat);
+                const lon = parseFloat(results[0].lon);
+                coordsEntrega = { lat, lng: lon };
+                
+                if (mapa && marcadorCliente) {
+                    mapa.setView([lat, lon], 15);
+                    marcadorCliente.setLatLng([lat, lon]);
+                }
+                recalcularTotales();
+            } else {
+                alert("No se encontró la dirección especificada en el mapa.");
+            }
+        } catch (err) {
+            console.error("Error al buscar dirección:", err);
+        }
+    }
+
+    async function obtenerDireccionDesdeCoords(lat, lng) {
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+            const data = await response.json();
+            if (data && data.display_name) {
+                document.getElementById('direccionEscrita').value = data.display_name;
+            }
+        } catch (err) {
+            console.error("Error al obtener nombre de dirección:", err);
+        }
     }
 
     // CÁLCULO DE DISTANCIA Y ENVÍO (Haversine Formula)
@@ -471,6 +514,7 @@
         const costoEnvio = PRECIO_BASE_ENVIO + (distanciaKm * PRECIO_KM);
         const total = subtotal + costoEnvio;
 
+        document.getElementById('txtDistancia').innerText = distanciaKm.toFixed(2);
         document.getElementById('txtSubtotal').innerText = subtotal.toFixed(2);
         document.getElementById('txtCostoEnvio').innerText = costoEnvio.toFixed(2);
         document.getElementById('txtTotalPagar').innerText = total.toFixed(2);
