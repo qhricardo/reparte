@@ -6,9 +6,13 @@
     <title>Plataforma de Comercios</title>
     <!-- Carga de SDK Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Leaflet JS y CSS para Mapa interactivo -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <style>
         * { box-sizing: border-box; font-family: Arial, sans-serif; }
-        body { background-color: #f4f6f9; margin: 0; padding: 20px; }
+        body { background-color: #f4f6f9; margin: 0; padding: 20px; padding-bottom: 80px; }
         .contenedor { max-width: 900px; margin: 0 auto; }
         .oculto { display: none !important; }
 
@@ -38,6 +42,18 @@
         .precio { color: #27ae60; font-weight: bold; font-size: 16px; margin: 5px 0; }
 
         .encabezado-usuario { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 20px; border-radius: 10px; margin-bottom: 20px; }
+
+        /* Barra Flotante Carrito */
+        #barraCarrito { position: fixed; bottom: 0; left: 0; right: 0; background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; z-index: 1000; box-shadow: 0 -4px 10px rgba(0,0,0,0.2); }
+        
+        /* Modal Mapa */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 2000; }
+        .modal-contenido { background: white; width: 90%; max-width: 600px; padding: 20px; border-radius: 12px; max-height: 90vh; overflow-y: auto; }
+        #mapaEntrega { width: 100%; height: 250px; border-radius: 8px; margin: 10px 0; }
+
+        /* Notificación Toast */
+        .notificacion-toast { position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 3000; font-weight: bold; animation: popup 0.3s ease-out; }
+        @keyframes popup { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     </style>
 </head>
 <body>
@@ -56,7 +72,7 @@
         </div>
     </div>
 
-    <!-- 1. PANTALLA DE LOGIN -->
+    <!-- 1. LOGIN -->
     <div id="pantallaLogin" class="card" style="text-align: center;">
         <h2>🛒 Portal Comercios</h2>
         <p>Inicia sesión con Google para registrar o administrar tu comercio.</p>
@@ -66,7 +82,7 @@
         </button>
     </div>
 
-    <!-- 2. PANTALLA CLIENTE: EXPLORAR COMERCIOS -->
+    <!-- 2. EXPLORAR COMERCIOS -->
     <div id="pantallaClienteComercios" class="oculto">
         <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
             <h2>🏬 Comercios Disponibles</h2>
@@ -75,7 +91,7 @@
         <div id="listaComercios" class="grid-comercios"></div>
     </div>
 
-    <!-- 3. PANTALLA CLIENTE: PRODUCTOS DEL COMERCIO -->
+    <!-- 3. PRODUCTOS DEL COMERCIO -->
     <div id="pantallaClienteProductos" class="oculto">
         <div class="card">
             <button class="btn btn-secundario" id="btnVolverComercios">← Volver a Comercios</button>
@@ -84,7 +100,7 @@
         </div>
     </div>
 
-    <!-- 4. PANTALLA REGISTRAR COMERCIO -->
+    <!-- 4. REGISTRAR COMERCIO -->
     <div id="pantallaRegistroComercio" class="card oculto">
         <h2>🏬 Registrar mi Comercio</h2>
         <form id="formComercio">
@@ -107,7 +123,7 @@
         </form>
     </div>
 
-    <!-- 5. PANEL DE CONTROL DEL DUEÑO DE COMERCIO -->
+    <!-- 5. PANEL DE CONTROL DEL DUEÑO -->
     <div id="pantallaDuenio" class="oculto">
         <div class="card">
             <h2 id="nombreComercioDuenio">Mi Comercio</h2>
@@ -126,12 +142,18 @@
                 <label>Descripción:</label>
                 <textarea id="prodDescripcion" rows="2" placeholder="Ingredientes o características..."></textarea>
 
-                <!-- CAMBIO AQUÍ: Campo de tipo archivo para seleccionar/tomar foto -->
                 <label>Foto del Producto (Galería o Cámara):</label>
                 <input type="file" id="prodImagenArchivo" accept="image/*" required>
 
                 <button type="submit" id="btnGuardarProducto" class="btn btn-primary">Publicar Producto</button>
             </form>
+        </div>
+
+        <div class="card">
+            <h3>🔔 Pedidos Recibidos en Tiempo Real</h3>
+            <div id="listaPedidosRecibidos">
+                <p style="color:#7f8c8d;">Esperando nuevos pedidos...</p>
+            </div>
         </div>
 
         <div class="card">
@@ -142,20 +164,63 @@
 
 </div>
 
+<!-- BARRA FLOTANTE CARRITO -->
+<div id="barraCarrito" class="oculto">
+    <div>
+        <span id="cantCarrito" style="font-weight: bold; background: #e74c3c; padding: 4px 10px; border-radius: 20px; font-size: 14px;">0</span>
+        <span style="margin-left: 10px; font-weight: bold;">Subtotal: $<span id="subtotalCarrito">0.00</span></span>
+    </div>
+    <button class="btn btn-primary" onclick="abrirModalCheckout()">Ver Carrito / Checkout</button>
+</div>
+
+<!-- MODAL CHECKOUT CON MAPA -->
+<div id="modalCheckout" class="modal oculto">
+    <div class="modal-contenido">
+        <h2>🛍️ Confirmar Pedido</h2>
+        <div id="resumenItemsCarrito" style="max-height: 120px; overflow-y: auto; border-bottom: 1px solid #ddd; margin-bottom: 10px;"></div>
+        
+        <label>Selecciona tu ubicación de entrega en el mapa:</label>
+        <div id="mapaEntrega"></div>
+
+        <label>Referencia / Dirección escrita:</label>
+        <input type="text" id="direccionEscrita" required placeholder="Ej. Casa blanca de 2 pisos, timbre con sticker">
+
+        <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin: 10px 0;">
+            <p style="margin: 4px 0;">Subtotal Productos: <b>$<span id="txtSubtotal">0.00</span></b></p>
+            <p style="margin: 4px 0;">Costo de Envío: <b>$<span id="txtCostoEnvio">25.00</span></b></p>
+            <hr>
+            <h3 style="margin: 5px 0; color: #27ae60;">Total a Pagar: $<span id="txtTotalPagar">0.00</span></h3>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; margin-top: 15px;">
+            <button class="btn btn-secundario" onclick="cerrarModalCheckout()">Cancelar</button>
+            <button class="btn btn-primary" id="btnEnviarPedidoFinal" onclick="procesarPedidoFinal()">Hacer Pedido</button>
+        </div>
+    </div>
+</div>
+
 <script>
-    // Variables globales
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
     
     let supabaseClient = null;
     let usuarioActual = null;
     let miComercio = null;
+    let comercioSeleccionadoId = null;
     let modoActual = 'duenio';
 
-    // Métodos de autenticación
+    // Estado del Carrito
+    let carrito = [];
+    let mapa = null;
+    let marcadorCliente = null;
+    let coordsEntrega = { lat: 19.4326, lng: -99.1332 }; // Default CDMX
+    const COORD_COMERCIO_DEFAULT = { lat: 19.4380, lng: -99.1380 }; // Coordenadas ficticias del comercio para cálculo de distancia
+    const PRECIO_BASE_ENVIO = 20; // $20 costo base
+    const PRECIO_KM = 8; // $8 por kilómetro
+
     window.loginConGoogle = async function() {
         if (window.location.protocol === 'file:') {
-            alert("Aviso: Google OAuth requiere ejecutarse desde un servidor web o Live Server (no como archivo local file://).");
+            alert("Aviso: Google OAuth requiere ejecutarse desde un servidor web o Live Server.");
             return;
         }
 
@@ -163,14 +228,10 @@
 
         const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
-            options: {
-                redirectTo: redirectTarget
-            }
+            options: { redirectTo: redirectTarget }
         });
 
-        if (error) {
-            alert("Error de autenticación: " + error.message);
-        }
+        if (error) alert("Error: " + error.message);
     };
 
     window.cerrarSesion = async function() {
@@ -180,7 +241,6 @@
         }
     };
 
-    // Inicialización del DOM
     document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById('btnLoginGoogle').addEventListener('click', window.loginConGoogle);
         document.getElementById('btnCerrarSesion').addEventListener('click', window.cerrarSesion);
@@ -189,19 +249,9 @@
         document.getElementById('btnVolverComercios').addEventListener('click', () => cargarComerciosCliente());
         document.getElementById('btnCancelarRegistro').addEventListener('click', () => cargarComerciosCliente());
 
-        if (!window.supabase) {
-            alert("Error: La librería CDN de Supabase no se ha podido cargar.");
-            return;
-        }
-
         supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        const { data: { session }, error } = await supabaseClient.auth.getSession();
-        
-        if (error) {
-            console.error("Error al obtener la sesión de usuario:", error);
-            return;
-        }
+        const { data: { session } } = await supabaseClient.auth.getSession();
 
         if (session) {
             usuarioActual = session.user;
@@ -227,14 +277,6 @@
 
         const btnCambiar = document.getElementById('btnCambiarModo');
 
-        if (error) {
-            console.error("Error al consultar perfil de comercio:", error);
-            document.getElementById('badgeRol').innerText = "Cliente";
-            if (btnCambiar) btnCambiar.classList.add('oculto');
-            cargarComerciosCliente();
-            return;
-        }
-
         if (data && data.length > 0) {
             miComercio = data[0];
             document.getElementById('badgeRol').innerText = "Dueño de Comercio";
@@ -246,6 +288,7 @@
 
             modoActual = 'duenio';
             cargarPanelDuenio();
+            activarEscuchaPedidosEnTiempoReal();
         } else {
             miComercio = null;
             document.getElementById('badgeRol').innerText = "Cliente";
@@ -271,8 +314,8 @@
     function ocultarTodasLasPantallas() {
         ['pantallaLogin', 'pantallaClienteComercios', 'pantallaClienteProductos', 'pantallaRegistroComercio', 'pantallaDuenio']
             .forEach(id => {
-                const elemento = document.getElementById(id);
-                if (elemento) elemento.classList.add('oculto');
+                const el = document.getElementById(id);
+                if (el) el.classList.add('oculto');
             });
     }
 
@@ -281,11 +324,8 @@
         document.getElementById('pantallaClienteComercios').classList.remove('oculto');
 
         const btnIrCrear = document.getElementById('btnIrCrearComercio');
-        if (miComercio) {
-            btnIrCrear.classList.add('oculto');
-        } else {
-            btnIrCrear.classList.remove('oculto');
-        }
+        if (miComercio) btnIrCrear.classList.add('oculto');
+        else btnIrCrear.classList.remove('oculto');
 
         const { data: comercios } = await supabaseClient.from('comercios').select('*');
         const lista = document.getElementById('listaComercios');
@@ -310,6 +350,12 @@
     }
 
     async function verProductosComercio(comercioId, nombreComercio) {
+        if (comercioSeleccionadoId !== comercioId) {
+            carrito = [];
+            actualizarBarraCarrito();
+        }
+        comercioSeleccionadoId = comercioId;
+
         ocultarTodasLasPantallas();
         document.getElementById('pantallaClienteProductos').classList.remove('oculto');
         document.getElementById('tituloComercioSeleccionado').innerText = `Productos de ${nombreComercio}`;
@@ -323,7 +369,7 @@
         lista.innerHTML = "";
 
         if (!productos || productos.length === 0) {
-            lista.innerHTML = "<p>Este comercio no tiene productos disponibles por el momento.</p>";
+            lista.innerHTML = "<p>Este comercio no tiene productos disponibles.</p>";
             return;
         }
 
@@ -336,13 +382,197 @@
                     <h4>${p.nombre}</h4>
                     <p style="font-size: 13px; color: #666;">${p.descripcion || ''}</p>
                     <div class="precio">$${Number(p.precio).toFixed(2)}</div>
-                    <button class="btn btn-primary" style="width:100%;" onclick="hacerPedido('${p.nombre}', ${p.precio}, '${p.comercio_id}')">Pedir ahora</button>
+                    <button class="btn btn-primary" style="width:100%;" onclick="agregarAlCarrito('${p.id}', '${p.nombre}', ${p.precio})">+ Agregar a Carrito</button>
                 </div>
             `;
             lista.appendChild(card);
         });
     }
 
+    // LÓGICA DE CARRITO
+    function agregarAlCarrito(id, nombre, precio) {
+        const existente = carrito.find(item => item.id === id);
+        if (existente) {
+            existente.cantidad++;
+        } else {
+            carrito.push({ id, nombre, precio, cantidad: 1 });
+        }
+        actualizarBarraCarrito();
+    }
+
+    function actualizarBarraCarrito() {
+        const barra = document.getElementById('barraCarrito');
+        const cant = carrito.reduce((acc, item) => acc + item.cantidad, 0);
+        const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+
+        if (cant > 0) {
+            barra.classList.remove('oculto');
+            document.getElementById('cantCarrito').innerText = cant;
+            document.getElementById('subtotalCarrito').innerText = subtotal.toFixed(2);
+        } else {
+            barra.classList.add('oculto');
+        }
+    }
+
+    // CHECKOUT Y MAPA LEAFLET
+    function abrirModalCheckout() {
+        document.getElementById('modalCheckout').classList.remove('oculto');
+        
+        // Renderizar resumen
+        const contenedorResumen = document.getElementById('resumenItemsCarrito');
+        contenedorResumen.innerHTML = carrito.map(i => `<p style="margin: 4px 0;"><b>${i.cantidad}x</b> ${i.nombre} - $${(i.precio * i.cantidad).toFixed(2)}</p>`).join('');
+
+        // Inicializar mapa Leaflet
+        setTimeout(() => {
+            if (!mapa) {
+                mapa = L.map('mapaEntrega').setView([coordsEntrega.lat, coordsEntrega.lng], 14);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap'
+                }).addTo(mapa);
+
+                marcadorCliente = L.marker([coordsEntrega.lat, coordsEntrega.lng], { draggable: true }).addTo(mapa);
+
+                marcadorCliente.on('dragend', function (e) {
+                    const pos = e.target.getLatLng();
+                    coordsEntrega = { lat: pos.lat, lng: pos.lng };
+                    recalcularTotales();
+                });
+
+                mapa.on('click', function(e) {
+                    marcadorCliente.setLatLng(e.latlng);
+                    coordsEntrega = { lat: e.latlng.lat, lng: e.latlng.lng };
+                    recalcularTotales();
+                });
+            } else {
+                mapa.invalidateSize();
+            }
+            recalcularTotales();
+        }, 300);
+    }
+
+    function cerrarModalCheckout() {
+        document.getElementById('modalCheckout').classList.add('oculto');
+    }
+
+    // CÁLCULO DE DISTANCIA Y ENVÍO (Haversine Formula)
+    function recalcularTotales() {
+        const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+        
+        // Distancia en km
+        const R = 6371;
+        const dLat = (coordsEntrega.lat - COORD_COMERCIO_DEFAULT.lat) * Math.PI / 180;
+        const dLon = (coordsEntrega.lng - COORD_COMERCIO_DEFAULT.lng) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(COORD_COMERCIO_DEFAULT.lat * Math.PI / 180) * Math.cos(coordsEntrega.lat * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const distanciaKm = R * c;
+
+        const costoEnvio = PRECIO_BASE_ENVIO + (distanciaKm * PRECIO_KM);
+        const total = subtotal + costoEnvio;
+
+        document.getElementById('txtSubtotal').innerText = subtotal.toFixed(2);
+        document.getElementById('txtCostoEnvio').innerText = costoEnvio.toFixed(2);
+        document.getElementById('txtTotalPagar').innerText = total.toFixed(2);
+    }
+
+    async function procesarPedidoFinal() {
+        const direccionText = document.getElementById('direccionEscrita').value;
+        if (!direccionText.trim()) {
+            alert("Por favor ingresa una referencia o dirección escrita.");
+            return;
+        }
+
+        const btn = document.getElementById('btnEnviarPedidoFinal');
+        btn.disabled = true;
+        btn.innerText = "Procesando...";
+
+        const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+        const costoEnvio = parseFloat(document.getElementById('txtCostoEnvio').innerText);
+        const totalFinal = subtotal + costoEnvio;
+        const resumenProductos = carrito.map(i => `${i.cantidad}x ${i.nombre}`).join(', ');
+
+        const { error } = await supabaseClient.from('pedidos').insert([{
+            cliente_nombre: usuarioActual.email,
+            direccion_entrega: `${direccionText} (GPS: ${coordsEntrega.lat.toFixed(4)}, ${coordsEntrega.lng.toFixed(4)})`,
+            producto_nombre: resumenProductos,
+            precio: totalFinal,
+            comercio_id: comercioSeleccionadoId,
+            estado: 'pendiente'
+        }]);
+
+        if (error) {
+            alert("Error al procesar el pedido: " + error.message);
+            btn.disabled = false;
+            btn.innerText = "Hacer Pedido";
+        } else {
+            alert("¡Pedido enviado con éxito!");
+            carrito = [];
+            actualizarBarraCarrito();
+            cerrarModalCheckout();
+            btn.disabled = false;
+            btn.innerText = "Hacer Pedido";
+        }
+    }
+
+    // NOTIFICACIONES EN TIEMPO REAL PARA EL DUEÑO
+    function activarEscuchaPedidosEnTiempoReal() {
+        if (!miComercio) return;
+
+        cargarPedidosInicialesDuenio();
+
+        supabaseClient
+            .channel('pedidos_en_vivo')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'pedidos',
+                filter: `comercio_id=eq.${miComercio.id}`
+            }, payload => {
+                lanzarNotificacionDuenio(payload.new);
+                cargarPedidosInicialesDuenio();
+            })
+            .subscribe();
+    }
+
+    async function cargarPedidosInicialesDuenio() {
+        const { data: pedidos } = await supabaseClient
+            .from('pedidos')
+            .select('*')
+            .eq('comercio_id', miComercio.id)
+            .order('created_at', { ascending: false });
+
+        const cont = document.getElementById('listaPedidosRecibidos');
+        if (!pedidos || pedidos.length === 0) {
+            cont.innerHTML = "<p style='color:#7f8c8d;'>Aún no hay pedidos recibidos.</p>";
+            return;
+        }
+
+        cont.innerHTML = pedidos.map(p => `
+            <div style="background: #f8f9fa; padding: 12px; border-left: 4px solid #27ae60; margin-bottom: 10px; border-radius: 4px;">
+                <p style="margin:2px 0;"><b>Cliente:</b> ${p.cliente_nombre}</p>
+                <p style="margin:2px 0;"><b>Productos:</b> ${p.producto_nombre}</p>
+                <p style="margin:2px 0;"><b>Dirección/Mapa:</b> ${p.direccion_entrega}</p>
+                <p style="margin:2px 0; color:#27ae60;"><b>Total a Cobrar:</b> $${Number(p.precio).toFixed(2)}</p>
+            </div>
+        `).join('');
+    }
+
+    function lanzarNotificacionDuenio(nuevoPedido) {
+        // Notificación Toast en pantalla
+        const toast = document.createElement('div');
+        toast.className = 'notificacion-toast';
+        toast.innerHTML = `🔔 ¡Nuevo Pedido de $${Number(nuevoPedido.precio).toFixed(2)}!`;
+        document.body.appendChild(toast);
+
+        // Sonido de alerta
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.play().catch(() => {});
+
+        setTimeout(() => toast.remove(), 5000);
+    }
+
+    // MÉTODOS DEL PANEL DUEÑO
     function mostrarFormularioCrearComercio() {
         ocultarTodasLasPantallas();
         document.getElementById('pantallaRegistroComercio').classList.remove('oculto');
@@ -359,10 +589,9 @@
         };
 
         const { error } = await supabaseClient.from('comercios').insert([nuevoComercio]);
-        if (error) {
-            alert("Error al registrar comercio: " + error.message);
-        } else {
-            alert("¡Comercio registrado con éxito!");
+        if (error) alert("Error: " + error.message);
+        else {
+            alert("¡Comercio registrado!");
             verificarSiEsDuenio();
         }
     });
@@ -372,7 +601,6 @@
         document.getElementById('pantallaDuenio').classList.remove('oculto');
         document.getElementById('nombreComercioDuenio').innerText = `🏬 ${miComercio.nombre}`;
         document.getElementById('infoComercioDuenio').innerText = `Dirección: ${miComercio.direccion || 'N/A'} | Horario: ${miComercio.horario || 'N/A'}`;
-
         cargarProductosDuenio();
     }
 
@@ -405,69 +633,43 @@
         });
     }
 
-    // NUEVO PROCESO: Subida de archivo a Storage + Guardado en tabla 'productos'
     document.getElementById('formProducto').addEventListener('submit', async (e) => {
         e.preventDefault();
-
         const btnGuardar = document.getElementById('btnGuardarProducto');
-        const inputArchivo = document.getElementById('prodImagenArchivo');
-        const archivo = inputArchivo.files[0];
+        const archivo = document.getElementById('prodImagenArchivo').files[0];
 
-        if (!archivo) {
-            alert("Por favor selecciona una imagen.");
-            return;
-        }
+        if (!archivo) return alert("Selecciona una imagen.");
 
         try {
             btnGuardar.disabled = true;
             btnGuardar.innerText = "Subiendo imagen...";
 
-            // 1. Generar un nombre único para evitar sobreescribir imágenes
             const extension = archivo.name.split('.').pop();
             const nombreArchivo = `${miComercio.id}/${Date.now()}.${extension}`;
 
-            // 2. Subir el archivo al bucket 'productos'
-            const { data: uploadData, error: uploadError } = await supabaseClient.storage
+            const { error: uploadError } = await supabaseClient.storage
                 .from('productos')
-                .upload(nombreArchivo, archivo, {
-                    cacheControl: '3600',
-                    upsert: false
-                });
+                .upload(nombreArchivo, archivo);
 
-            if (uploadError) {
-                throw new Error("Error al subir imagen a Storage: " + uploadError.message);
-            }
+            if (uploadError) throw uploadError;
 
-            // 3. Obtener la URL pública de la imagen recién subida
             const { data: publicUrlData } = supabaseClient.storage
                 .from('productos')
                 .getPublicUrl(nombreArchivo);
 
-            const urlPublicaImagen = publicUrlData.publicUrl;
-
-            // 4. Guardar los datos en la tabla 'productos' con la URL pública
             const producto = {
                 comercio_id: miComercio.id,
                 nombre: document.getElementById('prodNombre').value,
                 precio: parseFloat(document.getElementById('prodPrecio').value),
                 descripcion: document.getElementById('prodDescripcion').value,
-                imagen: urlPublicaImagen
+                imagen: publicUrlData.publicUrl
             };
 
-            const { error: insertError } = await supabaseClient.from('productos').insert([producto]);
-            
-            if (insertError) {
-                throw new Error("Error al guardar producto en base de datos: " + insertError.message);
-            }
-
-            // Éxito: Limpiar formulario y recargar
+            await supabaseClient.from('productos').insert([producto]);
             document.getElementById('formProducto').reset();
-            alert("¡Producto publicado con éxito!");
             cargarProductosDuenio();
-
         } catch (err) {
             alert(err.message);
-            console.error(err);
         } finally {
             btnGuardar.disabled = false;
             btnGuardar.innerText = "Publicar Producto";
@@ -478,26 +680,6 @@
         if (confirm("¿Estás seguro de eliminar este producto?")) {
             await supabaseClient.from('productos').delete().eq('id', id);
             cargarProductosDuenio();
-        }
-    };
-
-    window.hacerPedido = async function(nombre, precio, comercioId) {
-        const direccion = prompt("Ingresa tu dirección de entrega:");
-        if (!direccion) return;
-
-        const { error } = await supabaseClient.from('pedidos').insert([{
-            cliente_nombre: usuarioActual.email,
-            direccion_entrega: direccion,
-            producto_nombre: nombre,
-            precio: precio,
-            comercio_id: comercioId,
-            estado: 'pendiente'
-        }]);
-
-        if (error) {
-            alert("Error al enviar el pedido: " + error.message);
-        } else {
-            alert("¡Pedido realizado con éxito!");
         }
     };
 </script>
