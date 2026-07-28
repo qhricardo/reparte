@@ -142,7 +142,7 @@
       document.getElementById('login-view').classList.add('hidden');
       document.getElementById('dashboard-view').classList.remove('hidden');
       
-      document.getElementById('repartidor-name').innerText = currentUser.user_metadata?.full_name || 'Repartidor';
+      document.getElementById('repartidor-name').innerText = currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || 'Repartidor';
       document.getElementById('repartidor-email').innerText = currentUser.email;
 
       cargarPedidos();
@@ -155,8 +155,24 @@
       return fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true });
     }
 
+    // Función auxiliar para obtener el nombre limpio del cliente
+    function obtenerNombreCliente(pedido) {
+      if (pedido.cliente_nombre && !pedido.cliente_nombre.includes('@')) {
+        return pedido.cliente_nombre;
+      }
+      if (pedido.nombre_cliente && !pedido.nombre_cliente.includes('@')) {
+        return pedido.nombre_cliente;
+      }
+      // Si solo viene guardado el correo, extraer la primera parte antes del @
+      const correo = pedido.cliente_email || pedido.cliente_nombre || pedido.email || '';
+      if (correo.includes('@')) {
+        const parteUsuario = correo.split('@')[0];
+        return parteUsuario.charAt(0).toUpperCase() + parteUsuario.slice(1);
+      }
+      return 'Cliente';
+    }
+
     async function cargarPedidos() {
-      // 1. Cargar pedidos con la estructura original que funciona
       const { data: pedidos, error } = await supabaseClient
         .from('pedidos')
         .select('*')
@@ -168,7 +184,6 @@
         return;
       }
 
-      // 2. Traer información de los comercios por separado para no causar errores de JOIN
       let diccComercios = {};
       const comercioIds = [...new Set((pedidos || []).map(p => p.comercio_id).filter(Boolean))];
       
@@ -205,7 +220,6 @@
       }
 
       pedidos.forEach(pedido => {
-        // Ocultar los pedidos disponibles si ya está llevando uno
         if (tienePedidoActivo && pedido.estado === 'pendiente') {
           return;
         }
@@ -227,6 +241,7 @@
 
         const comercioInfo = diccComercios[pedido.comercio_id] || {};
         const horaPedido = formatearHora(pedido.created_at);
+        const nombreCliente = obtenerNombreCliente(pedido);
 
         card.innerHTML = `
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
@@ -236,12 +251,12 @@
 
           <div class="comercio-box">
             <h4 style="margin:0 0 4px 0;">🏪 ${comercioInfo.nombre || pedido.comercio_nombre || 'Comercio'}</h4>
-            <p style="margin:2px 0; font-size:13px;"><strong>📍 Recoger en:</strong> ${comercioInfo.direccion || 'Dirección de comercio no especificada'}</p>
+            <p style="margin:2px 0; font-size:13px;"><strong>📍 Recoger en:</strong> ${comercioInfo.direccion || 'Dirección no especificada'}</p>
             <p style="margin:2px 0; font-size:13px;"><strong>📞 Tel. Comercio:</strong> ${comercioInfo.telefono || 'Sin teléfono'}</p>
           </div>
 
           <p style="margin: 6px 0;"><strong>📦 Producto:</strong> ${pedido.producto_nombre || 'Producto sin nombre'}</p>
-          <p style="margin: 4px 0;"><strong>👤 Cliente:</strong> ${pedido.cliente_nombre || 'No especificado'}</p>
+          <p style="margin: 4px 0;"><strong>👤 Cliente:</strong> ${nombreCliente}</p>
           <p style="margin: 4px 0;"><strong>🏠 Dirección de entrega:</strong> ${pedido.direccion_entrega || 'Sin dirección'}</p>
           <p style="margin: 4px 0;"><strong>📱 Tel. Cliente:</strong> ${pedido.telefono_cliente || pedido.telefono || 'Sin teléfono'}</p>
           <p style="margin: 6px 0; font-size: 15px; color: var(--success);"><strong>💵 Precio:</strong> $${pedido.precio || '0.00'}</p>
