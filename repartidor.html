@@ -26,6 +26,8 @@
     .badge-en_camino { background: #dbeafe; color: #1e40af; }
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     .radar-pulse { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); animation: pulse 1.5s infinite; }
+    .comercio-box { background: #f1f5f9; padding: 10px; border-radius: 8px; margin: 8px 0; border-left: 4px solid var(--primary); }
+    .alerta-pedido { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 10px; border-radius: 8px; margin-bottom: 12px; text-align: center; font-weight: bold; font-size: 14px; }
     @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
   </style>
 </head>
@@ -56,6 +58,10 @@
         <h3 style="margin:0;">Radar de Pedidos Pendientes</h3>
       </div>
 
+      <div id="alerta-ocupado" class="alerta-pedido hidden">
+        🚨 Tienes un pedido en curso. Finalízalo para poder tomar otro.
+      </div>
+
       <div id="pedidos-container">
         <p style="color:#64748b;">Buscando pedidos cercanos...</p>
       </div>
@@ -63,11 +69,9 @@
   </div>
 
   <script>
-    // RENOMBRADO A supabaseClient PARA EVITAR CONFLICTOS DE IDENTIFICADOR
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit";
     
-    // Si ya fue creado anteriormente, se reutiliza; de lo contrario se inicializa.
     var supabaseClient = window.supabaseClient || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     window.supabaseClient = supabaseClient;
 
@@ -87,6 +91,18 @@
     };
 
     window.tomarPedido = async function(pedidoId) {
+      // Validar si ya tiene un pedido en camino
+      const { data: activos } = await supabaseClient
+        .from('pedidos')
+        .select('id')
+        .eq('repartidor_id', currentUser.id)
+        .eq('estado', 'en_camino');
+
+      if (activos && activos.length > 0) {
+        alert("⚠️ Solo puedes tomar 1 pedido a la vez. Entrega tu pedido activo primero.");
+        return;
+      }
+
       const { error } = await supabaseClient
         .from('pedidos')
         .update({
@@ -133,7 +149,14 @@
       suscribirRadarEnTiempoReal();
     }
 
+    function formatearHora(fechaIso) {
+      if (!fechaIso) return 'Reciente';
+      const fecha = new Date(fechaIso);
+      return fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true });
+    }
+
     async function cargarPedidos() {
+      // 1. Cargar pedidos con la estructura original que funciona
       const { data: pedidos, error } = await supabaseClient
         .from('pedidos')
         .select('*')
@@ -145,12 +168,36 @@
         return;
       }
 
-      renderizarPedidos(pedidos || []);
+      // 2. Traer información de los comercios por separado para no causar errores de JOIN
+      let diccComercios = {};
+      const comercioIds = [...new Set((pedidos || []).map(p => p.comercio_id).filter(Boolean))];
+      
+      if (comercioIds.length > 0) {
+        const { data: comercios } = await supabaseClient
+          .from('comercios')
+          .select('id, nombre, direccion, telefono')
+          .in('id', comercioIds);
+        
+        if (comercios) {
+          comercios.forEach(c => { diccComercios[c.id] = c; });
+        }
+      }
+
+      renderizarPedidos(pedidos || [], diccComercios);
     }
 
-    function renderizarPedidos(pedidos) {
+    function renderizarPedidos(pedidos, diccComercios = {}) {
       const contenedor = document.getElementById('pedidos-container');
+      const alerta = document.getElementById('alerta-ocupado');
       contenedor.innerHTML = '';
+
+      const tienePedidoActivo = pedidos.some(p => p.estado === 'en_camino' && p.repartidor_id === currentUser.id);
+
+      if (tienePedidoActivo) {
+        alerta.classList.remove('hidden');
+      } else {
+        alerta.classList.add('hidden');
+      }
 
       if (pedidos.length === 0) {
         contenedor.innerHTML = '<div class="card"><p style="color:#64748b; margin:0;">No hay pedidos pendientes en los comercios.</p></div>';
@@ -158,6 +205,11 @@
       }
 
       pedidos.forEach(pedido => {
+        // Ocultar los pedidos disponibles si ya está llevando uno
+        if (tienePedidoActivo && pedido.estado === 'pendiente') {
+          return;
+        }
+
         const card = document.createElement('div');
         card.className = 'card';
 
@@ -166,19 +218,34 @@
         let botonAccion = '';
 
         if (estadoBadge === 'pendiente') {
-          botonAccion = `<button class="btn-take" onclick="window.tomarPedido('${pedido.id}')">Tomar Pedido</button>`;
+          if (!tienePedidoActivo) {
+            botonAccion = `<button class="btn-take" onclick="window.tomarPedido('${pedido.id}')">Tomar Pedido</button>`;
+          }
         } else if (estadoBadge === 'en_camino' && esMio) {
           botonAccion = `<button class="btn-deliver" onclick="window.entregarPedido('${pedido.id}')">Marcar como Entregado</button>`;
         }
 
+        const comercioInfo = diccComercios[pedido.comercio_id] || {};
+        const horaPedido = formatearHora(pedido.created_at);
+
         card.innerHTML = `
-          <div style="display:flex; justify-content:space-between; align-items:start;">
-            <h4 style="margin:0 0 8px 0;">📦 ${pedido.producto_nombre || 'Producto sin nombre'}</h4>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+            <span style="font-size:12px; color:#64748b; font-weight:bold;">🕒 ${horaPedido}</span>
             <span class="badge badge-${estadoBadge}">${estadoBadge.replace('_', ' ')}</span>
           </div>
-          <p style="margin: 4px 0;"><strong>Cliente:</strong> ${pedido.cliente_nombre || 'No especificado'}</p>
-          <p style="margin: 4px 0;"><strong>Dirección de entrega:</strong> ${pedido.direccion_entrega || 'Sin dirección'}</p>
-          <p style="margin: 4px 0;"><strong>Precio:</strong> $${pedido.precio || '0.00'}</p>
+
+          <div class="comercio-box">
+            <h4 style="margin:0 0 4px 0;">🏪 ${comercioInfo.nombre || pedido.comercio_nombre || 'Comercio'}</h4>
+            <p style="margin:2px 0; font-size:13px;"><strong>📍 Recoger en:</strong> ${comercioInfo.direccion || 'Dirección de comercio no especificada'}</p>
+            <p style="margin:2px 0; font-size:13px;"><strong>📞 Tel. Comercio:</strong> ${comercioInfo.telefono || 'Sin teléfono'}</p>
+          </div>
+
+          <p style="margin: 6px 0;"><strong>📦 Producto:</strong> ${pedido.producto_nombre || 'Producto sin nombre'}</p>
+          <p style="margin: 4px 0;"><strong>👤 Cliente:</strong> ${pedido.cliente_nombre || 'No especificado'}</p>
+          <p style="margin: 4px 0;"><strong>🏠 Dirección de entrega:</strong> ${pedido.direccion_entrega || 'Sin dirección'}</p>
+          <p style="margin: 4px 0;"><strong>📱 Tel. Cliente:</strong> ${pedido.telefono_cliente || pedido.telefono || 'Sin teléfono'}</p>
+          <p style="margin: 6px 0; font-size: 15px; color: var(--success);"><strong>💵 Precio:</strong> $${pedido.precio || '0.00'}</p>
+
           ${botonAccion}
         `;
         contenedor.appendChild(card);
