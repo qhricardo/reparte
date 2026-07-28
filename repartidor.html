@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reparte - Panel de Repartidores</title>
-  <!-- Supabase JS Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
@@ -36,7 +35,8 @@
     <div id="login-view" class="card">
       <h2>🛵 Reparte - Repartidores</h2>
       <p>Inicia sesión con Google para conectarte al radar de pedidos.</p>
-      <button class="btn-google" onclick="loginWithGoogle()">
+      <!-- Llamada a la función global -->
+      <button class="btn-google" onclick="window.loginWithGoogle()">
         Iniciar Sesión con Google
       </button>
     </div>
@@ -48,7 +48,7 @@
           <h3 id="repartidor-name" style="margin:0;">Hola</h3>
           <small id="repartidor-email" style="color:#64748b;"></small>
         </div>
-        <button class="btn-logout" onclick="logout()">Salir</button>
+        <button class="btn-logout" onclick="window.logout()">Salir</button>
       </div>
 
       <div style="display:flex; align-items:center; gap:8px; margin-bottom: 12px;">
@@ -63,45 +63,57 @@
   </div>
 
   <script>
-    // Configuración de Supabase para reparte
+    // Inicialización del cliente Supabase
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit";
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let currentUser = null;
 
-    // INICIALIZAR AUTENTICACIÓN
-    window.addEventListener('DOMContentLoaded', async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session) {
-        currentUser = session.user;
-        showDashboard();
-      }
-
-      supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          currentUser = session.user;
-          showDashboard();
-        } else if (event === 'SIGNED_OUT') {
-          currentUser = null;
-          showLogin();
-        }
-      });
-    });
-
-    async function loginWithGoogle() {
+    // DEFINICIÓN DE FUNCIONES EN ÁMBITO GLOBAL (window)
+    window.loginWithGoogle = async function() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: window.location.href }
       });
       if (error) alert("Error al iniciar sesión: " + error.message);
-    }
+    };
 
-    async function logout() {
+    window.logout = async function() {
       await supabase.auth.signOut();
-    }
+    };
 
+    window.tomarPedido = async function(pedidoId) {
+      const { error } = await supabase
+        .from('pedidos')
+        .update({
+          estado: 'en_camino',
+          repartidor_id: currentUser.id
+        })
+        .eq('id', pedidoId);
+
+      if (error) {
+        alert("Error al tomar el pedido: " + error.message);
+      } else {
+        cargarPedidos();
+      }
+    };
+
+    window.entregarPedido = async function(pedidoId) {
+      const { error } = await supabase
+        .from('pedidos')
+        .update({ estado: 'entregado' })
+        .eq('id', pedidoId)
+        .eq('repartidor_id', currentUser.id);
+
+      if (error) {
+        alert("Error al marcar como entregado: " + error.message);
+      } else {
+        cargarPedidos();
+      }
+    };
+
+    // FUNCIONES INTERNAS DE INTERFAZ Y DATOS
     function showLogin() {
       document.getElementById('login-view').classList.remove('hidden');
       document.getElementById('dashboard-view').classList.add('hidden');
@@ -111,16 +123,14 @@
       document.getElementById('login-view').classList.add('hidden');
       document.getElementById('dashboard-view').classList.remove('hidden');
       
-      document.getElementById('repartidor-name').innerText = currentUser.user_metadata.full_name || 'Repartidor';
+      document.getElementById('repartidor-name').innerText = currentUser.user_metadata?.full_name || 'Repartidor';
       document.getElementById('repartidor-email').innerText = currentUser.email;
 
       cargarPedidos();
       suscribirRadarEnTiempoReal();
     }
 
-    // CARGAR PEDIDOS CON TUS COLUMNAS
     async function cargarPedidos() {
-      // Consulta los pedidos 'pendiente' o los tomados por este repartidor ('en_camino')
       const { data: pedidos, error } = await supabase
         .from('pedidos')
         .select('*')
@@ -135,7 +145,6 @@
       renderizarPedidos(pedidos || []);
     }
 
-    // MOSTRAR EN PANTALLA USANDO CLIENTE_NOMBRE, DIRECCION_ENTREGA, PRODUCTO_NOMBRE Y PRECIO
     function renderizarPedidos(pedidos) {
       const contenedor = document.getElementById('pedidos-container');
       contenedor.innerHTML = '';
@@ -154,9 +163,9 @@
         let botonAccion = '';
 
         if (estadoBadge === 'pendiente') {
-          botonAccion = `<button class="btn-take" onclick="tomarPedido('${pedido.id}')">Tomar Pedido</button>`;
+          botonAccion = `<button class="btn-take" onclick="window.tomarPedido('${pedido.id}')">Tomar Pedido</button>`;
         } else if (estadoBadge === 'en_camino' && esMio) {
-          botonAccion = `<button class="btn-deliver" onclick="entregarPedido('${pedido.id}')">Marcar como Entregado</button>`;
+          botonAccion = `<button class="btn-deliver" onclick="window.entregarPedido('${pedido.id}')">Marcar como Entregado</button>`;
         }
 
         card.innerHTML = `
@@ -166,15 +175,13 @@
           </div>
           <p style="margin: 4px 0;"><strong>Cliente:</strong> ${pedido.cliente_nombre || 'No especificado'}</p>
           <p style="margin: 4px 0;"><strong>Dirección de entrega:</strong> ${pedido.direccion_entrega || 'Sin dirección'}</p>
-          <p style="margin: 4px 0;"><strong>Precio del producto:</strong> $${pedido.precio || '0.00'}</p>
-          <p style="margin: 4px 0; font-size:12px; color:#64748b;"><strong>ID Comercio:</strong> ${pedido.comercio_id}</p>
+          <p style="margin: 4px 0;"><strong>Precio:</strong> $${pedido.precio || '0.00'}</p>
           ${botonAccion}
         `;
         contenedor.appendChild(card);
       });
     }
 
-    // SUSCRIPCIÓN EN TIEMPO REAL
     function suscribirRadarEnTiempoReal() {
       supabase
         .channel('radar-pedidos')
@@ -184,37 +191,27 @@
         .subscribe();
     }
 
-    // TOMAR PEDIDO
-    async function tomarPedido(pedidoId) {
-      const { error } = await supabase
-        .from('pedidos')
-        .update({
-          estado: 'en_camino',
-          repartidor_id: currentUser.id
-        })
-        .eq('id', pedidoId);
-
-      if (error) {
-        alert("Error al tomar el pedido: " + error.message);
+    // CONTROL DE EVENTOS DE SESIÓN AL CORTAR/CARGAR
+    window.addEventListener('DOMContentLoaded', async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        currentUser = session.user;
+        showDashboard();
       } else {
-        cargarPedidos();
+        showLogin();
       }
-    }
 
-    // ENTREGAR PEDIDO
-    async function entregarPedido(pedidoId) {
-      const { error } = await supabase
-        .from('pedidos')
-        .update({ estado: 'entregado' })
-        .eq('id', pedidoId)
-        .eq('repartidor_id', currentUser.id);
-
-      if (error) {
-        alert("Error al marcar como entregado: " + error.message);
-      } else {
-        cargarPedidos();
-      }
-    }
+      supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          currentUser = session.user;
+          showDashboard();
+        } else if (event === 'SIGNED_OUT') {
+          currentUser = null;
+          showLogin();
+        }
+      });
+    });
   </script>
 </body>
 </html>
