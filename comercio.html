@@ -48,8 +48,8 @@
         
         /* Modal y Mapas */
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 2000; }
-        .modal-contenido { background: white; width: 90%; max-width: 600px; padding: 20px; border-radius: 12px; max-height: 90vh; overflow-y: auto; }
-        #mapaEntrega, #mapaComercioReg { width: 100%; height: 250px; border-radius: 8px; margin: 10px 0; }
+        .modal-contenido { background: white; width: 90%; max-width: 650px; padding: 20px; border-radius: 12px; max-height: 90vh; overflow-y: auto; }
+        #mapaEntrega, #mapaComercioReg { width: 100%; height: 280px; border-radius: 8px; margin: 10px 0; }
 
         /* Notificación Toast */
         .notificacion-toast { position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 3000; font-weight: bold; animation: popup 0.3s ease-out; }
@@ -114,7 +114,7 @@
             </div>
             
             <div id="mapaComercioReg"></div>
-            <small style="color: #666;">Haz clic o arrastra el pin verde a la ubicación exacta de tu negocio.</small>
+            <small style="color: #666;">Haz clic o arrastra el marcador a la ubicación exacta de tu negocio.</small>
 
             <label style="margin-top: 15px;">Horario de Atención:</label>
             <input type="text" id="horarioComercioReg" placeholder="Ej. 10:00 AM - 10:00 PM">
@@ -180,22 +180,23 @@
     <button class="btn btn-primary" onclick="abrirModalCheckout()">Ver Carrito / Checkout</button>
 </div>
 
-<!-- MODAL CHECKOUT CON MAPA -->
+<!-- MODAL CHECKOUT CON MAPA DE RUTA Y DISTANCIA REAL -->
 <div id="modalCheckout" class="modal oculto">
     <div class="modal-contenido">
         <h2>🛍️ Confirmar Pedido</h2>
         <div id="resumenItemsCarrito" style="max-height: 120px; overflow-y: auto; border-bottom: 1px solid #ddd; margin-bottom: 10px;"></div>
         
-        <label>Escribe tu dirección o búscala en el mapa:</label>
+        <label>Escribe tu dirección de entrega o búscala en el mapa:</label>
         <div style="display: flex; gap: 8px; margin-bottom: 5px;">
             <input type="text" id="direccionEscrita" style="margin:0;" required placeholder="Ej. Av. Insurgentes Sur 123, CDMX">
             <button type="button" class="btn btn-modo" style="margin:0; white-space:nowrap;" onclick="buscarDireccionEnMapa()">🔍 Buscar</button>
         </div>
 
         <div id="mapaEntrega"></div>
+        <small style="color: #666;">🔵 Marcador Azul = Ubicación del Comercio | 🔴 Marcador Rojo = Tu Ubicación de Entrega</small>
 
         <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin: 10px 0;">
-            <p style="margin: 4px 0;">Distancia estimada: <b><span id="txtDistancia">0.0</span> km</b></p>
+            <p style="margin: 4px 0;">Distancia Comercio → Cliente: <b><span id="txtDistancia">0.0</span> km</b></p>
             <p style="margin: 4px 0;">Subtotal Productos: <b>$<span id="txtSubtotal">0.00</span></b></p>
             <p style="margin: 4px 0;">Costo de Envío: <b>$<span id="txtCostoEnvio">25.00</span></b></p>
             <hr>
@@ -216,7 +217,7 @@
     let supabaseClient = null;
     let usuarioActual = null;
     let miComercio = null;
-    let comercioSeleccionadoId = null;
+    let comercioSeleccionadoObjeto = null; // Guardará todos los datos del comercio activo
     let modoActual = 'duenio';
 
     // Carrito
@@ -225,6 +226,8 @@
     // Mapas
     let mapaEntrega = null;
     let marcadorCliente = null;
+    let marcadorComercioEnMapa = null;
+    let lineaRuta = null;
     let coordsEntrega = { lat: 19.4326, lng: -99.1332 };
 
     let mapaRegComercio = null;
@@ -355,7 +358,7 @@
         comercios.forEach(c => {
             const card = document.createElement('div');
             card.className = 'tarjeta-comercio';
-            card.onclick = () => verProductosComercio(c.id, c.nombre);
+            card.onclick = () => verProductosComercio(c);
             card.innerHTML = `
                 <img src="${c.logo_url || 'https://via.placeholder.com/80'}" alt="${c.nombre}">
                 <h3>${c.nombre}</h3>
@@ -365,21 +368,21 @@
         });
     }
 
-    async function verProductosComercio(comercioId, nombreComercio) {
-        if (comercioSeleccionadoId !== comercioId) {
+    async function verProductosComercio(comercioObj) {
+        if (!comercioSeleccionadoObjeto || comercioSeleccionadoObjeto.id !== comercioObj.id) {
             carrito = [];
             actualizarBarraCarrito();
         }
-        comercioSeleccionadoId = comercioId;
+        comercioSeleccionadoObjeto = comercioObj;
 
         ocultarTodasLasPantallas();
         document.getElementById('pantallaClienteProductos').classList.remove('oculto');
-        document.getElementById('tituloComercioSeleccionado').innerText = `Productos de ${nombreComercio}`;
+        document.getElementById('tituloComercioSeleccionado').innerText = `Productos de ${comercioObj.nombre}`;
 
         const { data: productos } = await supabaseClient
             .from('productos')
             .select('*')
-            .eq('comercio_id', comercioId);
+            .eq('comercio_id', comercioObj.id);
 
         const lista = document.getElementById('listaProductosCliente');
         lista.innerHTML = "";
@@ -410,7 +413,6 @@
         ocultarTodasLasPantallas();
         document.getElementById('pantallaRegistroComercio').classList.remove('oculto');
 
-        // Inicializar Mapa de Registro
         setTimeout(() => {
             if (!mapaRegComercio) {
                 mapaRegComercio = L.map('mapaComercioReg').setView([coordsComercioRegistro.lat, coordsComercioRegistro.lng], 14);
@@ -466,7 +468,7 @@
         const nuevoComercio = {
             usuario_id: usuarioActual.id,
             nombre: document.getElementById('nombreComercioReg').value,
-            direccion: `${textoDir} (GPS: ${coordsComercioRegistro.lat.toFixed(4)}, ${coordsComercioRegistro.lng.toFixed(4)})`,
+            direccion: `${textoDir} (GPS: ${coordsComercioRegistro.lat.toFixed(6)}, ${coordsComercioRegistro.lng.toFixed(6)})`,
             horario: document.getElementById('horarioComercioReg').value,
             logo_url: document.getElementById('logoComercioReg').value
         };
@@ -479,7 +481,7 @@
         }
     });
 
-    // CARRITO Y CHECKOUT CON MAPA
+    // CARRITO Y CHECKOUT CON MEDIDOR DE DISTANCIA REAL
     function agregarAlCarrito(id, nombre, precio) {
         const existente = carrito.find(item => item.id === id);
         if (existente) existente.cantidad++;
@@ -501,17 +503,38 @@
         }
     }
 
+    // Extrae coordenadas GPS de la cadena guardada en Supabase o toma una por defecto
+    function obtenerCoordsComercioActivo() {
+        if (!comercioSeleccionadoObjeto || !comercioSeleccionadoObjeto.direccion) {
+            return { lat: 19.4326, lng: -99.1332 };
+        }
+        const match = comercioSeleccionadoObjeto.direccion.match(/GPS:\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+        if (match) {
+            return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
+        }
+        return { lat: 19.4326, lng: -99.1332 };
+    }
+
     function abrirModalCheckout() {
         document.getElementById('modalCheckout').classList.remove('oculto');
         
         const contenedorResumen = document.getElementById('resumenItemsCarrito');
         contenedorResumen.innerHTML = carrito.map(i => `<p style="margin: 4px 0;"><b>${i.cantidad}x</b> ${i.nombre} - $${(i.precio * i.cantidad).toFixed(2)}</p>`).join('');
 
+        const coordsComercio = obtenerCoordsComercioActivo();
+
         setTimeout(() => {
             if (!mapaEntrega) {
-                mapaEntrega = L.map('mapaEntrega').setView([coordsEntrega.lat, coordsEntrega.lng], 14);
+                mapaEntrega = L.map('mapaEntrega').setView([coordsComercio.lat, coordsComercio.lng], 13);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaEntrega);
 
+                // Marcador Fijo del Comercio (Azul)
+                marcadorComercioEnMapa = L.marker([coordsComercio.lat, coordsComercio.lng])
+                    .addTo(mapaEntrega)
+                    .bindPopup(`<b>${comercioSeleccionadoObjeto.nombre}</b><br>Origen`)
+                    .openPopup();
+
+                // Marcador Arrastrable del Cliente (Rojo)
                 marcadorCliente = L.marker([coordsEntrega.lat, coordsEntrega.lng], { draggable: true }).addTo(mapaEntrega);
 
                 marcadorCliente.on('dragend', function (e) {
@@ -529,6 +552,9 @@
                 });
             } else {
                 mapaEntrega.invalidateSize();
+                if (marcadorComercioEnMapa) {
+                    marcadorComercioEnMapa.setLatLng([coordsComercio.lat, coordsComercio.lng]);
+                }
             }
             recalcularTotales();
         }, 300);
@@ -551,7 +577,6 @@
                 coordsEntrega = { lat, lng: lon };
                 
                 if (mapaEntrega && marcadorCliente) {
-                    mapaEntrega.setView([lat, lon], 15);
                     marcadorCliente.setLatLng([lat, lon]);
                 }
                 recalcularTotales();
@@ -575,18 +600,36 @@
         }
     }
 
+    // CÁLCULO DE DISTANCIA DE FÓRMULA HAVERSINE ENTRE COMERCIO Y CLIENTE
     function recalcularTotales() {
         const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
-        
-        // Distancia ficticia basada en el centro por simplicidad
-        const R = 6371;
-        const dLat = (coordsEntrega.lat - 19.4380) * Math.PI / 180;
-        const dLon = (coordsEntrega.lng - -99.1380) * Math.PI / 180;
+        const coordsComercio = obtenerCoordsComercioActivo();
+
+        // Fórmula Haversine para cálculo de distancia exacta en Kilómetros
+        const R = 6371; // Radio de la Tierra en km
+        const dLat = (coordsEntrega.lat - coordsComercio.lat) * Math.PI / 180;
+        const dLon = (coordsEntrega.lng - coordsComercio.lng) * Math.PI / 180;
         const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(19.4380 * Math.PI / 180) * Math.cos(coordsEntrega.lat * Math.PI / 180) *
+                  Math.cos(coordsComercio.lat * Math.PI / 180) * Math.cos(coordsEntrega.lat * Math.PI / 180) *
                   Math.sin(dLon/2) * Math.sin(dLon/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         const distanciaKm = R * c;
+
+        // Dibujar/Actualizar la línea de ruta en el mapa
+        if (mapaEntrega) {
+            if (lineaRuta) mapaEntrega.removeLayer(lineaRuta);
+            lineaRuta = L.polyline([
+                [coordsComercio.lat, coordsComercio.lng],
+                [coordsEntrega.lat, coordsEntrega.lng]
+            ], { color: '#e74c3c', weight: 4, opacity: 0.7, dashArray: '8, 8' }).addTo(mapaEntrega);
+
+            // Ajustar el zoom para que se vean ambos marcadores a la vez
+            const bounds = L.latLngBounds([
+                [coordsComercio.lat, coordsComercio.lng],
+                [coordsEntrega.lat, coordsEntrega.lng]
+            ]);
+            mapaEntrega.fitBounds(bounds, { padding: [40, 40] });
+        }
 
         const costoEnvio = PRECIO_BASE_ENVIO + (distanciaKm * PRECIO_KM);
         const total = subtotal + costoEnvio;
@@ -611,10 +654,10 @@
 
         const { error } = await supabaseClient.from('pedidos').insert([{
             cliente_nombre: usuarioActual.email,
-            direccion_entrega: `${direccionText} (GPS: ${coordsEntrega.lat.toFixed(4)}, ${coordsEntrega.lng.toFixed(4)})`,
+            direccion_entrega: `${direccionText} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
             producto_nombre: resumenProductos,
             precio: totalFinal,
-            comercio_id: comercioSeleccionadoId,
+            comercio_id: comercioSeleccionadoObjeto.id,
             estado: 'pendiente'
         }]);
 
