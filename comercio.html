@@ -108,33 +108,36 @@
     </div>
 
     <!-- 4. REGISTRAR COMERCIO CON MAPA -->
-    <div id="pantallaRegistroComercio" class="card oculto">
-        <h2>🏬 Registrar mi Comercio</h2>
-        <form id="formComercio">
-            <label>Nombre del Comercio:</label>
-            <input type="text" id="nombreComercioReg" required placeholder="Ej. Pizzería Don Pepe">
+<div id="pantallaRegistroComercio" class="card oculto">
+    <h2>🏬 Registrar mi Comercio</h2>
+    <form id="formComercio">
+        <label>Nombre del Comercio:</label>
+        <input type="text" id="nombreComercioReg" required placeholder="Ej. Pizzería Don Pepe">
 
-            <label>Ubicación / Dirección del Comercio:</label>
-            <div style="display: flex; gap: 8px; margin-bottom: 5px;">
-                <input type="text" id="direccionComercioReg" style="margin:0;" required placeholder="Ej. Av. Hidalgo #45, CDMX">
-                <button type="button" class="btn btn-modo" style="margin:0; white-space:nowrap;" onclick="buscarUbicacionComercio()">🔍 Buscar</button>
-            </div>
-            
-            <div id="mapaComercioReg"></div>
-            <small style="color: #666;">Haz clic o arrastra el marcador a la ubicación exacta de tu negocio.</small>
+        <label>Teléfono de Contacto / Recogida:</label>
+        <input type="tel" id="telefonoComercioReg" required placeholder="Ej. 555-123-4567">
 
-            <label style="margin-top: 15px;">Horario de Atención:</label>
-            <input type="text" id="horarioComercioReg" placeholder="Ej. 10:00 AM - 10:00 PM">
+        <label>Ubicación / Dirección del Comercio:</label>
+        <div style="display: flex; gap: 8px; margin-bottom: 5px;">
+            <input type="text" id="direccionComercioReg" style="margin:0;" required placeholder="Ej. Av. Hidalgo #45, CDMX">
+            <button type="button" class="btn btn-modo" style="margin:0; white-space:nowrap;" onclick="buscarUbicacionComercio()">🔍 Buscar</button>
+        </div>
+        
+        <div id="mapaComercioReg"></div>
+        <small style="color: #666;">Haz clic o arrastra el marcador a la ubicación exacta de tu negocio.</small>
 
-            <label>URL del Logo / Imagen:</label>
-            <input type="url" id="logoComercioReg" placeholder="https://ejemplo.com/logo.png">
+        <label style="margin-top: 15px;">Horario de Atención:</label>
+        <input type="text" id="horarioComercioReg" placeholder="Ej. 10:00 AM - 10:00 PM">
 
-            <div style="margin-top: 15px;">
-                <button type="button" class="btn btn-secundario" id="btnCancelarRegistro">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Guardar Comercio</button>
-            </div>
-        </form>
-    </div>
+        <label>URL del Logo / Imagen:</label>
+        <input type="url" id="logoComercioReg" placeholder="https://ejemplo.com/logo.png">
+
+        <div style="margin-top: 15px;">
+            <button type="button" class="btn btn-secundario" id="btnCancelarRegistro">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar Comercio</button>
+        </div>
+    </form>
+</div>
 
     <!-- 5. PANEL DE CONTROL DEL DUEÑO -->
     <div id="pantallaDuenio" class="oculto">
@@ -475,6 +478,7 @@
         const nuevoComercio = {
             usuario_id: usuarioActual.id,
             nombre: document.getElementById('nombreComercioReg').value,
+            telefono: document.getElementById('telefonoComercioReg').value,
             direccion: `${textoDir} (GPS: ${coordsComercioRegistro.lat.toFixed(6)}, ${coordsComercioRegistro.lng.toFixed(6)})`,
             horario: document.getElementById('horarioComercioReg').value,
             logo_url: document.getElementById('logoComercioReg').value
