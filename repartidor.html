@@ -3,25 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reparte - Portal Repartidores</title>
-  <!-- Supabase JS Client library -->
+  <title>Reparte - Panel de Repartidores</title>
+  <!-- Supabase JS Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --primary: #2563eb;
       --success: #16a34a;
-      --warning: #d97706;
       --bg: #f8fafc;
     }
     body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 16px; color: #1e293b; }
     .container { max-width: 600px; margin: 0 auto; }
     .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 16px; }
     .hidden { display: none; }
-    button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
-    button:hover { opacity: 0.9; }
-    .btn-google { background: #4285F4; color: white; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .btn-take { background: var(--success); color: white; margin-top: 10px; }
-    .btn-deliver { background: var(--primary); color: white; margin-top: 10px; }
+    button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .btn-google { background: #4285F4; color: white; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; }
+    .btn-take { background: var(--success); color: white; margin-top: 12px; }
+    .btn-deliver { background: var(--primary); color: white; margin-top: 12px; }
     .btn-logout { background: #ef4444; color: white; width: auto; padding: 6px 12px; }
     .badge { display: inline-block; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
     .badge-pendiente { background: #fef3c7; color: #92400e; }
@@ -36,14 +34,14 @@
   <div class="container">
     <!-- PANTALLA 1: LOGIN -->
     <div id="login-view" class="card">
-      <h2>🚀 Reparte - Repartidores</h2>
-      <p>Inicia sesión con Google para acceder al radar de pedidos en tiempo real.</p>
+      <h2>🛵 Reparte - Repartidores</h2>
+      <p>Inicia sesión con Google para conectarte al radar de pedidos.</p>
       <button class="btn-google" onclick="loginWithGoogle()">
-        Continuar con Google
+        Iniciar Sesión con Google
       </button>
     </div>
 
-    <!-- PANTALLA 2: RADAR DE PEDIDOS -->
+    <!-- PANTALLA 2: RADAR Y ENTREGAS -->
     <div id="dashboard-view" class="hidden">
       <div class="card header">
         <div>
@@ -55,24 +53,24 @@
 
       <div style="display:flex; align-items:center; gap:8px; margin-bottom: 12px;">
         <span class="radar-pulse"></span>
-        <h3 style="margin:0;">Radar de Pedidos Activos</h3>
+        <h3 style="margin:0;">Radar de Pedidos Pendientes</h3>
       </div>
 
       <div id="pedidos-container">
-        <p style="color:#64748b;">Escaneando pedidos cercanos...</p>
+        <p style="color:#64748b;">Buscando pedidos cercanos...</p>
       </div>
     </div>
   </div>
 
   <script>
-    // Configuración de Supabase
+    // Configuración de Supabase para reparte
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit";
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let currentUser = null;
 
-    // 1. INICIALIZACIÓN Y CONTROL DE SESIÓN
+    // INICIALIZAR AUTENTICACIÓN
     window.addEventListener('DOMContentLoaded', async () => {
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -81,7 +79,6 @@
         showDashboard();
       }
 
-      // Listener para cambios de autenticación
       supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' && session) {
           currentUser = session.user;
@@ -93,13 +90,10 @@
       });
     });
 
-    // Login con Google
     async function loginWithGoogle() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-          redirectTo: window.location.href
-        }
+        options: { redirectTo: window.location.href }
       });
       if (error) alert("Error al iniciar sesión: " + error.message);
     }
@@ -124,9 +118,9 @@
       suscribirRadarEnTiempoReal();
     }
 
-    // 2. OBTENER PEDIDOS DESDE SUPABASE
+    // CARGAR PEDIDOS CON TUS COLUMNAS
     async function cargarPedidos() {
-      // Consulta pedidos disponibles o tomados por este repartidor
+      // Consulta los pedidos 'pendiente' o los tomados por este repartidor ('en_camino')
       const { data: pedidos, error } = await supabase
         .from('pedidos')
         .select('*')
@@ -141,7 +135,7 @@
       renderizarPedidos(pedidos || []);
     }
 
-    // 3. RENDERIZAR EN INTERFAZ
+    // MOSTRAR EN PANTALLA USANDO CLIENTE_NOMBRE, DIRECCION_ENTREGA, PRODUCTO_NOMBRE Y PRECIO
     function renderizarPedidos(pedidos) {
       const contenedor = document.getElementById('pedidos-container');
       contenedor.innerHTML = '';
@@ -156,59 +150,58 @@
         card.className = 'card';
 
         const esMio = pedido.repartidor_id === currentUser.id;
+        let estadoBadge = pedido.estado || 'pendiente';
         let botonAccion = '';
 
-        if (pedido.estado === 'pendiente') {
+        if (estadoBadge === 'pendiente') {
           botonAccion = `<button class="btn-take" onclick="tomarPedido('${pedido.id}')">Tomar Pedido</button>`;
-        } else if (pedido.estado === 'en_camino' && esMio) {
+        } else if (estadoBadge === 'en_camino' && esMio) {
           botonAccion = `<button class="btn-deliver" onclick="entregarPedido('${pedido.id}')">Marcar como Entregado</button>`;
         }
 
         card.innerHTML = `
           <div style="display:flex; justify-content:space-between; align-items:start;">
-            <h4 style="margin:0 0 8px 0;">Pedido #${pedido.id.toString().slice(0, 8)}</h4>
-            <span class="badge badge-${pedido.estado}">${pedido.estado.replace('_', ' ')}</span>
+            <h4 style="margin:0 0 8px 0;">📦 ${pedido.producto_nombre || 'Producto sin nombre'}</h4>
+            <span class="badge badge-${estadoBadge}">${estadoBadge.replace('_', ' ')}</span>
           </div>
-          <p style="margin: 4px 0;"><strong>Comercio:</strong> ${pedido.comercio_nombre || 'Comercio Registrado'}</p>
-          <p style="margin: 4px 0;"><strong>Dirección de entrega:</strong> ${pedido.direccion_destino || 'Ver mapa'}</p>
-          <p style="margin: 4px 0;"><strong>Total a cobrar:</strong> $${pedido.total || '0.00'}</p>
+          <p style="margin: 4px 0;"><strong>Cliente:</strong> ${pedido.cliente_nombre || 'No especificado'}</p>
+          <p style="margin: 4px 0;"><strong>Dirección de entrega:</strong> ${pedido.direccion_entrega || 'Sin dirección'}</p>
+          <p style="margin: 4px 0;"><strong>Precio del producto:</strong> $${pedido.precio || '0.00'}</p>
+          <p style="margin: 4px 0; font-size:12px; color:#64748b;"><strong>ID Comercio:</strong> ${pedido.comercio_id}</p>
           ${botonAccion}
         `;
         contenedor.appendChild(card);
       });
     }
 
-    // 4. SUSCRIPCIÓN EN TIEMPO REAL (RADAR)
+    // SUSCRIPCIÓN EN TIEMPO REAL
     function suscribirRadarEnTiempoReal() {
       supabase
         .channel('radar-pedidos')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
-          // Si cambia cualquier pedido en la BD, recargar lista automáticamente
           cargarPedidos();
         })
         .subscribe();
     }
 
-    // 5. ACCIÓN: TOMAR PEDIDO
+    // TOMAR PEDIDO
     async function tomarPedido(pedidoId) {
       const { error } = await supabase
         .from('pedidos')
         .update({
           estado: 'en_camino',
-          repartidor_id: currentUser.id,
-          repartidor_nombre: currentUser.user_metadata.full_name
+          repartidor_id: currentUser.id
         })
-        .eq('id', pedidoId)
-        .eq('estado', 'pendiente'); // Previene que dos repartidores lo tomen al mismo tiempo
+        .eq('id', pedidoId);
 
       if (error) {
-        alert("No se pudo tomar el pedido. Es posible que otro repartidor lo haya tomado antes.");
+        alert("Error al tomar el pedido: " + error.message);
       } else {
         cargarPedidos();
       }
     }
 
-    // 6. ACCIÓN: ENTREGAR PEDIDO
+    // ENTREGAR PEDIDO
     async function entregarPedido(pedidoId) {
       const { error } = await supabase
         .from('pedidos')
@@ -217,7 +210,7 @@
         .eq('repartidor_id', currentUser.id);
 
       if (error) {
-        alert("Error al completar la entrega: " + error.message);
+        alert("Error al marcar como entregado: " + error.message);
       } else {
         cargarPedidos();
       }
