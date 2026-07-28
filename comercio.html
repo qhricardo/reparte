@@ -190,16 +190,22 @@
     <button class="btn btn-primary" onclick="abrirModalCheckout()">Ver Carrito / Checkout</button>
 </div>
 
-<!-- MODAL CHECKOUT CON MAPA DE RUTA Y DISTANCIA REAL -->
+<!-- MODAL CHECKOUT CON MAPA DE RUTA, DISTANCIA Y TELÉFONO -->
 <div id="modalCheckout" class="modal oculto">
     <div class="modal-contenido">
         <h2>🛍️ Confirmar Pedido</h2>
         <div id="resumenItemsCarrito" style="max-height: 120px; overflow-y: auto; border-bottom: 1px solid #ddd; margin-bottom: 10px;"></div>
         
-        <label>Escribe tu dirección de entrega o búscala en el mapa:</label>
-        <div style="display: flex; gap: 8px; margin-bottom: 5px;">
+        <label><b>Escribe tu dirección de entrega o búscala en el mapa:</b></label>
+        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
             <input type="text" id="direccionEscrita" style="margin:0;" required placeholder="Ej. Av. Insurgentes Sur 123, CDMX">
             <button type="button" class="btn btn-modo" style="margin:0; white-space:nowrap;" onclick="buscarDireccionEnMapa()">🔍 Buscar</button>
+        </div>
+
+        <!-- CAMPO NUEVO: Teléfono de contacto obligatorio -->
+        <label><b>📱 Tu número de teléfono (para el repartidor):</b></label>
+        <div style="margin-bottom: 10px;">
+            <input type="tel" id="telefonoCliente" required placeholder="Ej. 55 1234 5678" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px;">
         </div>
 
         <div id="mapaEntrega"></div>
@@ -645,48 +651,61 @@
     }
 
     // PROCESAR PEDIDO Y VINCULAR CON EL RADAR DE REPARTIDORES
-    async function procesarPedidoFinal() {
-        const direccionText = document.getElementById('direccionEscrita').value;
-        if (!direccionText.trim()) return alert("Ingresa tu dirección.");
+async function procesarPedidoFinal() {
+    const direccionText = document.getElementById('direccionEscrita').value;
+    const telefonoText = document.getElementById('telefonoCliente').value;
 
-        const btn = document.getElementById('btnEnviarPedidoFinal');
-        btn.disabled = true;
+    // Validaciones de entrada
+    if (!direccionText.trim()) return alert("Ingresa tu dirección de entrega.");
+    if (!telefonoText.trim()) return alert("Ingresa tu teléfono de contacto para el repartidor.");
 
-        const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
-        const costoEnvio = parseFloat(document.getElementById('txtCostoEnvio').innerText);
-        const totalFinal = subtotal + costoEnvio;
-        const resumenProductos = carrito.map(i => `${i.cantidad}x ${i.nombre}`).join(', ');
-        
-        const coordsComercio = obtenerCoordsComercioActivo();
+    const btn = document.getElementById('btnEnviarPedidoFinal');
+    btn.disabled = true;
 
-        // Estructura completa enviada a Supabase
-        const payloadPedido = {
-            cliente_nombre: usuarioActual.email,
-            direccion_entrega: `${direccionText} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
-            producto_nombre: resumenProductos,
-            precio: totalFinal,
-            comercio_id: comercioSeleccionadoObjeto.id,
-            comercio_nombre: comercioSeleccionadoObjeto.nombre,
-            // Coordenadas estructuradas para el Radar de Repartidores
-            lat_origen: coordsComercio.lat,
-            lng_origen: coordsComercio.lng,
-            lat_destino: coordsEntrega.lat,
-            lng_destino: coordsEntrega.lng,
-            estado: 'pendiente' // Crucial: Permite que aparezca en el radar del repartidor
-        };
+    const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+    const costoEnvio = parseFloat(document.getElementById('txtCostoEnvio').innerText);
+    const totalFinal = subtotal + costoEnvio;
+    const resumenProductos = carrito.map(i => `${i.cantidad}x ${i.nombre}`).join(', ');
+    
+    const coordsComercio = obtenerCoordsComercioActivo();
 
-        const { error } = await supabaseClient.from('pedidos').insert([payloadPedido]);
+    // Obtener el nombre del usuario o usar el correo como alternativa
+    const nombreCliente = usuarioActual?.user_metadata?.full_name 
+      || usuarioActual?.user_metadata?.name 
+      || usuarioActual?.email?.split('@')[0] 
+      || usuarioActual?.email;
 
-        if (error) alert("Error: " + error.message);
-        else {
-            alert("¡Pedido enviado con éxito! Aparecerá en el radar de repartidores en breve.");
-            carrito = [];
-            actualizarBarraCarrito();
-            cerrarModalCheckout();
-        }
-        btn.disabled = false;
+    // Estructura completa enviada a Supabase
+    const payloadPedido = {
+        cliente_nombre: nombreCliente,
+        cliente_email: usuarioActual?.email,
+        telefono_cliente: telefonoText.trim(), // <--- Teléfono agregado para el Radar
+        direccion_entrega: `${direccionText} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
+        producto_nombre: resumenProductos,
+        precio: totalFinal,
+        comercio_id: comercioSeleccionadoObjeto.id,
+        comercio_nombre: comercioSeleccionadoObjeto.nombre,
+        // Coordenadas estructuradas para el Radar de Repartidores
+        lat_origen: coordsComercio.lat,
+        lng_origen: coordsComercio.lng,
+        lat_destino: coordsEntrega.lat,
+        lng_destino: coordsEntrega.lng,
+        estado: 'pendiente' // Crucial: Permite que aparezca en el radar del repartidor
+    };
+
+    const { error } = await supabaseClient.from('pedidos').insert([payloadPedido]);
+
+    if (error) {
+        alert("Error al enviar el pedido: " + error.message);
+    } else {
+        alert("¡Pedido enviado con éxito! Aparecerá en el radar de repartidores en breve.");
+        carrito = [];
+        actualizarBarraCarrito();
+        cerrarModalCheckout();
     }
-
+    
+    btn.disabled = false;
+}
     // PANEL DE DUEÑO, HORA DE PEDIDO Y REFRESH DE ESTADOS
     async function cargarPanelDuenio() {
         ocultarTodasLasPantallas();
