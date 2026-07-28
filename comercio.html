@@ -54,6 +54,13 @@
         /* Notificación Toast */
         .notificacion-toast { position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 3000; font-weight: bold; animation: popup 0.3s ease-out; }
         @keyframes popup { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* Estado del Pedido Badges */
+        .badge-estado { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+        .estado-pendiente { background: #ffeaa7; color: #d63031; }
+        .estado-asignado { background: #74b9ff; color: #0984e3; }
+        .estado-en_camino { background: #a29bfe; color: #6c5ce7; }
+        .estado-entregado { background: #55efc4; color: #00b894; }
     </style>
 </head>
 <body>
@@ -217,7 +224,7 @@
     let supabaseClient = null;
     let usuarioActual = null;
     let miComercio = null;
-    let comercioSeleccionadoObjeto = null; // Guardará todos los datos del comercio activo
+    let comercioSeleccionadoObjeto = null;
     let modoActual = 'duenio';
 
     // Carrito
@@ -481,7 +488,7 @@
         }
     });
 
-    // CARRITO Y CHECKOUT CON MEDIDOR DE DISTANCIA REAL
+    // CARRITO Y CHECKOUT
     function agregarAlCarrito(id, nombre, precio) {
         const existente = carrito.find(item => item.id === id);
         if (existente) existente.cantidad++;
@@ -503,7 +510,6 @@
         }
     }
 
-    // Extrae coordenadas GPS de la cadena guardada en Supabase o toma una por defecto
     function obtenerCoordsComercioActivo() {
         if (!comercioSeleccionadoObjeto || !comercioSeleccionadoObjeto.direccion) {
             return { lat: 19.4326, lng: -99.1332 };
@@ -528,13 +534,11 @@
                 mapaEntrega = L.map('mapaEntrega').setView([coordsComercio.lat, coordsComercio.lng], 13);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaEntrega);
 
-                // Marcador Fijo del Comercio (Azul)
                 marcadorComercioEnMapa = L.marker([coordsComercio.lat, coordsComercio.lng])
                     .addTo(mapaEntrega)
                     .bindPopup(`<b>${comercioSeleccionadoObjeto.nombre}</b><br>Origen`)
                     .openPopup();
 
-                // Marcador Arrastrable del Cliente (Rojo)
                 marcadorCliente = L.marker([coordsEntrega.lat, coordsEntrega.lng], { draggable: true }).addTo(mapaEntrega);
 
                 marcadorCliente.on('dragend', function (e) {
@@ -600,13 +604,11 @@
         }
     }
 
-    // CÁLCULO DE DISTANCIA DE FÓRMULA HAVERSINE ENTRE COMERCIO Y CLIENTE
     function recalcularTotales() {
         const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
         const coordsComercio = obtenerCoordsComercioActivo();
 
-        // Fórmula Haversine para cálculo de distancia exacta en Kilómetros
-        const R = 6371; // Radio de la Tierra en km
+        const R = 6371;
         const dLat = (coordsEntrega.lat - coordsComercio.lat) * Math.PI / 180;
         const dLon = (coordsEntrega.lng - coordsComercio.lng) * Math.PI / 180;
         const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -615,7 +617,6 @@
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         const distanciaKm = R * c;
 
-        // Dibujar/Actualizar la línea de ruta en el mapa
         if (mapaEntrega) {
             if (lineaRuta) mapaEntrega.removeLayer(lineaRuta);
             lineaRuta = L.polyline([
@@ -623,7 +624,6 @@
                 [coordsEntrega.lat, coordsEntrega.lng]
             ], { color: '#e74c3c', weight: 4, opacity: 0.7, dashArray: '8, 8' }).addTo(mapaEntrega);
 
-            // Ajustar el zoom para que se vean ambos marcadores a la vez
             const bounds = L.latLngBounds([
                 [coordsComercio.lat, coordsComercio.lng],
                 [coordsEntrega.lat, coordsEntrega.lng]
@@ -640,6 +640,7 @@
         document.getElementById('txtTotalPagar').innerText = total.toFixed(2);
     }
 
+    // PROCESAR PEDIDO Y VINCULAR CON EL RADAR DE REPARTIDORES
     async function procesarPedidoFinal() {
         const direccionText = document.getElementById('direccionEscrita').value;
         if (!direccionText.trim()) return alert("Ingresa tu dirección.");
@@ -651,19 +652,30 @@
         const costoEnvio = parseFloat(document.getElementById('txtCostoEnvio').innerText);
         const totalFinal = subtotal + costoEnvio;
         const resumenProductos = carrito.map(i => `${i.cantidad}x ${i.nombre}`).join(', ');
+        
+        const coordsComercio = obtenerCoordsComercioActivo();
 
-        const { error } = await supabaseClient.from('pedidos').insert([{
+        // Estructura completa enviada a Supabase
+        const payloadPedido = {
             cliente_nombre: usuarioActual.email,
             direccion_entrega: `${direccionText} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
             producto_nombre: resumenProductos,
             precio: totalFinal,
             comercio_id: comercioSeleccionadoObjeto.id,
-            estado: 'pendiente'
-        }]);
+            comercio_nombre: comercioSeleccionadoObjeto.nombre,
+            // Coordenadas estructuradas para el Radar de Repartidores
+            lat_origen: coordsComercio.lat,
+            lng_origen: coordsComercio.lng,
+            lat_destino: coordsEntrega.lat,
+            lng_destino: coordsEntrega.lng,
+            estado: 'pendiente' // Crucial: Permite que aparezca en el radar del repartidor
+        };
+
+        const { error } = await supabaseClient.from('pedidos').insert([payloadPedido]);
 
         if (error) alert("Error: " + error.message);
         else {
-            alert("¡Pedido enviado con éxito!");
+            alert("¡Pedido enviado con éxito! Aparecerá en el radar de repartidores en breve.");
             carrito = [];
             actualizarBarraCarrito();
             cerrarModalCheckout();
@@ -671,7 +683,7 @@
         btn.disabled = false;
     }
 
-    // PANEL DE DUEÑO Y ELIMINACIÓN
+    // PANEL DE DUEÑO, HORA DE PEDIDO Y REFRESH DE ESTADOS
     async function cargarPanelDuenio() {
         ocultarTodasLasPantallas();
         document.getElementById('pantallaDuenio').classList.remove('oculto');
@@ -696,19 +708,44 @@
         }
     };
 
+    function formatearFechaHora(fechaIso) {
+        if (!fechaIso) return 'Reciente';
+        const fecha = new Date(fechaIso);
+        return fecha.toLocaleString('es-MX', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+            day: '2-digit',
+            month: 'short'
+        });
+    }
+
+    function obtenerClaseEstado(estado) {
+        switch(estado) {
+            case 'pendiente': return 'estado-pendiente';
+            case 'asignado': return 'estado-asignado';
+            case 'en_camino': return 'estado-en_camino';
+            case 'entregado': return 'estado-entregado';
+            default: return 'estado-pendiente';
+        }
+    }
+
     function activarEscuchaPedidosEnTiempoReal() {
         if (!miComercio) return;
         cargarPedidosInicialesDuenio();
 
+        // Suscripción en Tiempo Real para nuevos pedidos o actualizaciones de estado por parte de repartidores
         supabaseClient
             .channel('pedidos_en_vivo')
             .on('postgres_changes', {
-                event: 'INSERT',
+                event: '*', // Escucha INSERTs y UPDATEs (cuando el repartidor toma el pedido)
                 schema: 'public',
                 table: 'pedidos',
                 filter: `comercio_id=eq.${miComercio.id}`
             }, payload => {
-                lanzarNotificacionDuenio(payload.new);
+                if (payload.eventType === 'INSERT') {
+                    lanzarNotificacionDuenio(payload.new);
+                }
                 cargarPedidosInicialesDuenio();
             })
             .subscribe();
@@ -727,14 +764,24 @@
             return;
         }
 
-        cont.innerHTML = pedidos.map(p => `
-            <div style="background: #f8f9fa; padding: 12px; border-left: 4px solid #27ae60; margin-bottom: 10px; border-radius: 4px;">
-                <p style="margin:2px 0;"><b>Cliente:</b> ${p.cliente_nombre}</p>
-                <p style="margin:2px 0;"><b>Productos:</b> ${p.producto_nombre}</p>
-                <p style="margin:2px 0;"><b>Ubicación:</b> ${p.direccion_entrega}</p>
-                <p style="margin:2px 0; color:#27ae60;"><b>Total:</b> $${Number(p.precio).toFixed(2)}</p>
-            </div>
-        `).join('');
+        cont.innerHTML = pedidos.map(p => {
+            const horaFormateada = formatearFechaHora(p.created_at);
+            const estadoTexto = (p.estado || 'pendiente').replace('_', ' ');
+            const claseEstado = obtenerClaseEstado(p.estado);
+
+            return `
+                <div style="background: #f8f9fa; padding: 12px; border-left: 4px solid #27ae60; margin-bottom: 10px; border-radius: 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span class="badge-estado ${claseEstado}">${estadoTexto}</span>
+                        <span style="font-size: 12px; color: #7f8c8d; font-weight: bold;">🕒 ${horaFormateada}</span>
+                    </div>
+                    <p style="margin:2px 0;"><b>Cliente:</b> ${p.cliente_nombre}</p>
+                    <p style="margin:2px 0;"><b>Productos:</b> ${p.producto_nombre}</p>
+                    <p style="margin:2px 0;"><b>Ubicación:</b> ${p.direccion_entrega}</p>
+                    <p style="margin:2px 0; color:#27ae60;"><b>Total:</b> $${Number(p.precio).toFixed(2)}</p>
+                </div>
+            `;
+        }).join('');
     }
 
     function lanzarNotificacionDuenio(nuevoPedido) {
