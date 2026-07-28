@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reparte - Panel de Repartidores</title>
+  <!-- Supabase JS Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
@@ -35,7 +36,6 @@
     <div id="login-view" class="card">
       <h2>🛵 Reparte - Repartidores</h2>
       <p>Inicia sesión con Google para conectarte al radar de pedidos.</p>
-      <!-- Llamada a la función global -->
       <button class="btn-google" onclick="window.loginWithGoogle()">
         Iniciar Sesión con Google
       </button>
@@ -63,16 +63,19 @@
   </div>
 
   <script>
-    // Inicialización del cliente Supabase
+    // RENOMBRADO A supabaseClient PARA EVITAR CONFLICTOS DE IDENTIFICADOR
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    // Si ya fue creado anteriormente, se reutiliza; de lo contrario se inicializa.
+    var supabaseClient = window.supabaseClient || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.supabaseClient = supabaseClient;
 
     let currentUser = null;
 
-    // DEFINICIÓN DE FUNCIONES EN ÁMBITO GLOBAL (window)
+    // METODOS EN AMBITO GLOBAL
     window.loginWithGoogle = async function() {
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: window.location.href }
       });
@@ -80,11 +83,11 @@
     };
 
     window.logout = async function() {
-      await supabase.auth.signOut();
+      await supabaseClient.auth.signOut();
     };
 
     window.tomarPedido = async function(pedidoId) {
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from('pedidos')
         .update({
           estado: 'en_camino',
@@ -100,7 +103,7 @@
     };
 
     window.entregarPedido = async function(pedidoId) {
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from('pedidos')
         .update({ estado: 'entregado' })
         .eq('id', pedidoId)
@@ -113,7 +116,7 @@
       }
     };
 
-    // FUNCIONES INTERNAS DE INTERFAZ Y DATOS
+    // FUNCIONES DE INTERFAZ Y CONSULTAS
     function showLogin() {
       document.getElementById('login-view').classList.remove('hidden');
       document.getElementById('dashboard-view').classList.add('hidden');
@@ -131,7 +134,7 @@
     }
 
     async function cargarPedidos() {
-      const { data: pedidos, error } = await supabase
+      const { data: pedidos, error } = await supabaseClient
         .from('pedidos')
         .select('*')
         .or(`estado.eq.pendiente,and(estado.eq.en_camino,repartidor_id.eq.${currentUser.id})`)
@@ -183,7 +186,7 @@
     }
 
     function suscribirRadarEnTiempoReal() {
-      supabase
+      supabaseClient
         .channel('radar-pedidos')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
           cargarPedidos();
@@ -191,9 +194,9 @@
         .subscribe();
     }
 
-    // CONTROL DE EVENTOS DE SESIÓN AL CORTAR/CARGAR
+    // LISTENER DE SESIÓN
     window.addEventListener('DOMContentLoaded', async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabaseClient.auth.getSession();
       
       if (session) {
         currentUser = session.user;
@@ -202,7 +205,7 @@
         showLogin();
       }
 
-      supabase.auth.onAuthStateChange((event, session) => {
+      supabaseClient.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' && session) {
           currentUser = session.user;
           showDashboard();
