@@ -716,7 +716,7 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
         document.getElementById('txtTotalPagar').innerText = total.toFixed(2);
     }
 
-    // PROCESAR PEDIDO Y VINCULAR CON EL RADAR DE REPARTIDORES
+   // PROCESAR PEDIDO Y VINCULAR CON EL RADAR DE REPARTIDORES
 async function procesarPedidoFinal() {
     const direccionText = document.getElementById('direccionEscrita').value;
     const telefonoText = document.getElementById('telefonoCliente').value;
@@ -728,35 +728,40 @@ async function procesarPedidoFinal() {
     const btn = document.getElementById('btnEnviarPedidoFinal');
     btn.disabled = true;
 
-    const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
-    const costoEnvio = parseFloat(document.getElementById('txtCostoEnvio').innerText);
-    const totalFinal = subtotal + costoEnvio;
+    // 1. Desglose explícito de costos
+    const subtotalProductos = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+    const costoEnvio = parseFloat(document.getElementById('txtCostoEnvio').innerText) || 0;
+    const totalFinal = subtotalProductos + costoEnvio;
     const resumenProductos = carrito.map(i => `${i.cantidad}x ${i.nombre}`).join(', ');
     
     const coordsComercio = obtenerCoordsComercioActivo();
 
-    // Obtener el nombre del usuario o usar el correo como alternativa
+    // Obtener el nombre del usuario
     const nombreCliente = usuarioActual?.user_metadata?.full_name 
       || usuarioActual?.user_metadata?.name 
       || usuarioActual?.email?.split('@')[0] 
       || usuarioActual?.email;
 
-    // Estructura completa enviada a Supabase
+    // 2. Estructura completa enviada a Supabase con desglose
     const payloadPedido = {
         cliente_nombre: nombreCliente,
         cliente_email: usuarioActual?.email,
-        telefono_cliente: telefonoText.trim(), // <--- Teléfono agregado para el Radar
+        telefono_cliente: telefonoText.trim(),
         direccion_entrega: `${direccionText} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
         producto_nombre: resumenProductos,
-        precio: totalFinal,
+        
+        // --- DESGLOSE DE COSTOS ---
+        subtotal: subtotalProductos,    // <--- Solo Productos ($90.00 para el COMERCIO)
+        costo_envio: costoEnvio,        // <--- Envío ($54.19)
+        precio: totalFinal,             // <--- Gran Total ($144.19 para el REPARTIDOR)
+        
         comercio_id: comercioSeleccionadoObjeto.id,
         comercio_nombre: comercioSeleccionadoObjeto.nombre,
-        // Coordenadas estructuradas para el Radar de Repartidores
         lat_origen: coordsComercio.lat,
         lng_origen: coordsComercio.lng,
         lat_destino: coordsEntrega.lat,
         lng_destino: coordsEntrega.lng,
-        estado: 'pendiente' // Crucial: Permite que aparezca en el radar del repartidor
+        estado: 'pendiente'
     };
 
     const { error } = await supabaseClient.from('pedidos').insert([payloadPedido]);
@@ -764,7 +769,7 @@ async function procesarPedidoFinal() {
     if (error) {
         alert("Error al enviar el pedido: " + error.message);
     } else {
-        alert("¡Pedido enviado con éxito! Aparecerá en el radar de repartidores en breve.");
+        alert("¡Pedido enviado con éxito! Aparecerá en el radar del comercio en breve.");
         carrito = [];
         actualizarBarraCarrito();
         cerrarModalCheckout();
