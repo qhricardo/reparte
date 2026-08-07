@@ -880,7 +880,7 @@ async function procesarPedidoFinal() {
                 <p style="margin:2px 0;"><b>Cliente:</b> ${p.cliente_nombre}</p>
                 <p style="margin:2px 0;"><b>Productos:</b> ${p.producto_nombre}</p>
                 <p style="margin:2px 0;"><b>Ubicación:</b> ${p.direccion_entrega}</p>
-                <p style="margin:2px 0; color:#27ae60;"><b>Total:</b> $${Number(p.precio).toFixed(2)}</p>
+                <p style="margin:2px 0; color:#27ae60;"><b>Subtotal Productos:</b> $${Number(subtotalProductos).toFixed(2)}</p>
                 <div style="margin-top: 8px;">
                     ${botonAccion}
                 </div>
