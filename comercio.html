@@ -107,7 +107,7 @@
         </div>
     </div>
 
-    <!-- 4. REGISTRAR COMERCIO CON MAPA -->
+   <!-- 4. REGISTRAR COMERCIO CON MAPA -->
 <div id="pantallaRegistroComercio" class="card oculto">
     <h2>🏬 Registrar mi Comercio</h2>
     <form id="formComercio">
@@ -129,12 +129,13 @@
         <label style="margin-top: 15px;">Horario de Atención:</label>
         <input type="text" id="horarioComercioReg" placeholder="Ej. 10:00 AM - 10:00 PM">
 
-        <label>URL del Logo / Imagen:</label>
-        <input type="url" id="logoComercioReg" placeholder="https://ejemplo.com/logo.png">
+        <!-- CAMBIO AQUÍ: Input de archivo para cargar imagen desde el dispositivo -->
+        <label>Logo / Imagen del Comercio:</label>
+        <input type="file" id="logoComercioArchivo" accept="image/*" required>
 
         <div style="margin-top: 15px;">
             <button type="button" class="btn btn-secundario" id="btnCancelarRegistro">Cancelar</button>
-            <button type="submit" class="btn btn-primary">Guardar Comercio</button>
+            <button type="submit" id="btnGuardarComercio" class="btn btn-primary">Guardar Comercio</button>
         </div>
     </form>
 </div>
@@ -477,26 +478,69 @@
         }
     }
 
-    document.getElementById('formComercio').addEventListener('submit', async (e) => {
-        e.preventDefault();
+   // ✅ CÓDIGO ACTUALIZADO (Sube la imagen a Supabase Storage primero)
+document.getElementById('formComercio').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btnGuardar = e.target.querySelector('button[type="submit"]');
+    const archivoInput = document.getElementById('logoComercioArchivo');
+    const archivo = archivoInput ? archivoInput.files[0] : null;
+
+    if (!archivo) {
+        return alert("Por favor selecciona una imagen o logo para tu comercio.");
+    }
+
+    try {
+        if (btnGuardar) {
+            btnGuardar.disabled = true;
+            btnGuardar.innerText = "Subiendo imagen...";
+        }
+
+        // 1. Generar nombre único para la imagen
+        const extension = archivo.name.split('.').pop();
+        const nombreArchivo = `logos/${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${extension}`;
+
+        // 2. Subir imagen al bucket 'comercios'
+        const { error: uploadError } = await supabaseClient.storage
+            .from('comercios')
+            .upload(nombreArchivo, archivo);
+
+        if (uploadError) throw uploadError;
+
+        // 3. Obtener la URL pública de la imagen
+        const { data: publicUrlData } = supabaseClient.storage
+            .from('comercios')
+            .getPublicUrl(nombreArchivo);
+
+        if (btnGuardar) btnGuardar.innerText = "Guardando comercio...";
+
+        // 4. Armar el objeto para la base de datos con la URL pública generada
         const textoDir = document.getElementById('direccionComercioReg').value;
-        
         const nuevoComercio = {
             usuario_id: usuarioActual.id,
             nombre: document.getElementById('nombreComercioReg').value,
             telefono: document.getElementById('telefonoComercioReg').value,
             direccion: `${textoDir} (GPS: ${coordsComercioRegistro.lat.toFixed(6)}, ${coordsComercioRegistro.lng.toFixed(6)})`,
             horario: document.getElementById('horarioComercioReg').value,
-            logo_url: document.getElementById('logoComercioReg').value
+            logo_url: publicUrlData.publicUrl
         };
 
-        const { error } = await supabaseClient.from('comercios').insert([nuevoComercio]);
-        if (error) alert("Error: " + error.message);
-        else {
-            alert("¡Comercio registrado con éxito!");
-            verificarSiEsDuenio();
+        // 5. Insertar el registro en la tabla 'comercios'
+        const { error: insertError } = await supabaseClient.from('comercios').insert([nuevoComercio]);
+        if (insertError) throw insertError;
+
+        alert("¡Comercio registrado con éxito!");
+        document.getElementById('formComercio').reset();
+        verificarSiEsDuenio();
+
+    } catch (err) {
+        alert("Error al registrar el comercio: " + err.message);
+    } finally {
+        if (btnGuardar) {
+            btnGuardar.disabled = false;
+            btnGuardar.innerText = "Guardar Comercio";
         }
-    });
+    }
+});
 
     // CARRITO Y CHECKOUT
     function agregarAlCarrito(id, nombre, precio) {
