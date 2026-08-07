@@ -859,6 +859,8 @@ async function procesarPedidoFinal() {
         const estadoTexto = (p.estado || 'pendiente').replace('_', ' ');
         const claseEstado = obtenerClaseEstado(p.estado);
 
+        // Si tu columna 'precio' incluye envío, se resta p.costo_envio (o p.envio)
+        const subtotalProductos = Number(p.subtotal || p.precio_productos || p.precio || 0) - Number(p.costo_envio || 0);
         // --- LÓGICA DE BOTONES PARA EL COMERCIO ---
         let botonAccion = '';
         if (p.estado === 'pendiente') {
