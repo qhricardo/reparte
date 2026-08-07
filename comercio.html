@@ -897,8 +897,9 @@ async function procesarPedidoFinal() {
         setTimeout(() => toast.remove(), 5000);
     }
 
-   async function cargarProductosDuenio() {
-    const { data: productos } = await supabaseClient
+  // ✅ REEMPLAZAR cargarProductosDuenio
+async function cargarProductosDuenio() {
+    const { data: productos, error } = await supabaseClient
         .from('productos')
         .select('*')
         .eq('comercio_id', miComercio.id);
@@ -906,10 +907,19 @@ async function procesarPedidoFinal() {
     const lista = document.getElementById('listaProductosDuenio');
     lista.innerHTML = "";
 
+    if (error) {
+        console.error("Error al obtener productos:", error);
+        lista.innerHTML = "<p>Error al cargar productos.</p>";
+        return;
+    }
+
     if (!productos || productos.length === 0) {
         lista.innerHTML = "<p>Aún no has publicado productos.</p>";
         return;
     }
+
+    // Guardar lista global temporal para evitar problemas con comillas/caracteres en HTML
+    window.productosDuenioCache = productos;
 
     productos.forEach(p => {
         const card = document.createElement('div');
@@ -921,7 +931,7 @@ async function procesarPedidoFinal() {
                 <p style="font-size: 12px; color: #666; margin: 4px 0;">${p.descripcion || ''}</p>
                 <div class="precio">$${Number(p.precio).toFixed(2)}</div>
                 <div style="display: flex; gap: 6px; margin-top: 8px;">
-                    <button class="btn btn-secundario" style="flex:1;" onclick="abrirModalEditarProducto('${p.id}', '${escape(p.nombre)}', ${p.precio}, '${escape(p.descripcion || '')}', '${p.imagen}')">✏️ Editar</button>
+                    <button class="btn btn-secundario" style="flex:1;" onclick="prepararEdicionProducto('${p.id}')">✏️ Editar</button>
                     <button class="btn btn-danger" style="flex:1;" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar</button>
                 </div>
             </div>
@@ -930,15 +940,19 @@ async function procesarPedidoFinal() {
     });
 }
 
+// ✅ NUEVA FUNCIÓN INTERMEDIA SEGURA
+window.prepararEdicionProducto = function(idProducto) {
+    // Buscar el producto en la memoria sin romper cadenas en HTML
+    const prod = (window.productosDuenioCache || []).find(item => item.id === idProducto);
+    if (!prod) return alert("No se encontraron los datos del producto.");
 
-window.abrirModalEditarProducto = function(id, nombreEscapado, precio, descripcionEscapada, imagenUrl) {
-    document.getElementById('editProdId').value = id;
-    document.getElementById('editProdNombre').value = unescape(nombreEscapado);
-    document.getElementById('editProdPrecio').value = precio;
-    document.getElementById('editProdDescripcion').value = unescape(descripcionEscapada);
-    document.getElementById('editProdImagenActual').value = imagenUrl;
-    document.getElementById('previewImagenActual').src = imagenUrl;
-    document.getElementById('editProdImagenArchivo').value = ""; // Limpiar input de archivo
+    document.getElementById('editProdId').value = prod.id;
+    document.getElementById('editProdNombre').value = prod.nombre || '';
+    document.getElementById('editProdPrecio').value = prod.precio || 0;
+    document.getElementById('editProdDescripcion').value = prod.descripcion || '';
+    document.getElementById('editProdImagenActual').value = prod.imagen || '';
+    document.getElementById('previewImagenActual').src = prod.imagen || '';
+    document.getElementById('editProdImagenArchivo').value = ""; // Limpiar input file
 
     document.getElementById('modalEditarProducto').classList.remove('oculto');
 };
