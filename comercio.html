@@ -11,58 +11,44 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
-        * { box-sizing: border-box; font-family: Arial, sans-serif; }
-        body { background-color: #f4f6f9; margin: 0; padding: 20px; padding-bottom: 80px; }
-        .contenedor { max-width: 900px; margin: 0 auto; }
-        .oculto { display: none !important; }
-        .modal.oculto { display: none !important;}
-
-        /* Tarjetas / Paneles */
-        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 20px; }
-        .btn { border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .btn-google { background: #4285F4; color: white; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; max-width: 300px; margin: 15px auto; padding: 12px; font-size: 15px; }
-        .btn-primary { background: #27ae60; color: white; }
-        .btn-primary:hover { background: #219150; }
-        .btn-danger { background: #e74c3c; color: white; }
-        .btn-secundario { background: #7f8c8d; color: white; }
-        .btn-modo { background: #2980b9; color: white; margin-right: 10px; }
-        
-        /* Formularios */
-        label { font-weight: bold; font-size: 14px; color: #333; display: block; margin-top: 10px; }
-        input, textarea { width: 100%; padding: 10px; margin: 5px 0 12px 0; border: 1px solid #ccc; border-radius: 6px; }
-
-        /* Grillas */
-        .grid-comercios { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-top: 15px; }
-        .tarjeta-comercio { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer; text-align: center; }
-        .tarjeta-comercio img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; }
-
-        .grid-productos { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; margin-top: 15px; }
-        .tarjeta-producto { background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; }
-        .tarjeta-producto img { width: 100%; height: 140px; object-fit: cover; }
-        .info-producto { padding: 12px; }
-        .precio { color: #27ae60; font-weight: bold; font-size: 16px; margin: 5px 0; }
-
-        .encabezado-usuario { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 20px; border-radius: 10px; margin-bottom: 20px; }
-
-        /* Barra Flotante Carrito */
-        #barraCarrito { position: fixed; bottom: 0; left: 0; right: 0; background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; z-index: 1000; box-shadow: 0 -4px 10px rgba(0,0,0,0.2); }
-        
-        /* Modal y Mapas */
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 2000; }
-        .modal-contenido { background: white; width: 90%; max-width: 650px; padding: 20px; border-radius: 12px; max-height: 90vh; overflow-y: auto; }
-        #mapaEntrega, #mapaComercioReg { width: 100%; height: 280px; border-radius: 8px; margin: 10px 0; }
-
-        /* Notificación Toast */
-        .notificacion-toast { position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 3000; font-weight: bold; animation: popup 0.3s ease-out; }
-        @keyframes popup { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-        /* Estado del Pedido Badges */
-        .badge-estado { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
-        .estado-pendiente { background: #ffeaa7; color: #d63031; }
-        .estado-asignado { background: #74b9ff; color: #0984e3; }
-        .estado-en_camino { background: #a29bfe; color: #6c5ce7; }
-        .estado-entregado { background: #55efc4; color: #00b894; }
-    </style>
+    * { box-sizing: border-box; font-family: Arial, sans-serif; }
+    body { background-color: #f4f6f9; margin: 0; padding: 20px; padding-bottom: 80px; }
+    .contenedor { max-width: 900px; margin: 0 auto; }
+    .oculto, .modal.oculto { display: none !important; }
+    .modal:not(.oculto) { display: flex !important; }
+    .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 20px; }
+    .btn { border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    .btn-google { background: #4285F4; color: white; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; max-width: 300px; margin: 15px auto; padding: 12px; font-size: 15px; }
+    .btn-primary { background: #27ae60; color: white; }
+    .btn-primary:hover { background: #219150; }
+    .btn-danger { background: #e74c3c; color: white; }
+    .btn-secundario { background: #7f8c8d; color: white; }
+    .btn-modo { background: #2980b9; color: white; margin-right: 10px; }
+    label { font-weight: bold; font-size: 14px; color: #333; display: block; margin-top: 10px; }
+    input, textarea { width: 100%; padding: 10px; margin: 5px 0 12px 0; border: 1px solid #ccc; border-radius: 6px; }
+    .grid-comercios { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-top: 15px; }
+    .tarjeta-comercio { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer; text-align: center; }
+    .tarjeta-comercio img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; }
+    .grid-productos { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; margin-top: 15px; }
+    .tarjeta-producto { background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; }
+    .tarjeta-producto img { width: 100%; height: 140px; object-fit: cover; }
+    .info-producto { padding: 12px; }
+    .precio { color: #27ae60; font-weight: bold; font-size: 16px; margin: 5px 0; }
+    .encabezado-usuario { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 20px; border-radius: 10px; margin-bottom: 20px; }
+    #barraCarrito { position: fixed; bottom: 0; left: 0; right: 0; background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; z-index: 1000; box-shadow: 0 -4px 10px rgba(0,0,0,0.2); }
+    .modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 2000; }
+    .modal-contenido { background: white; width: 90%; max-width: 650px; padding: 20px; border-radius: 12px; max-height: 90vh; overflow-y: auto; position: relative; }
+    .cerrar-modal { position: absolute; top: 12px; right: 18px; font-size: 24px; font-weight: bold; color: #666; cursor: pointer; }
+    .cerrar-modal:hover { color: #000; }
+    #mapaEntrega, #mapaComercioReg { width: 100%; height: 280px; border-radius: 8px; margin: 10px 0; }
+    .notificacion-toast { position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 3000; font-weight: bold; animation: popup 0.3s ease-out; }
+    @keyframes popup { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .badge-estado { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+    .estado-pendiente { background: #ffeaa7; color: #d63031; }
+    .estado-asignado { background: #74b9ff; color: #0984e3; }
+    .estado-en_camino { background: #a29bfe; color: #6c5ce7; }
+    .estado-entregado { background: #55efc4; color: #00b894; }
+</style>
 </head>
 <body>
 
