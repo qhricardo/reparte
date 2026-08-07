@@ -900,7 +900,13 @@ async function procesarPedidoFinal() {
 
     
 
- async function cargarProductosDuenio() {
+ // ==========================================
+// FUNCIONES GLOBALES DE PRODUCTO
+// ==========================================
+
+async function cargarProductosDuenio() {
+    if (!miComercio || !miComercio.id) return;
+
     const { data: productos, error } = await supabaseClient
         .from('productos')
         .select('*')
@@ -934,8 +940,8 @@ async function procesarPedidoFinal() {
                 <p style="font-size: 12px; color: #666; margin: 4px 0;">${p.descripcion || ''}</p>
                 <div class="precio">$${Number(p.precio).toFixed(2)}</div>
                 <div style="display: flex; gap: 6px; margin-top: 8px;">
-                    <button type="button" class="btn btn-secundario" style="flex:1;" onclick="prepararEdicionProducto('${p.id}')">✏️ Editar</button>
-                    <button type="button" class="btn btn-danger" style="flex:1;" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar</button>
+                    <button type="button" class="btn btn-secundario" style="flex:1;" onclick="window.prepararEdicionProducto('${p.id}')">✏️ Editar</button>
+                    <button type="button" class="btn btn-danger" style="flex:1;" onclick="window.eliminarProducto('${p.id}')">🗑️ Eliminar</button>
                 </div>
             </div>
         `;
@@ -946,13 +952,12 @@ async function procesarPedidoFinal() {
 window.prepararEdicionProducto = function(idProducto) {
     const modal = document.getElementById('modalEditarProducto');
     if (!modal) {
-        return alert("Error: No se encontró el modal en el HTML ('modalEditarProducto'). Verifique que agregó el HTML del modal.");
+        return alert("Error: No existe el contenedor con id='modalEditarProducto' en tu HTML.");
     }
 
     const prod = (window.productosDuenioCache || []).find(item => String(item.id) === String(idProducto));
     if (!prod) return alert("No se encontraron los datos del producto.");
 
-    // Carga segura comprobando existencia de elementos
     const elId = document.getElementById('editProdId');
     const elNombre = document.getElementById('editProdNombre');
     const elPrecio = document.getElementById('editProdPrecio');
@@ -976,112 +981,133 @@ window.cerrarModalEditarProducto = function() {
     const modal = document.getElementById('modalEditarProducto');
     if (modal) modal.classList.add('oculto');
 };
-    
 
-    document.getElementById('formProducto').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const btnGuardar = document.getElementById('btnGuardarProducto');
-        const archivo = document.getElementById('prodImagenArchivo').files[0];
-
-        if (!archivo) return alert("Selecciona una imagen.");
-
-        try {
-            btnGuardar.disabled = true;
-            btnGuardar.innerText = "Subiendo imagen...";
-
-            const extension = archivo.name.split('.').pop();
-            const nombreArchivo = `${miComercio.id}/${Date.now()}.${extension}`;
-
-            const { error: uploadError } = await supabaseClient.storage
-                .from('productos')
-                .upload(nombreArchivo, archivo);
-
-            if (uploadError) throw uploadError;
-
-            const { data: publicUrlData } = supabaseClient.storage
-                .from('productos')
-                .getPublicUrl(nombreArchivo);
-
-            const producto = {
-                comercio_id: miComercio.id,
-                nombre: document.getElementById('prodNombre').value,
-                precio: parseFloat(document.getElementById('prodPrecio').value),
-                descripcion: document.getElementById('prodDescripcion').value,
-                imagen: publicUrlData.publicUrl
-            };
-
-            await supabaseClient.from('productos').insert([producto]);
-            document.getElementById('formProducto').reset();
-            cargarProductosDuenio();
-        } catch (err) {
-            alert(err.message);
-        } finally {
-            btnGuardar.disabled = false;
-            btnGuardar.innerText = "Publicar Producto";
-        }
-    });
-
-    window.eliminarProducto = async function(id) {
-        if (confirm("¿Eliminar este producto?")) {
-            await supabaseClient.from('productos').delete().eq('id', id);
-            cargarProductosDuenio();
-        }
-    };
-
-    document.getElementById('formEditarProducto').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btnGuardar = document.getElementById('btnGuardarEdicionProd');
-    const idProducto = document.getElementById('editProdId').value;
-    const archivoNuevo = document.getElementById('editProdImagenArchivo').files[0];
-    let urlImagenFinal = document.getElementById('editProdImagenActual').value;
-
-    try {
-        btnGuardar.disabled = true;
-        btnGuardar.innerText = "Guardando cambios...";
-
-        // Si el usuario seleccionó una imagen nueva, se sube a Supabase Storage
-        if (archivoNuevo) {
-            btnGuardar.innerText = "Subiendo nueva imagen...";
-            const extension = archivoNuevo.name.split('.').pop();
-            const nombreArchivo = `${miComercio.id}/${Date.now()}_mod.${extension}`;
-
-            const { error: uploadError } = await supabaseClient.storage
-                .from('productos')
-                .upload(nombreArchivo, archivoNuevo);
-
-            if (uploadError) throw uploadError;
-
-            const { data: publicUrlData } = supabaseClient.storage
-                .from('productos')
-                .getPublicUrl(nombreArchivo);
-
-            urlImagenFinal = publicUrlData.publicUrl;
-        }
-
-        // Actualizar registro en la tabla 'productos'
-        const datosActualizados = {
-            nombre: document.getElementById('editProdNombre').value.trim(),
-            precio: parseFloat(document.getElementById('editProdPrecio').value),
-            descripcion: document.getElementById('editProdDescripcion').value.trim(),
-            imagen: urlImagenFinal
-        };
-
-        const { error: updateError } = await supabaseClient
-            .from('productos')
-            .update(datosActualizados)
-            .eq('id', idProducto);
-
-        if (updateError) throw updateError;
-
-        alert("¡Producto actualizado correctamente!");
-        cerrarModalEditarProducto();
+window.eliminarProducto = async function(id) {
+    if (confirm("¿Eliminar este producto?")) {
+        await supabaseClient.from('productos').delete().eq('id', id);
         cargarProductosDuenio();
+    }
+};
 
-    } catch (err) {
-        alert("Error al actualizar el producto: " + err.message);
-    } finally {
-        btnGuardar.disabled = false;
-        btnGuardar.innerText = "Guardar Cambios";
+// ==========================================
+// VINCULACIÓN DE EVENTOS DE FORMULARIO (SAFE)
+// ==========================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    
+    // Formulario Crear Producto
+    const formProducto = document.getElementById('formProducto');
+    if (formProducto) {
+        formProducto.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btnGuardar = document.getElementById('btnGuardarProducto');
+            const archivo = document.getElementById('prodImagenArchivo').files[0];
+
+            if (!archivo) return alert("Selecciona una imagen.");
+
+            try {
+                if (btnGuardar) {
+                    btnGuardar.disabled = true;
+                    btnGuardar.innerText = "Subiendo imagen...";
+                }
+
+                const extension = archivo.name.split('.').pop();
+                const nombreArchivo = `${miComercio.id}/${Date.now()}.${extension}`;
+
+                const { error: uploadError } = await supabaseClient.storage
+                    .from('productos')
+                    .upload(nombreArchivo, archivo);
+
+                if (uploadError) throw uploadError;
+
+                const { data: publicUrlData } = supabaseClient.storage
+                    .from('productos')
+                    .getPublicUrl(nombreArchivo);
+
+                const producto = {
+                    comercio_id: miComercio.id,
+                    nombre: document.getElementById('prodNombre').value,
+                    precio: parseFloat(document.getElementById('prodPrecio').value),
+                    descripcion: document.getElementById('prodDescripcion').value,
+                    imagen: publicUrlData.publicUrl
+                };
+
+                await supabaseClient.from('productos').insert([producto]);
+                formProducto.reset();
+                cargarProductosDuenio();
+            } catch (err) {
+                alert("Error al crear producto: " + err.message);
+            } finally {
+                if (btnGuardar) {
+                    btnGuardar.disabled = false;
+                    btnGuardar.innerText = "Publicar Producto";
+                }
+            }
+        });
+    }
+
+    // Formulario Editar Producto
+    const formEditarProducto = document.getElementById('formEditarProducto');
+    if (formEditarProducto) {
+        formEditarProducto.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btnGuardar = document.getElementById('btnGuardarEdicionProd');
+            const idProducto = document.getElementById('editProdId').value;
+            const fileInput = document.getElementById('editProdImagenArchivo');
+            const archivoNuevo = fileInput ? fileInput.files[0] : null;
+            let urlImagenFinal = document.getElementById('editProdImagenActual').value;
+
+            try {
+                if (btnGuardar) {
+                    btnGuardar.disabled = true;
+                    btnGuardar.innerText = "Guardando cambios...";
+                }
+
+                if (archivoNuevo) {
+                    if (btnGuardar) btnGuardar.innerText = "Subiendo nueva imagen...";
+                    const extension = archivoNuevo.name.split('.').pop();
+                    const nombreArchivo = `${miComercio.id}/${Date.now()}_mod.${extension}`;
+
+                    const { error: uploadError } = await supabaseClient.storage
+                        .from('productos')
+                        .upload(nombreArchivo, archivoNuevo);
+
+                    if (uploadError) throw uploadError;
+
+                    const { data: publicUrlData } = supabaseClient.storage
+                        .from('productos')
+                        .getPublicUrl(nombreArchivo);
+
+                    urlImagenFinal = publicUrlData.publicUrl;
+                }
+
+                const datosActualizados = {
+                    nombre: document.getElementById('editProdNombre').value.trim(),
+                    precio: parseFloat(document.getElementById('editProdPrecio').value),
+                    descripcion: document.getElementById('editProdDescripcion').value.trim(),
+                    imagen: urlImagenFinal
+                };
+
+                const { error: updateError } = await supabaseClient
+                    .from('productos')
+                    .update(datosActualizados)
+                    .eq('id', idProducto);
+
+                if (updateError) throw updateError;
+
+                alert("¡Producto actualizado correctamente!");
+                cerrarModalEditarProducto();
+                cargarProductosDuenio();
+
+            } catch (err) {
+                alert("Error al actualizar producto: " + err.message);
+            } finally {
+                if (btnGuardar) {
+                    btnGuardar.disabled = false;
+                    btnGuardar.innerText = "Guardar Cambios";
+                }
+            }
+        });
     }
 });
 </script>
