@@ -169,10 +169,11 @@
     }
 
     async function cargarPedidos() {
+      // AJUSTE: Ahora consulta únicamente pedidos con estado 'despachado' o los 'en_camino' del repartidor activo
       const { data: pedidos, error } = await supabaseClient
         .from('pedidos')
         .select('*')
-        .or(`estado.eq.pendiente,and(estado.eq.en_camino,repartidor_id.eq.${currentUser.id})`)
+        .or(`estado.eq.despachado,and(estado.eq.en_camino,repartidor_id.eq.${currentUser.id})`)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -211,12 +212,13 @@
       }
 
       if (pedidos.length === 0) {
-        contenedor.innerHTML = '<div class="card"><p style="color:#64748b; margin:0;">No hay pedidos pendientes en los comercios.</p></div>';
+        contenedor.innerHTML = '<div class="card"><p style="color:#64748b; margin:0;">No hay pedidos despachados en los comercios.</p></div>';
         return;
       }
 
       pedidos.forEach(pedido => {
-        if (tienePedidoActivo && pedido.estado === 'pendiente') {
+        // AJUSTE: Ignora los pedidos despachados si el repartidor ya tiene un pedido activo en camino
+        if (tienePedidoActivo && pedido.estado === 'despachado') {
           return;
         }
 
@@ -224,10 +226,11 @@
         card.className = 'card';
 
         const esMio = pedido.repartidor_id === currentUser.id;
-        let estadoBadge = pedido.estado || 'pendiente';
+        let estadoBadge = pedido.estado || 'despachado';
         let botonAccion = '';
 
-        if (estadoBadge === 'pendiente') {
+        // AJUSTE: Permite tomar el pedido cuando su estado sea 'despachado'
+        if (estadoBadge === 'despachado') {
           if (!tienePedidoActivo) {
             botonAccion = `<button class="btn-take" onclick="window.tomarPedido('${pedido.id}')">Tomar Pedido</button>`;
           }
@@ -239,7 +242,6 @@
         const horaPedido = formatearHora(pedido.created_at);
         const nombreCliente = obtenerNombreCliente(pedido);
         
-        // Búsqueda del teléfono en las posibles columnas
         const telefonoCliente = pedido.telefono_cliente || pedido.telefono || pedido.cliente_telefono || 'Sin teléfono';
 
         card.innerHTML = `
@@ -295,6 +297,6 @@
         }
       });
     });
-  </script>
+</script>
 </body>
 </html>
