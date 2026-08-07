@@ -203,6 +203,40 @@
             <button type="button" class="btn btn-modo" style="margin:0; white-space:nowrap;" onclick="buscarDireccionEnMapa()">🔍 Buscar</button>
         </div>
 
+        <!-- MODAL EDITAR PRODUCTO -->
+<div id="modalEditarProducto" class="modal oculto">
+    <div class="modal-contenido">
+        <h3>✏️ Editar Producto</h3>
+        <form id="formEditarProducto">
+            <input type="hidden" id="editProdId">
+            <input type="hidden" id="editProdImagenActual">
+
+            <label>Nombre del Producto:</label>
+            <input type="text" id="editProdNombre" required>
+
+            <label>Precio ($):</label>
+            <input type="number" step="0.01" id="editProdPrecio" required>
+
+            <label>Descripción:</label>
+
+            <textarea id="editProdDescripcion" rows="3"></textarea>
+
+            <label>Imagen Actual:</label>
+            <div style="margin-bottom: 10px;">
+                <img id="previewImagenActual" src="" alt="Vista previa" style="width: 70px; height: 70px; object-fit: cover; border-radius: 6px;">
+            </div>
+
+            <label>Cambiar Imagen (opcional):</label>
+            <input type="file" id="editProdImagenArchivo" accept="image/*">
+
+            <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" class="btn btn-secundario" onclick="cerrarModalEditarProducto()">Cancelar</button>
+                <button type="submit" id="btnGuardarEdicionProd" class="btn btn-primary">Guardar Cambios</button>
+            </div>
+        </form>
+    </div>
+ </div>
+
         <!-- CAMPO NUEVO: Teléfono de contacto obligatorio -->
         <label><b>📱 Tu número de teléfono (para el repartidor):</b></label>
         <div style="margin-bottom: 10px;">
@@ -863,34 +897,56 @@ async function procesarPedidoFinal() {
         setTimeout(() => toast.remove(), 5000);
     }
 
-    async function cargarProductosDuenio() {
-        const { data: productos } = await supabaseClient
-            .from('productos')
-            .select('*')
-            .eq('comercio_id', miComercio.id);
+   async function cargarProductosDuenio() {
+    const { data: productos } = await supabaseClient
+        .from('productos')
+        .select('*')
+        .eq('comercio_id', miComercio.id);
 
-        const lista = document.getElementById('listaProductosDuenio');
-        lista.innerHTML = "";
+    const lista = document.getElementById('listaProductosDuenio');
+    lista.innerHTML = "";
 
-        if (!productos || productos.length === 0) {
-            lista.innerHTML = "<p>Aún no has publicado productos.</p>";
-            return;
-        }
-
-        productos.forEach(p => {
-            const card = document.createElement('div');
-            card.className = 'tarjeta-producto';
-            card.innerHTML = `
-                <img src="${p.imagen}" alt="${p.nombre}">
-                <div class="info-producto">
-                    <h4>${p.nombre}</h4>
-                    <div class="precio">$${Number(p.precio).toFixed(2)}</div>
-                    <button class="btn btn-danger" style="width:100%;" onclick="eliminarProducto('${p.id}')">Eliminar</button>
-                </div>
-            `;
-            lista.appendChild(card);
-        });
+    if (!productos || productos.length === 0) {
+        lista.innerHTML = "<p>Aún no has publicado productos.</p>";
+        return;
     }
+
+    productos.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'tarjeta-producto';
+        card.innerHTML = `
+            <img src="${p.imagen}" alt="${p.nombre}">
+            <div class="info-producto">
+                <h4>${p.nombre}</h4>
+                <p style="font-size: 12px; color: #666; margin: 4px 0;">${p.descripcion || ''}</p>
+                <div class="precio">$${Number(p.precio).toFixed(2)}</div>
+                <div style="display: flex; gap: 6px; margin-top: 8px;">
+                    <button class="btn btn-secundario" style="flex:1;" onclick="abrirModalEditarProducto('${p.id}', '${escape(p.nombre)}', ${p.precio}, '${escape(p.descripcion || '')}', '${p.imagen}')">✏️ Editar</button>
+                    <button class="btn btn-danger" style="flex:1;" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar</button>
+                </div>
+            </div>
+        `;
+        lista.appendChild(card);
+    });
+}
+
+
+window.abrirModalEditarProducto = function(id, nombreEscapado, precio, descripcionEscapada, imagenUrl) {
+    document.getElementById('editProdId').value = id;
+    document.getElementById('editProdNombre').value = unescape(nombreEscapado);
+    document.getElementById('editProdPrecio').value = precio;
+    document.getElementById('editProdDescripcion').value = unescape(descripcionEscapada);
+    document.getElementById('editProdImagenActual').value = imagenUrl;
+    document.getElementById('previewImagenActual').src = imagenUrl;
+    document.getElementById('editProdImagenArchivo').value = ""; // Limpiar input de archivo
+
+    document.getElementById('modalEditarProducto').classList.remove('oculto');
+};
+
+window.cerrarModalEditarProducto = function() {
+    document.getElementById('modalEditarProducto').classList.add('oculto');
+};
+    
 
     document.getElementById('formProducto').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -941,6 +997,63 @@ async function procesarPedidoFinal() {
             cargarProductosDuenio();
         }
     };
+
+    document.getElementById('formEditarProducto').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btnGuardar = document.getElementById('btnGuardarEdicionProd');
+    const idProducto = document.getElementById('editProdId').value;
+    const archivoNuevo = document.getElementById('editProdImagenArchivo').files[0];
+    let urlImagenFinal = document.getElementById('editProdImagenActual').value;
+
+    try {
+        btnGuardar.disabled = true;
+        btnGuardar.innerText = "Guardando cambios...";
+
+        // Si el usuario seleccionó una imagen nueva, se sube a Supabase Storage
+        if (archivoNuevo) {
+            btnGuardar.innerText = "Subiendo nueva imagen...";
+            const extension = archivoNuevo.name.split('.').pop();
+            const nombreArchivo = `${miComercio.id}/${Date.now()}_mod.${extension}`;
+
+            const { error: uploadError } = await supabaseClient.storage
+                .from('productos')
+                .upload(nombreArchivo, archivoNuevo);
+
+            if (uploadError) throw uploadError;
+
+            const { data: publicUrlData } = supabaseClient.storage
+                .from('productos')
+                .getPublicUrl(nombreArchivo);
+
+            urlImagenFinal = publicUrlData.publicUrl;
+        }
+
+        // Actualizar registro en la tabla 'productos'
+        const datosActualizados = {
+            nombre: document.getElementById('editProdNombre').value.trim(),
+            precio: parseFloat(document.getElementById('editProdPrecio').value),
+            descripcion: document.getElementById('editProdDescripcion').value.trim(),
+            imagen: urlImagenFinal
+        };
+
+        const { error: updateError } = await supabaseClient
+            .from('productos')
+            .update(datosActualizados)
+            .eq('id', idProducto);
+
+        if (updateError) throw updateError;
+
+        alert("¡Producto actualizado correctamente!");
+        cerrarModalEditarProducto();
+        cargarProductosDuenio();
+
+    } catch (err) {
+        alert("Error al actualizar el producto: " + err.message);
+    } finally {
+        btnGuardar.disabled = false;
+        btnGuardar.innerText = "Guardar Cambios";
+    }
+});
 </script>
 
 </body>
