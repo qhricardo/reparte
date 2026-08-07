@@ -952,28 +952,28 @@ async function cargarProductosDuenio() {
 
 window.prepararEdicionProducto = function(idProducto) {
     const modal = document.getElementById('modalEditarProducto');
-    if (!modal) {
-        return alert("Error: No existe el contenedor con id='modalEditarProducto' en tu HTML.");
-    }
+    if (!modal) return alert("Error: No existe el modal en el HTML.");
 
     const prod = (window.productosDuenioCache || []).find(item => String(item.id) === String(idProducto));
     if (!prod) return alert("No se encontraron los datos del producto.");
 
-    const elId = document.getElementById('editProdId');
-    const elNombre = document.getElementById('editProdNombre');
-    const elPrecio = document.getElementById('editProdPrecio');
-    const elDesc = document.getElementById('editProdDescripcion');
-    const elImgActual = document.getElementById('editProdImagenActual');
-    const elPreview = document.getElementById('previewImagenActual');
-    const elFileInput = document.getElementById('editProdImagenArchivo');
+    // Asignación de valores
+    document.getElementById('editProdId').value = prod.id;
+    document.getElementById('editProdNombre').value = prod.nombre || '';
+    document.getElementById('editProdPrecio').value = prod.precio || 0;
+    document.getElementById('editProdDescripcion').value = prod.descripcion || '';
+    document.getElementById('editProdImagenActual').value = prod.imagen || '';
+    
+    // Vista previa de la imagen
+    const preview = document.getElementById('previewImagenActual');
+    if (preview) {
+        preview.src = prod.imagen || '';
+        preview.style.display = prod.imagen ? 'block' : 'none';
+    }
 
-    if (elId) elId.value = prod.id;
-    if (elNombre) elNombre.value = prod.nombre || '';
-    if (elPrecio) elPrecio.value = prod.precio || 0;
-    if (elDesc) elDesc.value = prod.descripcion || '';
-    if (elImgActual) elImgActual.value = prod.imagen || '';
-    if (elPreview) elPreview.src = prod.imagen || '';
-    if (elFileInput) elFileInput.value = ""; 
+    // Limpiar input de archivo nuevo por si se editó otro antes
+    const fileInput = document.getElementById('editProdImagenArchivo');
+    if (fileInput) fileInput.value = '';
 
     modal.classList.remove('oculto');
 };
