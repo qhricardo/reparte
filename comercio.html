@@ -900,8 +900,7 @@ async function procesarPedidoFinal() {
     }
 
     
-
- // ==========================================
+// ==========================================
 // FUNCIONES GLOBALES DE PRODUCTO
 // ==========================================
 
@@ -928,7 +927,7 @@ async function cargarProductosDuenio() {
         return;
     }
 
-    // Cache global
+    // Guardar en Cache global
     window.productosDuenioCache = productos;
 
     productos.forEach(p => {
@@ -941,8 +940,8 @@ async function cargarProductosDuenio() {
                 <p style="font-size: 12px; color: #666; margin: 4px 0;">${p.descripcion || ''}</p>
                 <div class="precio">$${Number(p.precio).toFixed(2)}</div>
                 <div style="display: flex; gap: 6px; margin-top: 8px;">
-                    <button type="button" class="btn btn-secundario" style="flex:1;" onclick="window.prepararEdicionProducto('${p.id}')">✏️ Editar</button>
-                    <button type="button" class="btn btn-danger" style="flex:1;" onclick="window.eliminarProducto('${p.id}')">🗑️ Eliminar</button>
+                    <button type="button" class="btn btn-secundario" style="flex:1;" onclick="prepararEdicionProducto('${p.id}')">✏️ Editar</button>
+                    <button type="button" class="btn btn-danger" style="flex:1;" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar</button>
                 </div>
             </div>
         `;
@@ -950,31 +949,50 @@ async function cargarProductosDuenio() {
     });
 }
 
+// Asignación explícita global
 window.prepararEdicionProducto = function(idProducto) {
+    console.log("Intentando editar producto ID:", idProducto);
+
     const modal = document.getElementById('modalEditarProducto');
-    if (!modal) return alert("Error: No existe el modal en el HTML.");
+    if (!modal) {
+        console.error("No se encontró el elemento #modalEditarProducto");
+        return alert("Error interno: No se encuentra el modal en el HTML.");
+    }
 
-    const prod = (window.productosDuenioCache || []).find(item => String(item.id) === String(idProducto));
-    if (!prod) return alert("No se encontraron los datos del producto.");
+    const productos = window.productosDuenioCache || [];
+    // Convertimos ambos lados a String para evitar fallos si id es número o UUID
+    const prod = productos.find(item => String(item.id) === String(idProducto));
 
-    // Asignación de valores
-    document.getElementById('editProdId').value = prod.id;
-    document.getElementById('editProdNombre').value = prod.nombre || '';
-    document.getElementById('editProdPrecio').value = prod.precio || 0;
-    document.getElementById('editProdDescripcion').value = prod.descripcion || '';
-    document.getElementById('editProdImagenActual').value = prod.imagen || '';
-    
-    // Vista previa de la imagen
+    if (!prod) {
+        console.error("Productos en cache:", productos);
+        return alert("No se encontraron los datos del producto seleccionado.");
+    }
+
+    // Asignación segura de campos
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+        else console.warn(`Elemento con ID #${id} no encontrado en el modal.`);
+    };
+
+    setVal('editProdId', prod.id);
+    setVal('editProdNombre', prod.nombre || '');
+    setVal('editProdPrecio', prod.precio || 0);
+    setVal('editProdDescripcion', prod.descripcion || '');
+    setVal('editProdImagenActual', prod.imagen || '');
+
+    // Preview de la imagen
     const preview = document.getElementById('previewImagenActual');
     if (preview) {
         preview.src = prod.imagen || '';
         preview.style.display = prod.imagen ? 'block' : 'none';
     }
 
-    // Limpiar input de archivo nuevo por si se editó otro antes
+    // Limpiar selector de archivo
     const fileInput = document.getElementById('editProdImagenArchivo');
     if (fileInput) fileInput.value = '';
 
+    // Mostrar modal
     modal.classList.remove('oculto');
 };
 
@@ -985,24 +1003,29 @@ window.cerrarModalEditarProducto = function() {
 
 window.eliminarProducto = async function(id) {
     if (confirm("¿Eliminar este producto?")) {
-        await supabaseClient.from('productos').delete().eq('id', id);
-        cargarProductosDuenio();
+        const { error } = await supabaseClient.from('productos').delete().eq('id', id);
+        if (error) {
+            alert("Error al eliminar: " + error.message);
+        } else {
+            cargarProductosDuenio();
+        }
     }
 };
 
 // ==========================================
-// VINCULACIÓN DE EVENTOS DE FORMULARIO (SAFE)
+// VINCULACIÓN DE EVENTOS DE FORMULARIO
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    
+
     // Formulario Crear Producto
     const formProducto = document.getElementById('formProducto');
     if (formProducto) {
         formProducto.addEventListener('submit', async (e) => {
             e.preventDefault();
             const btnGuardar = document.getElementById('btnGuardarProducto');
-            const archivo = document.getElementById('prodImagenArchivo').files[0];
+            const archivoInput = document.getElementById('prodImagenArchivo');
+            const archivo = archivoInput ? archivoInput.files[0] : null;
 
             if (!archivo) return alert("Selecciona una imagen.");
 
@@ -1027,13 +1050,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const producto = {
                     comercio_id: miComercio.id,
-                    nombre: document.getElementById('prodNombre').value,
+                    nombre: document.getElementById('prodNombre').value.trim(),
                     precio: parseFloat(document.getElementById('prodPrecio').value),
-                    descripcion: document.getElementById('prodDescripcion').value,
+                    descripcion: document.getElementById('prodDescripcion').value.trim(),
                     imagen: publicUrlData.publicUrl
                 };
 
-                await supabaseClient.from('productos').insert([producto]);
+                const { error: insertError } = await supabaseClient.from('productos').insert([producto]);
+                if (insertError) throw insertError;
+
                 formProducto.reset();
                 cargarProductosDuenio();
             } catch (err) {
@@ -1096,7 +1121,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (updateError) throw updateError;
 
-                alert("¡Producto actualizado correctamente!");
                 cerrarModalEditarProducto();
                 cargarProductosDuenio();
 
