@@ -102,13 +102,15 @@
         return;
       }
 
+      // Actualiza solo si el pedido sigue estando 'despachado'
       const { error } = await supabaseClient
         .from('pedidos')
         .update({
           estado: 'en_camino',
           repartidor_id: currentUser.id
         })
-        .eq('id', pedidoId);
+        .eq('id', pedidoId)
+        .eq('estado', 'despachado');
 
       if (error) {
         alert("Error al tomar el pedido: " + error.message);
@@ -169,10 +171,11 @@
     }
 
     async function cargarPedidos() {
+      // Se traen pedidos despachados (listos para recolección) O en_camino asignados a este repartidor
       const { data: pedidos, error } = await supabaseClient
         .from('pedidos')
         .select('*')
-        .or(`estado.eq.pendiente,and(estado.eq.en_camino,repartidor_id.eq.${currentUser.id})`)
+        .or(`estado.eq.despachado,and(estado.eq.en_camino,repartidor_id.eq.${currentUser.id})`)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -211,12 +214,13 @@
       }
 
       if (pedidos.length === 0) {
-        contenedor.innerHTML = '<div class="card"><p style="color:#64748b; margin:0;">No hay pedidos pendientes en los comercios.</p></div>';
+        contenedor.innerHTML = '<div class="card"><p style="color:#64748b; margin:0;">No hay pedidos despachados o listos para entrega en este momento.</p></div>';
         return;
       }
 
       pedidos.forEach(pedido => {
-        if (tienePedidoActivo && pedido.estado === 'pendiente') {
+        // Ocultar pedidos despachados si el repartidor ya tiene una entrega activa
+        if (tienePedidoActivo && pedido.estado === 'despachado') {
           return;
         }
 
@@ -224,10 +228,10 @@
         card.className = 'card';
 
         const esMio = pedido.repartidor_id === currentUser.id;
-        let estadoBadge = pedido.estado || 'pendiente';
+        let estadoBadge = pedido.estado || 'despachado';
         let botonAccion = '';
 
-        if (estadoBadge === 'pendiente') {
+        if (estadoBadge === 'despachado') {
           if (!tienePedidoActivo) {
             botonAccion = `<button class="btn-take" onclick="window.tomarPedido('${pedido.id}')">Tomar Pedido</button>`;
           }
@@ -295,6 +299,6 @@
         }
       });
     });
-  </script>
+</script>
 </body>
 </html>
