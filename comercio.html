@@ -840,38 +840,96 @@ async function procesarPedidoFinal() {
             .subscribe();
     }
 
-    async function cargarPedidosInicialesDuenio() {
-        const { data: pedidos } = await supabaseClient
-            .from('pedidos')
-            .select('*')
-            .eq('comercio_id', miComercio.id)
-            .order('created_at', { ascending: false });
+    // Cargar pedidos recibidos para el comercio actual
+async function cargarPedidosRecibidos() {
+    if (!miComercio || !miComercio.id) return;
 
-        const cont = document.getElementById('listaPedidosRecibidos');
-        if (!pedidos || pedidos.length === 0) {
-            cont.innerHTML = "<p style='color:#7f8c8d;'>Aún no hay pedidos recibidos.</p>";
-            return;
-        }
+    const { data: pedidos, error } = await supabaseClient
+        .from('pedidos')
+        .select('*')
+        .eq('comercio_id', miComercio.id)
+        .in('estado', ['pendiente', 'despachado']) // Traemos pendientes y despachados
+        .order('created_at', { ascending: false });
 
-        cont.innerHTML = pedidos.map(p => {
-            const horaFormateada = formatearFechaHora(p.created_at);
-            const estadoTexto = (p.estado || 'pendiente').replace('_', ' ');
-            const claseEstado = obtenerClaseEstado(p.estado);
+    const contenedor = document.getElementById('listaPedidosRecibidos');
+    if (!contenedor) return;
 
-            return `
-                <div style="background: #f8f9fa; padding: 12px; border-left: 4px solid #27ae60; margin-bottom: 10px; border-radius: 4px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span class="badge-estado ${claseEstado}">${estadoTexto}</span>
-                        <span style="font-size: 12px; color: #7f8c8d; font-weight: bold;">🕒 ${horaFormateada}</span>
-                    </div>
-                    <p style="margin:2px 0;"><b>Cliente:</b> ${p.cliente_nombre}</p>
-                    <p style="margin:2px 0;"><b>Productos:</b> ${p.producto_nombre}</p>
-                    <p style="margin:2px 0;"><b>Ubicación:</b> ${p.direccion_entrega}</p>
-                    <p style="margin:2px 0; color:#27ae60;"><b>Total:</b> $${Number(p.precio).toFixed(2)}</p>
-                </div>
-            `;
-        }).join('');
+    if (error) {
+        console.error("Error al obtener pedidos:", error);
+        contenedor.innerHTML = "<p style='color:red;'>Error al cargar pedidos.</p>";
+        return;
     }
+
+    if (!pedidos || pedidos.length === 0) {
+        contenedor.innerHTML = "<p style='color:#7f8c8d;'>Esperando nuevos pedidos...</p>";
+        return;
+    }
+
+    contenedor.innerHTML = "";
+
+    pedidos.forEach(pedido => {
+        const card = document.createElement('div');
+        card.className = 'card-pedido';
+        card.style.cssText = "border: 1px solid #ddd; padding: 12px; margin-bottom: 10px; border-radius: 8px; background: #fff;";
+
+        const esPendiente = pedido.estado === 'pendiente';
+
+        card.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h4>Pedido #${pedido.id.toString().slice(-4)}</h4>
+                <span class="badge" style="background:${esPendiente ? '#f39c12' : '#27ae60'}; color:#fff; padding:3px 8px; border-radius:12px; font-size:12px;">
+                    ${esPendiente ? 'Pendiente' : 'Despachado 🚴'}
+                </span>
+            </div>
+            <p style="margin: 5px 0;"><b>Cliente:</b> ${pedido.nombre_cliente || 'Cliente'} (${pedido.telefono_cliente || 'Sin tel'})</p>
+            <p style="margin: 5px 0;"><b>Dirección:</b> ${pedido.direccion_entrega || 'Ubicación en mapa'}</p>
+            <p style="margin: 5px 0;"><b>Total:</b> $${Number(pedido.total).toFixed(2)}</p>
+            
+            ${esPendiente ? `
+                <button type="button" class="btn btn-primary" style="width:100%; margin-top:8px;" onclick="window.despacharPedido('${pedido.id}')">
+                    🚀 Despachar Pedido
+                </button>
+            ` : `
+                <p style="color:#666; font-size:12px; margin-top:8px; text-align:center;">Esperando a que un repartidor lo tome.</p>
+            `}
+        `;
+        contenedor.appendChild(card);
+    });
+}
+
+// Función global para cambiar el estado a "despachado"
+window.despacharPedido = async function(idPedido) {
+    if (!confirm("¿Confirmas que el pedido está listo para enviarse?")) return;
+
+    const { error } = await supabaseClient
+        .from('pedidos')
+        .update({ estado: 'despachado' })
+        .eq('id', idPedido);
+
+    if (error) {
+        alert("Error al despachar el pedido: " + error.message);
+    } else {
+        alert("Pedido despachado. Ahora es visible para los repartidores.");
+        cargarPedidosRecibidos();
+    }
+};
+
+// Escuchar cambios en tiempo real en la tabla de pedidos
+function suscribirPedidosDuenio() {
+    if (!miComercio || !miComercio.id) return;
+
+    supabaseClient
+        .channel('pedidos_duenio')
+        .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'pedidos', filter: `comercio_id=eq.${miComercio.id}` },
+            (payload) => {
+                console.log('Cambio detectado en pedidos:', payload);
+                cargarPedidosRecibidos();
+            }
+        )
+        .subscribe();
+}
 
     function lanzarNotificacionDuenio(nuevoPedido) {
         const toast = document.createElement('div');
