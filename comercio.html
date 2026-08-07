@@ -809,15 +809,16 @@ async function procesarPedidoFinal() {
         });
     }
 
-    function obtenerClaseEstado(estado) {
-        switch(estado) {
-            case 'pendiente': return 'estado-pendiente';
-            case 'asignado': return 'estado-asignado';
-            case 'en_camino': return 'estado-en_camino';
-            case 'entregado': return 'estado-entregado';
-            default: return 'estado-pendiente';
-        }
+   function obtenerClaseEstado(estado) {
+    switch(estado) {
+        case 'pendiente': return 'estado-pendiente';
+        case 'preparado': return 'estado-preparado';
+        case 'despachado': return 'estado-despachado';
+        case 'en_camino': return 'estado-en_camino';
+        case 'entregado': return 'estado-entregado';
+        default: return 'estado-pendiente';
     }
+}
 
     function activarEscuchaPedidosEnTiempoReal() {
         if (!miComercio) return;
@@ -841,37 +842,50 @@ async function procesarPedidoFinal() {
     }
 
     async function cargarPedidosInicialesDuenio() {
-        const { data: pedidos } = await supabaseClient
-            .from('pedidos')
-            .select('*')
-            .eq('comercio_id', miComercio.id)
-            .order('created_at', { ascending: false });
+    const { data: pedidos } = await supabaseClient
+        .from('pedidos')
+        .select('*')
+        .eq('comercio_id', miComercio.id)
+        .order('created_at', { ascending: false });
 
-        const cont = document.getElementById('listaPedidosRecibidos');
-        if (!pedidos || pedidos.length === 0) {
-            cont.innerHTML = "<p style='color:#7f8c8d;'>Aún no hay pedidos recibidos.</p>";
-            return;
+    const cont = document.getElementById('listaPedidosRecibidos');
+    if (!pedidos || pedidos.length === 0) {
+        cont.innerHTML = "<p style='color:#7f8c8d;'>Aún no hay pedidos recibidos.</p>";
+        return;
+    }
+
+    cont.innerHTML = pedidos.map(p => {
+        const horaFormateada = formatearFechaHora(p.created_at);
+        const estadoTexto = (p.estado || 'pendiente').replace('_', ' ');
+        const claseEstado = obtenerClaseEstado(p.estado);
+
+        // --- LÓGICA DE BOTONES PARA EL COMERCIO ---
+        let botonAccion = '';
+        if (p.estado === 'pendiente') {
+            botonAccion = `<button type="button" class="btn btn-primary" onclick="cambiarEstadoPedido('${p.id}', 'preparado')">👨‍🍳 Marcar Preparado</button>`;
+        } else if (p.estado === 'preparado') {
+            botonAccion = `<button type="button" class="btn btn-success" onclick="cambiarEstadoPedido('${p.id}', 'despachado')">📦 Marcar Despachado (Enviar a Radar)</button>`;
+        } else if (p.estado === 'despachado') {
+            botonAccion = `<span style="font-size:12px; color:#e67e22; font-weight:bold;">⏳ Esperando que un repartidor lo tome...</span>`;
         }
 
-        cont.innerHTML = pedidos.map(p => {
-            const horaFormateada = formatearFechaHora(p.created_at);
-            const estadoTexto = (p.estado || 'pendiente').replace('_', ' ');
-            const claseEstado = obtenerClaseEstado(p.estado);
-
-            return `
-                <div style="background: #f8f9fa; padding: 12px; border-left: 4px solid #27ae60; margin-bottom: 10px; border-radius: 4px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span class="badge-estado ${claseEstado}">${estadoTexto}</span>
-                        <span style="font-size: 12px; color: #7f8c8d; font-weight: bold;">🕒 ${horaFormateada}</span>
-                    </div>
-                    <p style="margin:2px 0;"><b>Cliente:</b> ${p.cliente_nombre}</p>
-                    <p style="margin:2px 0;"><b>Productos:</b> ${p.producto_nombre}</p>
-                    <p style="margin:2px 0;"><b>Ubicación:</b> ${p.direccion_entrega}</p>
-                    <p style="margin:2px 0; color:#27ae60;"><b>Total:</b> $${Number(p.precio).toFixed(2)}</p>
+        return `
+            <div style="background: #f8f9fa; padding: 12px; border-left: 4px solid #27ae60; margin-bottom: 10px; border-radius: 4px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span class="badge-estado ${claseEstado}">${estadoTexto}</span>
+                    <span style="font-size: 12px; color: #7f8c8d; font-weight: bold;">🕒 ${horaFormateada}</span>
                 </div>
-            `;
-        }).join('');
-    }
+                <p style="margin:2px 0;"><b>Cliente:</b> ${p.cliente_nombre}</p>
+                <p style="margin:2px 0;"><b>Productos:</b> ${p.producto_nombre}</p>
+                <p style="margin:2px 0;"><b>Ubicación:</b> ${p.direccion_entrega}</p>
+                <p style="margin:2px 0; color:#27ae60;"><b>Total:</b> $${Number(p.precio).toFixed(2)}</p>
+                <div style="margin-top: 8px;">
+                    ${botonAccion}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
 
     function lanzarNotificacionDuenio(nuevoPedido) {
         const toast = document.createElement('div');
@@ -884,6 +898,20 @@ async function procesarPedidoFinal() {
 
         setTimeout(() => toast.remove(), 5000);
     }
+    
+
+    window.cambiarEstadoPedido = async function(idPedido, nuevoEstado) {
+    const { error } = await supabaseClient
+        .from('pedidos')
+        .update({ estado: nuevoEstado })
+        .eq('id', idPedido);
+
+    if (error) {
+        alert("Error al actualizar el estado: " + error.message);
+    } else {
+        cargarPedidosInicialesDuenio();
+    }
+};
 
     
 // ==========================================
