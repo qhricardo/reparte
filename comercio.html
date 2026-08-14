@@ -377,50 +377,51 @@
             });
     }
 
-  // Variable global asegurada
-window.canalPedidosRealtime = window.canalPedidosRealtime || null;
+ // Variable global para gestionar el canal Realtime
+    let canalPedidosRealtime = null;
 
-async function cargarComerciosCliente() {
-    try {
-        ocultarTodasLasPantallas();
-        const pantalla = document.getElementById('pantallaClienteComercios');
-        if (pantalla) pantalla.classList.remove('oculto');
+    async function cargarComerciosCliente() {
+        try {
+            ocultarTodasLasPantallas();
+            const pantalla = document.getElementById('pantallaClienteComercios');
+            if (pantalla) pantalla.classList.remove('oculto');
 
-        const btnIrCrear = document.getElementById('btnIrCrearComercio');
-        if (btnIrCrear) {
-            if (typeof miComercio !== 'undefined' && miComercio) btnIrCrear.classList.add('oculto');
-            else btnIrCrear.classList.remove('oculto');
-        }
+            const btnIrCrear = document.getElementById('btnIrCrearComercio');
+            if (btnIrCrear) {
+                if (typeof miComercio !== 'undefined' && miComercio) btnIrCrear.classList.add('oculto');
+                else btnIrCrear.classList.remove('oculto');
+            }
 
-        // --- 1. CARGAR Y MOSTRAR PEDIDOS DEL CLIENTE ---
-        await renderizarPedidosCliente();
+            // --- 1. MOSTRAR PEDIDOS DEL CLIENTE ---
+            await renderizarPedidosCliente();
 
-        // --- 2. SUSCRIPCIÓN REALTIME SUPABASE ---
-        if (typeof usuarioActual !== 'undefined' && usuarioActual && !window.canalPedidosRealtime) {
-            window.canalPedidosRealtime = supabaseClient
-                .channel('seguimiento-pedidos-cliente')
-                .on(
-                    'postgres_changes',
-                    {
-                        event: 'UPDATE',
-                        schema: 'public',
-                        table: 'pedidos',
-                        filter: `cliente_id=eq.${usuarioActual.id}`
-                    },
-                    async (payload) => {
-                        console.log('¡Cambio de estado en pedido detectado!', payload);
-                        await renderizarPedidosCliente();
-                    }
-                )
-                .subscribe();
-        }
+            // --- 2. SUSCRIPCIÓN REALTIME SUPABASE ---
+            if (usuarioActual && !canalPedidosRealtime) {
+                canalPedidosRealtime = supabaseClient
+                    .channel('seguimiento-pedidos-cliente')
+                    .on(
+                        'postgres_changes',
+                        {
+                            event: '*', // Escucha inserts y updates
+                            schema: 'public',
+                            table: 'pedidos',
+                            filter: `cliente_id=eq.${usuarioActual.id}`
+                        },
+                        async (payload) => {
+                            console.log('¡Actualización de pedido detectada!', payload);
+                            await renderizarPedidosCliente();
+                        }
+                    )
+                    .subscribe();
+            }
 
-        // --- 3. CARGAR LISTA DE COMERCIOS ---
-        const { data: comercios, error } = await supabaseClient.from('comercios').select('*');
-        if (error) console.error("Error al cargar comercios:", error);
+            // --- 3. CARGAR LISTA DE COMERCIOS ---
+            const { data: comercios, error } = await supabaseClient.from('comercios').select('*');
+            if (error) console.error("Error al cargar comercios:", error);
 
-        const lista = document.getElementById('listaComercios');
-        if (lista) {
+            const lista = document.getElementById('listaComercios');
+            if (!lista) return;
+            
             lista.innerHTML = "";
 
             if (!comercios || comercios.length === 0) {
@@ -431,104 +432,158 @@ async function cargarComerciosCliente() {
             comercios.forEach(c => {
                 const card = document.createElement('div');
                 card.className = 'tarjeta-comercio';
-                card.style.cursor = 'pointer'; // Asegurar feedback visual
+                card.style.cursor = 'pointer';
                 
-                // Asignación explícita del evento click
-                card.onclick = (e) => {
-                    e.preventDefault();
-                    if (typeof verProductosComercio === 'function') {
-                        verProductosComercio(c);
-                    } else if (typeof window.verProductosComercio === 'function') {
-                        window.verProductosComercio(c);
-                    } else {
-                        console.error("La función verProductosComercio no está definida.");
-                    }
-                };
+                // Evento click asegurado
+                card.onclick = () => verProductosComercio(c);
+
+                const logo = c.logo_url || c.logo || 'https://via.placeholder.com/80';
+                const nombreComercio = c.nombre || c.nombre_comercio || 'Comercio';
+                const direccionComercio = c.direccion || c.direccion_escrita || '';
 
                 card.innerHTML = `
-                    <img src="${c.logo_url || 'https://via.placeholder.com/80'}" alt="${c.nombre}">
-                    <h3>${c.nombre}</h3>
-                    <p style="color:#7f8c8d; font-size:13px;">${c.direccion || ''}</p>
+                    <img src="${logo}" alt="${nombreComercio}" style="width:80px; height:80px; object-fit:cover; border-radius:8px;">
+                    <h3>${nombreComercio}</h3>
+                    <p style="color:#7f8c8d; font-size:13px;">${direccionComercio}</p>
                 `;
                 lista.appendChild(card);
             });
+        } catch (err) {
+            console.error("Error en cargarComerciosCliente:", err);
         }
-    } catch (err) {
-        console.error("Error en cargarComerciosCliente:", err);
     }
-}
 
-async function renderizarPedidosCliente() {
-    if (typeof usuarioActual === 'undefined' || !usuarioActual) return;
+    async function verProductosComercio(comercioObj) {
+        try {
+            if (!comercioSeleccionadoObjeto || comercioSeleccionadoObjeto.id !== comercioObj.id) {
+                carrito = [];
+                if (typeof actualizarBarraCarrito === 'function') actualizarBarraCarrito();
+            }
+            comercioSeleccionadoObjeto = comercioObj;
 
-    try {
-        // Consulta resiliente (intenta traer con la relación 'comercios', y si falla trae solo pedidos)
-        let { data: pedidosActivos, error } = await supabaseClient
-            .from('pedidos')
-            .select('*, comercios(nombre)')
-            .eq('cliente_id', usuarioActual.id)
-            .order('created_at', { ascending: false });
+            ocultarTodasLasPantallas();
+            const pantallaProds = document.getElementById('pantallaClienteProductos');
+            if (pantallaProds) pantallaProds.classList.remove('oculto');
 
-        if (error) {
-            console.warn("Fallo al relacionar con tabla comercios, reintentando consulta simple:", error);
-            const resSimple = await supabaseClient
-                .from('pedidos')
+            const titulo = document.getElementById('tituloComercioSeleccionado');
+            if (titulo) titulo.innerText = `Productos de ${comercioObj.nombre || 'Comercio'}`;
+
+            // Consulta de productos por ID de comercio
+            const { data: productos, error } = await supabaseClient
+                .from('productos')
                 .select('*')
-                .eq('cliente_id', usuarioActual.id)
-                .order('created_at', { ascending: false });
-            pedidosActivos = resSimple.data;
-        }
+                .eq('comercio_id', comercioObj.id);
 
-        let contenedorPedidos = document.getElementById('seccionMisPedidos');
-        if (!contenedorPedidos) {
-            contenedorPedidos = document.createElement('div');
-            contenedorPedidos.id = 'seccionMisPedidos';
-            contenedorPedidos.style.cssText = 'margin-bottom: 20px; padding: 10px;';
-            const pantalla = document.getElementById('pantallaClienteComercios');
-            if (pantalla) pantalla.insertBefore(contenedorPedidos, pantalla.firstChild);
-        }
+            if (error) console.error("Error al obtener productos:", error);
 
-        if (pedidosActivos && pedidosActivos.length > 0) {
-            let htmlPedidos = '<h3 style="margin-bottom:10px;">📦 Tus Pedidos Recientes</h3>';
-            pedidosActivos.forEach(ped => {
-                let badgeColor = '#f39c12'; // Pendiente
-                let estadoTexto = ped.estado || 'Pendiente';
-                const estLower = estadoTexto.toLowerCase();
+            const lista = document.getElementById('listaProductosCliente');
+            if (!lista) return;
 
-                if (estLower.includes('despachado') || estLower.includes('preparando')) {
-                    badgeColor = '#3498db'; // Despachado / Preparando
-                } else if (estLower.includes('camino') || estLower.includes('enviado')) {
-                    badgeColor = '#9b59b6'; // En camino
-                } else if (estLower.includes('entregado')) {
-                    badgeColor = '#2ecc71'; // Entregado
-                } else if (estLower.includes('cancelado')) {
-                    badgeColor = '#e74c3c'; // Cancelado
-                }
+            lista.innerHTML = "";
 
-                const nombreComercio = ped.comercios ? ped.comercios.nombre : (ped.comercio_nombre || 'Comercio');
+            if (!productos || productos.length === 0) {
+                lista.innerHTML = "<p>Este comercio no tiene productos disponibles por el momento.</p>";
+                return;
+            }
 
-                htmlPedidos += `
-                    <div style="background: #ffffff; border-left: 5px solid ${badgeColor}; padding: 12px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.08);">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <strong>${nombreComercio}</strong>
-                            <span style="background: ${badgeColor}; color: white; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;">
-                                ${estadoTexto.toUpperCase()}
-                            </span>
-                        </div>
-                        <p style="margin: 5px 0 0 0; font-size: 13px; color: #555;">
-                            Total: <b>$${Number(ped.total || 0).toFixed(2)}</b>
-                        </p>
+            productos.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'tarjeta-producto';
+
+                const precioNum = Number(p.precio || p.costo || 0);
+                const imagenProd = p.imagen || p.imagen_url || 'https://via.placeholder.com/150';
+                const nombreProd = p.nombre || 'Producto';
+                const descProd = p.descripcion || '';
+
+                card.innerHTML = `
+                    <img src="${imagenProd}" alt="${nombreProd}" style="width:100%; height:140px; object-fit:cover; border-radius:6px;">
+                    <div class="info-producto" style="padding:8px 0;">
+                        <h4 style="margin:5px 0;">${nombreProd}</h4>
+                        <p style="font-size: 13px; color: #666; margin:4px 0;">${descProd}</p>
+                        <div class="precio" style="font-weight:bold; font-size:16px; color:#2c3e50; margin:6px 0;">$${precioNum.toFixed(2)}</div>
+                        <button class="btn btn-primary" style="width:100%; padding:8px; cursor:pointer;" onclick="agregarAlCarrito('${p.id}', '${nombreProd.replace(/'/g, "\\'")}', ${precioNum})">+ Agregar a Carrito</button>
                     </div>
                 `;
+                lista.appendChild(card);
             });
-            contenedorPedidos.innerHTML = htmlPedidos;
-        } else if (contenedorPedidos) {
-            contenedorPedidos.innerHTML = '';
+        } catch (err) {
+            console.error("Error en verProductosComercio:", err);
         }
-    } catch (err) {
-        console.error("Error al renderizar pedidos:", err);
     }
-}
+
+    async function renderizarPedidosCliente() {
+        if (!usuarioActual) return;
+
+        try {
+            // Consulta de pedidos realizados por el usuario
+            let { data: pedidosActivos, error } = await supabaseClient
+                .from('pedidos')
+                .select('*, comercios(nombre)')
+                .eq('cliente_id', usuarioActual.id)
+                .order('created_at', { ascending: false });
+
+            // Fallback en caso de que no exista la relación FK explicita en Supabase
+            if (error) {
+                const resSimple = await supabaseClient
+                    .from('pedidos')
+                    .select('*')
+                    .eq('cliente_id', usuarioActual.id)
+                    .order('created_at', { ascending: false });
+                pedidosActivos = resSimple.data;
+            }
+
+            let contenedorPedidos = document.getElementById('seccionMisPedidos');
+            if (!contenedorPedidos) {
+                contenedorPedidos = document.createElement('div');
+                contenedorPedidos.id = 'seccionMisPedidos';
+                contenedorPedidos.style.cssText = 'margin-bottom: 20px; padding: 10px;';
+                const pantalla = document.getElementById('pantallaClienteComercios');
+                if (pantalla) pantalla.insertBefore(contenedorPedidos, pantalla.firstChild);
+            }
+
+            if (pedidosActivos && pedidosActivos.length > 0) {
+                let htmlPedidos = '<h3 style="margin-bottom:10px;">📦 Tus Pedidos Recientes</h3>';
+                pedidosActivos.forEach(ped => {
+                    let badgeColor = '#f39c12'; // Pendiente
+                    let estadoTexto = ped.estado || 'Pendiente';
+                    const estLower = estadoTexto.toLowerCase();
+
+                    if (estLower.includes('despachado') || estLower.includes('preparando')) {
+                        badgeColor = '#3498db'; // Despachado / Preparando
+                    } else if (estLower.includes('camino') || estLower.includes('enviado')) {
+                        badgeColor = '#9b59b6'; // En camino
+                    } else if (estLower.includes('entregado')) {
+                        badgeColor = '#2ecc71'; // Entregado
+                    } else if (estLower.includes('cancelado')) {
+                        badgeColor = '#e74c3c'; // Cancelado
+                    }
+
+                    // Detección flexible del nombre del comercio y del monto total
+                    const nombreComercio = ped.comercios ? ped.comercios.nombre : (ped.comercio_nombre || 'Comercio');
+                    const totalPagar = Number(ped.total || ped.total_pagar || ped.monto_total || 0);
+
+                    htmlPedidos += `
+                        <div style="background: #ffffff; border-left: 5px solid ${badgeColor}; padding: 12px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.08);">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <strong>${nombreComercio}</strong>
+                                <span style="background: ${badgeColor}; color: white; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;">
+                                    ${estadoTexto.toUpperCase()}
+                                </span>
+                            </div>
+                            <p style="margin: 5px 0 0 0; font-size: 13px; color: #555;">
+                                Total: <b>$${totalPagar.toFixed(2)}</b>
+                            </p>
+                        </div>
+                    `;
+                });
+                contenedorPedidos.innerHTML = htmlPedidos;
+            } else if (contenedorPedidos) {
+                contenedorPedidos.innerHTML = '';
+            }
+        } catch (err) {
+            console.error("Error al renderizar pedidos:", err);
+        }
+    }
     
     // REGISTRAR COMERCIO CON MAPA
     function mostrarFormularioCrearComercio() {
