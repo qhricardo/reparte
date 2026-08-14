@@ -565,6 +565,9 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
 });
 
     // CARRITO Y CHECKOUT
+    let coordsEntrega = { lat: 19.5694, lng: -99.7669 };
+    let lineaRuta = null;
+
     function agregarAlCarrito(id, nombre, precio) {
         const existente = carrito.find(item => item.id === id);
         if (existente) existente.cantidad++;
@@ -607,7 +610,7 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
 
         setTimeout(() => {
             if (!mapaEntrega) {
-                mapaEntrega = L.map('mapaEntrega').setView([coordsComercio.lat, coordsComercio.lng], 13);
+                mapaEntrega = L.map('mapaEntrega').setView([coordsEntrega.lat, coordsEntrega.lng], 13);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaEntrega);
 
                 marcadorComercioEnMapa = L.marker([coordsComercio.lat, coordsComercio.lng])
@@ -636,6 +639,12 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
                     marcadorComercioEnMapa.setLatLng([coordsComercio.lat, coordsComercio.lng]);
                 }
             }
+
+            const inputDir = document.getElementById('direccionEscrita');
+            if (inputDir && !inputDir.value.trim()) {
+                obtenerNombreDireccion(coordsEntrega.lat, coordsEntrega.lng, 'direccionEscrita');
+            }
+
             recalcularTotales();
         }, 300);
     }
@@ -680,31 +689,60 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
         }
     }
 
-    function recalcularTotales() {
+    async function recalcularTotales() {
         const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
         const coordsComercio = obtenerCoordsComercioActivo();
 
-        const R = 6371;
-        const dLat = (coordsEntrega.lat - coordsComercio.lat) * Math.PI / 180;
-        const dLon = (coordsEntrega.lng - coordsComercio.lng) * Math.PI / 180;
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(coordsComercio.lat * Math.PI / 180) * Math.cos(coordsEntrega.lat * Math.PI / 180) *
-                  Math.sin(dLon/2) * Math.sin(dLon/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        const distanciaKm = R * c;
+        let distanciaKm = 0;
 
-        if (mapaEntrega) {
-            if (lineaRuta) mapaEntrega.removeLayer(lineaRuta);
-            lineaRuta = L.polyline([
-                [coordsComercio.lat, coordsComercio.lng],
-                [coordsEntrega.lat, coordsEntrega.lng]
-            ], { color: '#e74c3c', weight: 4, opacity: 0.7, dashArray: '8, 8' }).addTo(mapaEntrega);
+        try {
+            const urlRuta = `https://router.project-osrm.org/route/v1/driving/${coordsComercio.lng},${coordsComercio.lat};${coordsEntrega.lng},${coordsEntrega.lat}?overview=full&geometries=geojson`;
+            const resp = await fetch(urlRuta);
+            const data = await resp.json();
 
-            const bounds = L.latLngBounds([
-                [coordsComercio.lat, coordsComercio.lng],
-                [coordsEntrega.lat, coordsEntrega.lng]
-            ]);
-            mapaEntrega.fitBounds(bounds, { padding: [40, 40] });
+            if (data.routes && data.routes.length > 0) {
+                const ruta = data.routes[0];
+                distanciaKm = ruta.distance / 1000;
+
+                const coordenadasPolyline = ruta.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+
+                if (mapaEntrega) {
+                    if (lineaRuta) mapaEntrega.removeLayer(lineaRuta);
+                    lineaRuta = L.polyline(coordenadasPolyline, { color: '#27ae60', weight: 5, opacity: 0.8 }).addTo(mapaEntrega);
+
+                    const bounds = L.latLngBounds([
+                        [coordsComercio.lat, coordsComercio.lng],
+                        [coordsEntrega.lat, coordsEntrega.lng]
+                    ]);
+                    mapaEntrega.fitBounds(bounds, { padding: [40, 40] });
+                }
+            } else {
+                throw new Error("No se pudo obtener la ruta por calles.");
+            }
+        } catch (err) {
+            console.warn("Fallo el cálculo por calles, recurriendo a distancia directa:", err);
+            const R = 6371;
+            const dLat = (coordsEntrega.lat - coordsComercio.lat) * Math.PI / 180;
+            const dLon = (coordsEntrega.lng - coordsComercio.lng) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(coordsComercio.lat * Math.PI / 180) * Math.cos(coordsEntrega.lat * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            distanciaKm = R * c;
+
+            if (mapaEntrega) {
+                if (lineaRuta) mapaEntrega.removeLayer(lineaRuta);
+                lineaRuta = L.polyline([
+                    [coordsComercio.lat, coordsComercio.lng],
+                    [coordsEntrega.lat, coordsEntrega.lng]
+                ], { color: '#e74c3c', weight: 4, opacity: 0.7, dashArray: '8, 8' }).addTo(mapaEntrega);
+
+                const bounds = L.latLngBounds([
+                    [coordsComercio.lat, coordsComercio.lng],
+                    [coordsEntrega.lat, coordsEntrega.lng]
+                ]);
+                mapaEntrega.fitBounds(bounds, { padding: [40, 40] });
+            }
         }
 
         const costoEnvio = PRECIO_BASE_ENVIO + (distanciaKm * PRECIO_KM);
@@ -715,7 +753,6 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
         document.getElementById('txtCostoEnvio').innerText = costoEnvio.toFixed(2);
         document.getElementById('txtTotalPagar').innerText = total.toFixed(2);
     }
-
    // PROCESAR PEDIDO Y VINCULAR CON EL RADAR DE REPARTIDORES
 async function procesarPedidoFinal() {
     const direccionText = document.getElementById('direccionEscrita').value;
