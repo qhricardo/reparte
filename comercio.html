@@ -377,31 +377,35 @@
             });
     }
 
-   // Variable global para gestionar el canal Realtime de pedidos
-    let canalPedidosRealtime = null;
+  // Variable global asegurada
+window.canalPedidosRealtime = window.canalPedidosRealtime || null;
 
-    async function cargarComerciosCliente() {
+async function cargarComerciosCliente() {
+    try {
         ocultarTodasLasPantallas();
-        document.getElementById('pantallaClienteComercios').classList.remove('oculto');
+        const pantalla = document.getElementById('pantallaClienteComercios');
+        if (pantalla) pantalla.classList.remove('oculto');
 
         const btnIrCrear = document.getElementById('btnIrCrearComercio');
-        if (miComercio) btnIrCrear.classList.add('oculto');
-        else btnIrCrear.classList.remove('oculto');
+        if (btnIrCrear) {
+            if (typeof miComercio !== 'undefined' && miComercio) btnIrCrear.classList.add('oculto');
+            else btnIrCrear.classList.remove('oculto');
+        }
 
-        // --- CARGAR Y MOSTRAR PEDIDOS DEL CLIENTE ---
+        // --- 1. CARGAR Y MOSTRAR PEDIDOS DEL CLIENTE ---
         await renderizarPedidosCliente();
 
-        // --- SUSCRIPCIÓN REALTIME SUPABASE ---
-        if (usuarioActual && !canalPedidosRealtime) {
-            canalPedidosRealtime = supabaseClient
+        // --- 2. SUSCRIPCIÓN REALTIME SUPABASE ---
+        if (typeof usuarioActual !== 'undefined' && usuarioActual && !window.canalPedidosRealtime) {
+            window.canalPedidosRealtime = supabaseClient
                 .channel('seguimiento-pedidos-cliente')
                 .on(
                     'postgres_changes',
                     {
-                        event: 'UPDATE', // Escuchamos cambios de estado en tiempo real
+                        event: 'UPDATE',
                         schema: 'public',
                         table: 'pedidos',
-                        filter: `cliente_id=eq.${usuarioActual.id}` // Filtro exclusivo para el comprador activo
+                        filter: `cliente_id=eq.${usuarioActual.id}`
                     },
                     async (payload) => {
                         console.log('¡Cambio de estado en pedido detectado!', payload);
@@ -411,38 +415,69 @@
                 .subscribe();
         }
 
-        // --- CARGAR LISTA DE COMERCIOS ---
-        const { data: comercios } = await supabaseClient.from('comercios').select('*');
+        // --- 3. CARGAR LISTA DE COMERCIOS ---
+        const { data: comercios, error } = await supabaseClient.from('comercios').select('*');
+        if (error) console.error("Error al cargar comercios:", error);
+
         const lista = document.getElementById('listaComercios');
-        lista.innerHTML = "";
+        if (lista) {
+            lista.innerHTML = "";
 
-        if (!comercios || comercios.length === 0) {
-            lista.innerHTML = "<p>Aún no hay comercios registrados.</p>";
-            return;
+            if (!comercios || comercios.length === 0) {
+                lista.innerHTML = "<p>Aún no hay comercios registrados.</p>";
+                return;
+            }
+
+            comercios.forEach(c => {
+                const card = document.createElement('div');
+                card.className = 'tarjeta-comercio';
+                card.style.cursor = 'pointer'; // Asegurar feedback visual
+                
+                // Asignación explícita del evento click
+                card.onclick = (e) => {
+                    e.preventDefault();
+                    if (typeof verProductosComercio === 'function') {
+                        verProductosComercio(c);
+                    } else if (typeof window.verProductosComercio === 'function') {
+                        window.verProductosComercio(c);
+                    } else {
+                        console.error("La función verProductosComercio no está definida.");
+                    }
+                };
+
+                card.innerHTML = `
+                    <img src="${c.logo_url || 'https://via.placeholder.com/80'}" alt="${c.nombre}">
+                    <h3>${c.nombre}</h3>
+                    <p style="color:#7f8c8d; font-size:13px;">${c.direccion || ''}</p>
+                `;
+                lista.appendChild(card);
+            });
         }
-
-        comercios.forEach(c => {
-            const card = document.createElement('div');
-            card.className = 'tarjeta-comercio';
-            card.onclick = () => verProductosComercio(c);
-            card.innerHTML = `
-                <img src="${c.logo_url || 'https://via.placeholder.com/80'}" alt="${c.nombre}">
-                <h3>${c.nombre}</h3>
-                <p style="color:#7f8c8d; font-size:13px;">${c.direccion || ''}</p>
-            `;
-            lista.appendChild(card);
-        });
+    } catch (err) {
+        console.error("Error en cargarComerciosCliente:", err);
     }
+}
 
-    // Renderiza la lista de pedidos realizados por el usuario
-    async function renderizarPedidosCliente() {
-        if (!usuarioActual) return;
+async function renderizarPedidosCliente() {
+    if (typeof usuarioActual === 'undefined' || !usuarioActual) return;
 
-        const { data: pedidosActivos } = await supabaseClient
+    try {
+        // Consulta resiliente (intenta traer con la relación 'comercios', y si falla trae solo pedidos)
+        let { data: pedidosActivos, error } = await supabaseClient
             .from('pedidos')
             .select('*, comercios(nombre)')
             .eq('cliente_id', usuarioActual.id)
             .order('created_at', { ascending: false });
+
+        if (error) {
+            console.warn("Fallo al relacionar con tabla comercios, reintentando consulta simple:", error);
+            const resSimple = await supabaseClient
+                .from('pedidos')
+                .select('*')
+                .eq('cliente_id', usuarioActual.id)
+                .order('created_at', { ascending: false });
+            pedidosActivos = resSimple.data;
+        }
 
         let contenedorPedidos = document.getElementById('seccionMisPedidos');
         if (!contenedorPedidos) {
@@ -450,27 +485,27 @@
             contenedorPedidos.id = 'seccionMisPedidos';
             contenedorPedidos.style.cssText = 'margin-bottom: 20px; padding: 10px;';
             const pantalla = document.getElementById('pantallaClienteComercios');
-            pantalla.insertBefore(contenedorPedidos, pantalla.firstChild);
+            if (pantalla) pantalla.insertBefore(contenedorPedidos, pantalla.firstChild);
         }
 
         if (pedidosActivos && pedidosActivos.length > 0) {
-            let htmlPedidos = '<h3>📦 Tus Pedidos Recientes</h3>';
+            let htmlPedidos = '<h3 style="margin-bottom:10px;">📦 Tus Pedidos Recientes</h3>';
             pedidosActivos.forEach(ped => {
-                let badgeColor = '#f39c12'; // Pendiente (Naranja)
+                let badgeColor = '#f39c12'; // Pendiente
                 let estadoTexto = ped.estado || 'Pendiente';
-                const estadoLower = estadoTexto.toLowerCase();
+                const estLower = estadoTexto.toLowerCase();
 
-                if (estadoLower.includes('despachado') || estadoLower.includes('preparando')) {
-                    badgeColor = '#3498db'; // Despachado / Preparando (Azul)
-                } else if (estadoLower.includes('camino') || estadoLower.includes('enviado')) {
-                    badgeColor = '#9b59b6'; // En camino (Morado)
-                } else if (estadoLower.includes('entregado')) {
-                    badgeColor = '#2ecc71'; // Entregado (Verde)
-                } else if (estadoLower.includes('cancelado')) {
-                    badgeColor = '#e74c3c'; // Cancelado (Rojo)
+                if (estLower.includes('despachado') || estLower.includes('preparando')) {
+                    badgeColor = '#3498db'; // Despachado / Preparando
+                } else if (estLower.includes('camino') || estLower.includes('enviado')) {
+                    badgeColor = '#9b59b6'; // En camino
+                } else if (estLower.includes('entregado')) {
+                    badgeColor = '#2ecc71'; // Entregado
+                } else if (estLower.includes('cancelado')) {
+                    badgeColor = '#e74c3c'; // Cancelado
                 }
 
-                const nombreComercio = ped.comercios ? ped.comercios.nombre : 'Comercio';
+                const nombreComercio = ped.comercios ? ped.comercios.nombre : (ped.comercio_nombre || 'Comercio');
 
                 htmlPedidos += `
                     <div style="background: #ffffff; border-left: 5px solid ${badgeColor}; padding: 12px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.08);">
@@ -487,11 +522,14 @@
                 `;
             });
             contenedorPedidos.innerHTML = htmlPedidos;
-        } else {
+        } else if (contenedorPedidos) {
             contenedorPedidos.innerHTML = '';
         }
+    } catch (err) {
+        console.error("Error al renderizar pedidos:", err);
     }
-
+}
+    
     // REGISTRAR COMERCIO CON MAPA
     function mostrarFormularioCrearComercio() {
         ocultarTodasLasPantallas();
