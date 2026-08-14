@@ -377,75 +377,115 @@
             });
     }
 
-    async function cargarComerciosCliente() {
-        ocultarTodasLasPantallas();
-        document.getElementById('pantallaClienteComercios').classList.remove('oculto');
+   async function cargarComerciosCliente() {
+    ocultarTodasLasPantallas();
+    document.getElementById('pantallaClienteComercios').classList.remove('oculto');
 
-        const btnIrCrear = document.getElementById('btnIrCrearComercio');
-        if (miComercio) btnIrCrear.classList.add('oculto');
-        else btnIrCrear.classList.remove('oculto');
+    const btnIrCrear = document.getElementById('btnIrCrearComercio');
+    if (miComercio) btnIrCrear.classList.add('oculto');
+    else btnIrCrear.classList.remove('oculto');
 
-        const { data: comercios } = await supabaseClient.from('comercios').select('*');
-        const lista = document.getElementById('listaComercios');
-        lista.innerHTML = "";
+    // --- CARGAR Y MOSTRAR PEDIDOS DEL CLIENTE ---
+    await renderizarPedidosCliente();
 
-        if (!comercios || comercios.length === 0) {
-            lista.innerHTML = "<p>Aún no hay comercios registrados.</p>";
-            return;
-        }
-
-        comercios.forEach(c => {
-            const card = document.createElement('div');
-            card.className = 'tarjeta-comercio';
-            card.onclick = () => verProductosComercio(c);
-            card.innerHTML = `
-                <img src="${c.logo_url || 'https://via.placeholder.com/80'}" alt="${c.nombre}">
-                <h3>${c.nombre}</h3>
-                <p style="color:#7f8c8d; font-size:13px;">${c.direccion || ''}</p>
-            `;
-            lista.appendChild(card);
-        });
+    // --- SUSCRIPCIÓN REALTIME SUPABASE ---
+    if (usuarioActual && !canalPedidosRealtime) {
+        canalPedidosRealtime = supabaseClient
+            .channel('seguimiento-pedidos-cliente')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE', // Escuchamos cambios/actualizaciones de estado
+                    schema: 'public',
+                    table: 'pedidos',
+                    filter: `cliente_id=eq.${usuarioActual.id}` // Solo los pedidos de este cliente
+                },
+                async (payload) => {
+                    console.log('¡Cambio de estado en pedido detectado!', payload);
+                    // Volvemos a renderizar los pedidos al detectar un cambio
+                    await renderizarPedidosCliente();
+                }
+            )
+            .subscribe();
     }
 
-    async function verProductosComercio(comercioObj) {
-        if (!comercioSeleccionadoObjeto || comercioSeleccionadoObjeto.id !== comercioObj.id) {
-            carrito = [];
-            actualizarBarraCarrito();
-        }
-        comercioSeleccionadoObjeto = comercioObj;
+    // --- CARGAR LISTA DE COMERCIOS ---
+    const { data: comercios } = await supabaseClient.from('comercios').select('*');
+    const lista = document.getElementById('listaComercios');
+    lista.innerHTML = "";
 
-        ocultarTodasLasPantallas();
-        document.getElementById('pantallaClienteProductos').classList.remove('oculto');
-        document.getElementById('tituloComercioSeleccionado').innerText = `Productos de ${comercioObj.nombre}`;
+    if (!comercios || comercios.length === 0) {
+        lista.innerHTML = "<p>Aún no hay comercios registrados.</p>";
+        return;
+    }
 
-        const { data: productos } = await supabaseClient
-            .from('productos')
-            .select('*')
-            .eq('comercio_id', comercioObj.id);
+    comercios.forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'tarjeta-comercio';
+        card.onclick = () => verProductosComercio(c);
+        card.innerHTML = `
+            <img src="${c.logo_url || 'https://via.placeholder.com/80'}" alt="${c.nombre}">
+            <h3>${c.nombre}</h3>
+            <p style="color:#7f8c8d; font-size:13px;">${c.direccion || ''}</p>
+        `;
+        lista.appendChild(card);
+    });
+}
 
-        const lista = document.getElementById('listaProductosCliente');
-        lista.innerHTML = "";
+// Función auxiliar para dibujar la lista de pedidos en el DOM
+async function renderizarPedidosCliente() {
+    if (!usuarioActual) return;
 
-        if (!productos || productos.length === 0) {
-            lista.innerHTML = "<p>Este comercio no tiene productos disponibles.</p>";
-            return;
-        }
+    const { data: pedidosActivos } = await supabaseClient
+        .from('pedidos')
+        .select('*, comercios(nombre)')
+        .eq('cliente_id', usuarioActual.id)
+        .order('created_at', { ascending: false });
 
-        productos.forEach(p => {
-            const card = document.createElement('div');
-            card.className = 'tarjeta-producto';
-            card.innerHTML = `
-                <img src="${p.imagen}" alt="${p.nombre}">
-                <div class="info-producto">
-                    <h4>${p.nombre}</h4>
-                    <p style="font-size: 13px; color: #666;">${p.descripcion || ''}</p>
-                    <div class="precio">$${Number(p.precio).toFixed(2)}</div>
-                    <button class="btn btn-primary" style="width:100%;" onclick="agregarAlCarrito('${p.id}', '${p.nombre}', ${p.precio})">+ Agregar a Carrito</button>
+    let contenedorPedidos = document.getElementById('seccionMisPedidos');
+    if (!contenedorPedidos) {
+        contenedorPedidos = document.createElement('div');
+        contenedorPedidos.id = 'seccionMisPedidos';
+        contenedorPedidos.style.cssText = 'margin-bottom: 20px; padding: 10px;';
+        const pantalla = document.getElementById('pantallaClienteComercios');
+        pantalla.insertBefore(contenedorPedidos, pantalla.firstChild);
+    }
+
+    if (pedidosActivos && pedidosActivos.length > 0) {
+        let htmlPedidos = '<h3>📦 Tus Pedidos Recientes</h3>';
+        pedidosActivos.forEach(ped => {
+            let badgeColor = '#f39c12'; // Pendiente
+            let estadoTexto = ped.estado || 'Pendiente';
+
+            if (estadoTexto.toLowerCase().includes('despachado') || estadoTexto.toLowerCase().includes('preparando')) {
+                badgeColor = '#3498db'; // Despachado / Preparando
+            } else if (estadoTexto.toLowerCase().includes('camino') || estadoTexto.toLowerCase().includes('enviado')) {
+                badgeColor = '#9b59b6'; // En camino
+            } else if (estadoTexto.toLowerCase().includes('entregado')) {
+                badgeColor = '#2ecc71'; // Entregado
+            }
+
+            const nombreComercio = ped.comercios ? ped.comercios.nombre : 'Comercio';
+
+            htmlPedidos += `
+                <div style="background: #ffffff; border-left: 5px solid ${badgeColor}; padding: 12px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.08);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong>${nombreComercio}</strong>
+                        <span style="background: ${badgeColor}; color: white; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;">
+                            ${estadoTexto.toUpperCase()}
+                        </span>
+                    </div>
+                    <p style="margin: 5px 0 0 0; font-size: 13px; color: #555;">
+                        Total: <b>$${Number(ped.total || 0).toFixed(2)}</b>
+                    </p>
                 </div>
             `;
-            lista.appendChild(card);
         });
+        contenedorPedidos.innerHTML = htmlPedidos;
+    } else {
+        contenedorPedidos.innerHTML = '';
     }
+}
 
     // REGISTRAR COMERCIO CON MAPA
     function mostrarFormularioCrearComercio() {
