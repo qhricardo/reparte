@@ -389,11 +389,156 @@
             });
     }
 
-   async function renderizarPedidosCliente() {
+    async function cargarComerciosCliente() {
+        try {
+            ocultarTodasLasPantallas();
+            const pantalla = document.getElementById('pantallaClienteComercios');
+            if (pantalla) pantalla.classList.remove('oculto');
+
+            const btnIrCrear = document.getElementById('btnIrCrearComercio');
+            if (btnIrCrear) {
+                if (typeof miComercio !== 'undefined' && miComercio) btnIrCrear.classList.add('oculto');
+                else btnIrCrear.classList.remove('oculto');
+            }
+
+            // 1. CARGAR PEDIDOS ACTIVOS DEL CLIENTE
+            await renderizarPedidosCliente();
+
+            // 2. SUSCRIPCIÓN EN TIEMPO REAL (Exclusiva de este cliente)
+            if (usuarioActual && !canalPedidosRealtime) {
+                canalPedidosRealtime = supabaseClient
+                    .channel('seguimiento-pedidos-cliente')
+                    .on(
+                        'postgres_changes',
+                        {
+                            event: '*',
+                            schema: 'public',
+                            table: 'pedidos',
+                            filter: `cliente_id=eq.${usuarioActual.id}`
+                        },
+                        async (payload) => {
+                            console.log('¡Cambio detectado en pedido propio!', payload);
+                            await renderizarPedidosCliente();
+                        }
+                    )
+                    .subscribe();
+            }
+
+            // 3. LISTAR COMERCIOS
+            const { data: comercios, error } = await supabaseClient.from('comercios').select('*');
+            if (error) console.error("Error al obtener comercios:", error);
+
+            const lista = document.getElementById('listaComercios');
+            if (!lista) return;
+            
+            lista.innerHTML = "";
+
+            if (!comercios || comercios.length === 0) {
+                lista.innerHTML = "<p>Aún no hay comercios registrados.</p>";
+                return;
+            }
+
+            comercios.forEach(c => {
+                const card = document.createElement('div');
+                card.className = 'tarjeta-comercio';
+                card.style.cursor = 'pointer';
+                
+                card.onclick = () => verProductosComercio(c);
+
+                const logo = c.logo_url || c.logo || DEFAULT_LOGO_SVG;
+                const nombreComercio = c.nombre || c.nombre_comercio || 'Comercio';
+                const direccionComercio = c.direccion || c.direccion_escrita || '';
+
+                card.innerHTML = `
+                    <img src="${logo}" alt="${nombreComercio}" style="width:80px; height:80px; object-fit:cover; border-radius:8px;">
+                    <h3>${nombreComercio}</h3>
+                    <p style="color:#7f8c8d; font-size:13px;">${direccionComercio}</p>
+                `;
+                lista.appendChild(card);
+            });
+        } catch (err) {
+            console.error("Error en cargarComerciosCliente:", err);
+        }
+    }
+
+    async function verProductosComercio(comercioObj) {
+        try {
+            if (!comercioSeleccionadoObjeto || comercioSeleccionadoObjeto.id !== comercioObj.id) {
+                carrito = [];
+                if (typeof actualizarBarraCarrito === 'function') actualizarBarraCarrito();
+            }
+            comercioSeleccionadoObjeto = comercioObj;
+
+            ocultarTodasLasPantallas();
+            const pantallaProds = document.getElementById('pantallaClienteProductos');
+            if (pantallaProds) pantallaProds.classList.remove('oculto');
+
+            const titulo = document.getElementById('tituloComercioSeleccionado');
+            if (titulo) titulo.innerText = `Productos de ${comercioObj.nombre || 'Comercio'}`;
+
+            const { data: productos, error } = await supabaseClient
+                .from('productos')
+                .select('*')
+                .eq('comercio_id', comercioObj.id);
+
+            if (error) console.error("Error al obtener productos:", error);
+
+            const lista = document.getElementById('listaProductosCliente');
+            if (!lista) return;
+
+            lista.innerHTML = "";
+
+            if (!productos || productos.length === 0) {
+                lista.innerHTML = "<p>Este comercio no tiene productos disponibles por el momento.</p>";
+                return;
+            }
+
+            productos.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'tarjeta-producto';
+
+                const precioNum = Number(p.precio || p.costo || 0);
+                const imagenProd = p.imagen || p.imagen_url || DEFAULT_PROD_SVG;
+                const nombreProd = p.nombre || 'Producto';
+                const descProd = p.descripcion || '';
+
+                card.innerHTML = `
+                    <img src="${imagenProd}" alt="${nombreProd}" style="width:100%; height:140px; object-fit:cover; border-radius:6px;">
+                    <div class="info-producto" style="padding:8px 0;">
+                        <h4 style="margin:5px 0;">${nombreProd}</h4>
+                        <p style="font-size: 13px; color: #666; margin:4px 0;">${descProd}</p>
+                        <div class="precio" style="font-weight:bold; font-size:16px; color:#2c3e50; margin:6px 0;">$${precioNum.toFixed(2)}</div>
+                        <button class="btn btn-primary" style="width:100%; padding:8px; cursor:pointer;" onclick="agregarAlCarrito('${p.id}', '${nombreProd.replace(/'/g, "\\'")}', ${precioNum})">+ Agregar a Carrito</button>
+                    </div>
+                `;
+                lista.appendChild(card);
+            });
+        } catch (err) {
+            console.error("Error en verProductosComercio:", err);
+        }
+    }
+
+    async function renderizarPedidosCliente() {
         if (!usuarioActual) return;
 
         try {
-            // 1. Crear o preparar el contenedor en el DOM
+            // Consulta de pedidos asociados únicamente al ID del cliente actual
+            let { data: pedidosActivos, error } = await supabaseClient
+                .from('pedidos')
+                .select('*, comercios(nombre)')
+                .eq('cliente_id', usuarioActual.id)
+                .order('created_at', { ascending: false });
+
+            // Fallback por si la relación directa entre tablas no está configurada en la BD
+            if (error) {
+                const resSimple = await supabaseClient
+                    .from('pedidos')
+                    .select('*')
+                    .eq('cliente_id', usuarioActual.id)
+                    .order('created_at', { ascending: false });
+                pedidosActivos = resSimple.data;
+            }
+
             let contenedorPedidos = document.getElementById('seccionMisPedidos');
             if (!contenedorPedidos) {
                 contenedorPedidos = document.createElement('div');
@@ -403,93 +548,56 @@
                 if (pantalla) pantalla.insertBefore(contenedorPedidos, pantalla.firstChild);
             }
 
-            // Identificadores posibles del usuario en Supabase Auth
-            const idUsuario = usuarioActual.id;
-            const correoUsuario = usuarioActual.email;
-            const nombreUsuario = usuarioActual.user_metadata?.full_name || usuarioActual.user_metadata?.name || '';
+            // Filtrar solo pedidos activos (Pendientes, Preparando o En Camino)
+            const pedidosEnCurso = pedidosActivos ? pedidosActivos.filter(p => {
+                const est = (p.estado || '').toLowerCase();
+                return !est.includes('entregado') && !est.includes('cancelado');
+            }) : [];
 
-            // 2. Consulta flexible en 'cliente_nombre' usando filtros OR
-            // Busca si 'cliente_nombre' coincide con el ID, el correo o el nombre del usuario
-            let queryOR = `cliente_nombre.eq.${idUsuario},cliente_nombre.eq.${correoUsuario}`;
-            if (nombreUsuario) {
-                queryOR += `,cliente_nombre.eq.${nombreUsuario}`;
-            }
-
-            let { data: pedidosActivos, error } = await supabaseClient
-                .from('pedidos')
-                .select('*')
-                .or(queryOR)
-                .order('created_at', { ascending: false });
-
-            // Fallback por si la columna se llama 'cliente_id' o 'usuario_id' en otros registros
-            if (error || !pedidosActivos || pedidosActivos.length === 0) {
-                const resAlt = await supabaseClient
-                    .from('pedidos')
-                    .select('*')
-                    .or(`cliente_id.eq.${idUsuario},usuario_id.eq.${idUsuario}`)
-                    .order('created_at', { ascending: false });
+            if (pedidosEnCurso.length > 0) {
+                let htmlPedidos = '<h3 style="margin-bottom:10px;">🛵 Tu Pedido en Curso</h3>';
                 
-                if (resAlt.data && resAlt.data.length > 0) {
-                    pedidosActivos = resAlt.data;
-                }
-            }
+                pedidosEnCurso.forEach(ped => {
+                    let badgeColor = '#f39c12'; // Pendiente
+                    let estadoTexto = ped.estado || 'Pendiente';
+                    const estLower = estadoTexto.toLowerCase();
+                    let esRutaActiva = false;
 
-            // Si no hay pedidos
-            if (!pedidosActivos || pedidosActivos.length === 0) {
-                contenedorPedidos.innerHTML = `
-                    <div style="background:#f8f9fa; padding:12px; border-radius:8px; text-align:center; color:#7f8c8d; border: 1px dashed #ccc;">
-                        <p style="margin:0;">No tienes pedidos realizados como comprador.</p>
-                    </div>`;
-                return;
-            }
+                    if (estLower.includes('despachado') || estLower.includes('preparando')) {
+                        badgeColor = '#3498db'; // Azul
+                    } else if (estLower.includes('camino') || estLower.includes('enviado')) {
+                        badgeColor = '#9b59b6'; // Morado
+                        esRutaActiva = true;
+                    }
 
-            // 3. Renderizar los pedidos encontrados
-            let htmlPedidos = '<h3 style="margin-bottom:12px; color:#2c3e50;">🛍️ Tus Pedidos Realizados</h3>';
-            
-            pedidosActivos.forEach(ped => {
-                let badgeColor = '#f39c12'; // Pendiente (Naranja)
-                let estadoTexto = ped.estado || 'Pendiente';
-                const estLower = estadoTexto.toLowerCase();
-                let esRutaActiva = false;
+                    const nombreComercio = ped.comercios ? ped.comercios.nombre : (ped.comercio_nombre || 'Comercio');
+                    const totalPagar = Number(ped.total || ped.total_pagar || ped.monto_total || 0);
 
-                if (estLower.includes('preparando') || estLower.includes('aceptado')) {
-                    badgeColor = '#3498db'; // Azul
-                } else if (estLower.includes('camino') || estLower.includes('enviado') || estLower.includes('despachado')) {
-                    badgeColor = '#9b59b6'; // Morado
-                    esRutaActiva = true;
-                } else if (estLower.includes('entregado')) {
-                    badgeColor = '#2ecc71'; // Verde
-                } else if (estLower.includes('cancelado')) {
-                    badgeColor = '#e74c3c'; // Rojo
-                }
-
-                const nombreComercio = ped.comercio_nombre || ped.nombre_comercio || 'Comercio';
-                const totalPagar = Number(ped.total || ped.total_pagar || ped.monto_total || 0);
-
-                htmlPedidos += `
-                    <div style="background: #ffffff; border-left: 6px solid ${badgeColor}; padding: 14px; margin-bottom: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <strong style="font-size: 15px; color:#333;">${nombreComercio}</strong>
-                            <span style="background: ${badgeColor}; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">
-                                ${estadoTexto.toUpperCase()}
-                            </span>
-                        </div>
-                        
-                        <p style="margin: 8px 0 0 0; font-size: 13px; color: #555;">
-                            Total: <b>$${totalPagar.toFixed(2)}</b>
-                        </p>
-
-                        ${esRutaActiva ? `
-                            <div style="margin-top: 10px; padding: 8px; background: #f3e5f5; border-radius: 6px; color: #6a1b9a; font-size: 12px; font-weight: bold; display: flex; align-items: center; gap: 6px;">
-                                <span>🚀 ¡Tu repartidor va en camino con el pedido!</span>
+                    htmlPedidos += `
+                        <div style="background: #ffffff; border-left: 6px solid ${badgeColor}; padding: 14px; margin-bottom: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <strong style="font-size: 15px;">${nombreComercio}</strong>
+                                <span style="background: ${badgeColor}; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">
+                                    ${estadoTexto.toUpperCase()}
+                                </span>
                             </div>
-                        ` : ''}
-                    </div>
-                `;
-            });
+                            
+                            <p style="margin: 8px 0 0 0; font-size: 13px; color: #555;">
+                                Total a pagar: <b>$${totalPagar.toFixed(2)}</b>
+                            </p>
 
-            contenedorPedidos.innerHTML = htmlPedidos;
-
+                            ${esRutaActiva ? `
+                                <div style="margin-top: 10px; padding: 8px; background: #f3e5f5; border-radius: 6px; color: #6a1b9a; font-size: 12px; font-weight: bold; display: flex; align-items: center; gap: 6px;">
+                                    <span>🚀 ¡Tu repartidor ya va en camino con el paquete!</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                contenedorPedidos.innerHTML = htmlPedidos;
+            } else if (contenedorPedidos) {
+                contenedorPedidos.innerHTML = '';
+            }
         } catch (err) {
             console.error("Error al renderizar pedidos del cliente:", err);
         }
