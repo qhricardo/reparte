@@ -518,7 +518,7 @@
         }
     }
 
-   async function renderizarPedidosCliente() {
+  async function renderizarPedidosCliente() {
         if (!usuarioActual) return;
 
         try {
@@ -538,7 +538,6 @@
             const nombreUsuario = usuarioActual.user_metadata?.full_name || usuarioActual.user_metadata?.name || '';
 
             // 2. Consulta flexible en 'cliente_nombre' usando filtros OR
-            // Busca si 'cliente_nombre' coincide con el ID, el correo o el nombre del usuario
             let queryOR = `cliente_nombre.eq.${idUsuario},cliente_nombre.eq.${correoUsuario}`;
             if (nombreUsuario) {
                 queryOR += `,cliente_nombre.eq.${nombreUsuario}`;
@@ -550,7 +549,7 @@
                 .or(queryOR)
                 .order('created_at', { ascending: false });
 
-            // Fallback por si la columna se llama 'cliente_id' o 'usuario_id' en otros registros
+            // Fallback por si la columna se llama 'cliente_id' o 'usuario_id'
             if (error || !pedidosActivos || pedidosActivos.length === 0) {
                 const resAlt = await supabaseClient
                     .from('pedidos')
@@ -592,8 +591,10 @@
                     badgeColor = '#e74c3c'; // Rojo
                 }
 
+                // Obtener datos con las columnas actualizadas
                 const nombreComercio = ped.comercio_nombre || ped.nombre_comercio || 'Comercio';
-                const totalPagar = Number(ped.total || ped.total_pagar || ped.monto_total || 0);
+                const nombreProducto = ped.producto_nombre || ped.producto || 'Producto';
+                const precioPagar = Number(ped.precio || ped.total || ped.total_pagar || ped.monto_total || 0);
 
                 htmlPedidos += `
                     <div style="background: #ffffff; border-left: 6px solid ${badgeColor}; padding: 14px; margin-bottom: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
@@ -603,9 +604,13 @@
                                 ${estadoTexto.toUpperCase()}
                             </span>
                         </div>
+
+                        <div style="margin-top: 8px; font-size: 14px; color: #2c3e50;">
+                            <b>Producto:</b> ${nombreProducto}
+                        </div>
                         
-                        <p style="margin: 8px 0 0 0; font-size: 13px; color: #555;">
-                            Total: <b>$${totalPagar.toFixed(2)}</b>
+                        <p style="margin: 6px 0 0 0; font-size: 13px; color: #555;">
+                            Precio: <b>$${precioPagar.toFixed(2)}</b>
                         </p>
 
                         ${esRutaActiva ? `
