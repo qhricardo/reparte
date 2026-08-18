@@ -518,27 +518,11 @@
         }
     }
 
-    async function renderizarPedidosCliente() {
+   async function renderizarPedidosCliente() {
         if (!usuarioActual) return;
 
         try {
-            // Consulta de pedidos asociados únicamente al ID del cliente actual
-            let { data: pedidosActivos, error } = await supabaseClient
-                .from('pedidos')
-                .select('*, comercios(nombre)')
-                .eq('cliente_id', usuarioActual.id)
-                .order('created_at', { ascending: false });
-
-            // Fallback por si la relación directa entre tablas no está configurada en la BD
-            if (error) {
-                const resSimple = await supabaseClient
-                    .from('pedidos')
-                    .select('*')
-                    .eq('cliente_id', usuarioActual.id)
-                    .order('created_at', { ascending: false });
-                pedidosActivos = resSimple.data;
-            }
-
+            // 1. Crear o preparar el contenedor en el DOM
             let contenedorPedidos = document.getElementById('seccionMisPedidos');
             if (!contenedorPedidos) {
                 contenedorPedidos = document.createElement('div');
@@ -548,56 +532,93 @@
                 if (pantalla) pantalla.insertBefore(contenedorPedidos, pantalla.firstChild);
             }
 
-            // Filtrar solo pedidos activos (Pendientes, Preparando o En Camino)
-            const pedidosEnCurso = pedidosActivos ? pedidosActivos.filter(p => {
-                const est = (p.estado || '').toLowerCase();
-                return !est.includes('entregado') && !est.includes('cancelado');
-            }) : [];
+            // Identificadores posibles del usuario en Supabase Auth
+            const idUsuario = usuarioActual.id;
+            const correoUsuario = usuarioActual.email;
+            const nombreUsuario = usuarioActual.user_metadata?.full_name || usuarioActual.user_metadata?.name || '';
 
-            if (pedidosEnCurso.length > 0) {
-                let htmlPedidos = '<h3 style="margin-bottom:10px;">🛵 Tu Pedido en Curso</h3>';
-                
-                pedidosEnCurso.forEach(ped => {
-                    let badgeColor = '#f39c12'; // Pendiente
-                    let estadoTexto = ped.estado || 'Pendiente';
-                    const estLower = estadoTexto.toLowerCase();
-                    let esRutaActiva = false;
-
-                    if (estLower.includes('despachado') || estLower.includes('preparando')) {
-                        badgeColor = '#3498db'; // Azul
-                    } else if (estLower.includes('camino') || estLower.includes('enviado')) {
-                        badgeColor = '#9b59b6'; // Morado
-                        esRutaActiva = true;
-                    }
-
-                    const nombreComercio = ped.comercios ? ped.comercios.nombre : (ped.comercio_nombre || 'Comercio');
-                    const totalPagar = Number(ped.total || ped.total_pagar || ped.monto_total || 0);
-
-                    htmlPedidos += `
-                        <div style="background: #ffffff; border-left: 6px solid ${badgeColor}; padding: 14px; margin-bottom: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <strong style="font-size: 15px;">${nombreComercio}</strong>
-                                <span style="background: ${badgeColor}; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">
-                                    ${estadoTexto.toUpperCase()}
-                                </span>
-                            </div>
-                            
-                            <p style="margin: 8px 0 0 0; font-size: 13px; color: #555;">
-                                Total a pagar: <b>$${totalPagar.toFixed(2)}</b>
-                            </p>
-
-                            ${esRutaActiva ? `
-                                <div style="margin-top: 10px; padding: 8px; background: #f3e5f5; border-radius: 6px; color: #6a1b9a; font-size: 12px; font-weight: bold; display: flex; align-items: center; gap: 6px;">
-                                    <span>🚀 ¡Tu repartidor ya va en camino con el paquete!</span>
-                                </div>
-                            ` : ''}
-                        </div>
-                    `;
-                });
-                contenedorPedidos.innerHTML = htmlPedidos;
-            } else if (contenedorPedidos) {
-                contenedorPedidos.innerHTML = '';
+            // 2. Consulta flexible en 'cliente_nombre' usando filtros OR
+            // Busca si 'cliente_nombre' coincide con el ID, el correo o el nombre del usuario
+            let queryOR = `cliente_nombre.eq.${idUsuario},cliente_nombre.eq.${correoUsuario}`;
+            if (nombreUsuario) {
+                queryOR += `,cliente_nombre.eq.${nombreUsuario}`;
             }
+
+            let { data: pedidosActivos, error } = await supabaseClient
+                .from('pedidos')
+                .select('*')
+                .or(queryOR)
+                .order('created_at', { ascending: false });
+
+            // Fallback por si la columna se llama 'cliente_id' o 'usuario_id' en otros registros
+            if (error || !pedidosActivos || pedidosActivos.length === 0) {
+                const resAlt = await supabaseClient
+                    .from('pedidos')
+                    .select('*')
+                    .or(`cliente_id.eq.${idUsuario},usuario_id.eq.${idUsuario}`)
+                    .order('created_at', { ascending: false });
+                
+                if (resAlt.data && resAlt.data.length > 0) {
+                    pedidosActivos = resAlt.data;
+                }
+            }
+
+            // Si no hay pedidos
+            if (!pedidosActivos || pedidosActivos.length === 0) {
+                contenedorPedidos.innerHTML = `
+                    <div style="background:#f8f9fa; padding:12px; border-radius:8px; text-align:center; color:#7f8c8d; border: 1px dashed #ccc;">
+                        <p style="margin:0;">No tienes pedidos realizados como comprador.</p>
+                    </div>`;
+                return;
+            }
+
+            // 3. Renderizar los pedidos encontrados
+            let htmlPedidos = '<h3 style="margin-bottom:12px; color:#2c3e50;">🛍️ Tus Pedidos Realizados</h3>';
+            
+            pedidosActivos.forEach(ped => {
+                let badgeColor = '#f39c12'; // Pendiente (Naranja)
+                let estadoTexto = ped.estado || 'Pendiente';
+                const estLower = estadoTexto.toLowerCase();
+                let esRutaActiva = false;
+
+                if (estLower.includes('preparando') || estLower.includes('aceptado')) {
+                    badgeColor = '#3498db'; // Azul
+                } else if (estLower.includes('camino') || estLower.includes('enviado') || estLower.includes('despachado')) {
+                    badgeColor = '#9b59b6'; // Morado
+                    esRutaActiva = true;
+                } else if (estLower.includes('entregado')) {
+                    badgeColor = '#2ecc71'; // Verde
+                } else if (estLower.includes('cancelado')) {
+                    badgeColor = '#e74c3c'; // Rojo
+                }
+
+                const nombreComercio = ped.comercio_nombre || ped.nombre_comercio || 'Comercio';
+                const totalPagar = Number(ped.total || ped.total_pagar || ped.monto_total || 0);
+
+                htmlPedidos += `
+                    <div style="background: #ffffff; border-left: 6px solid ${badgeColor}; padding: 14px; margin-bottom: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong style="font-size: 15px; color:#333;">${nombreComercio}</strong>
+                            <span style="background: ${badgeColor}; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">
+                                ${estadoTexto.toUpperCase()}
+                            </span>
+                        </div>
+                        
+                        <p style="margin: 8px 0 0 0; font-size: 13px; color: #555;">
+                            Total: <b>$${totalPagar.toFixed(2)}</b>
+                        </p>
+
+                        ${esRutaActiva ? `
+                            <div style="margin-top: 10px; padding: 8px; background: #f3e5f5; border-radius: 6px; color: #6a1b9a; font-size: 12px; font-weight: bold; display: flex; align-items: center; gap: 6px;">
+                                <span>🚀 ¡Tu repartidor va en camino con el pedido!</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+
+            contenedorPedidos.innerHTML = htmlPedidos;
+
         } catch (err) {
             console.error("Error al renderizar pedidos del cliente:", err);
         }
