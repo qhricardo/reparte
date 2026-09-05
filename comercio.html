@@ -10,13 +10,13 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <style>
+  <style>
     :root {
         /* Paleta de colores Ixtlahuaca & Gastronomía */
         --color-principal: #8B261D;    /* Terracota Cantera Parroquia San Francisco */
         --color-secundario: #1B5E20;   /* Verde Municipio / Frescura agrícola */
         --color-acento: #E65100;       /* Naranja maíz / apetito */
-        --color-fondo: #F8F5F2;        /* Beige cálido artesanal */
+        --color-fondo: #FFF3E0;        /* Naranja claro suave y gastronómico */
         --color-tarjeta: #FFFFFF;
         --color-texto: #2C2C2C;
         --color-texto-suave: #666666;
@@ -57,7 +57,7 @@
         border-radius: var(--radio-borde); 
         box-shadow: var(--sombra-suave); 
         margin-bottom: 20px;
-        border: 1px solid rgba(0,0,0,0.03);
+        border: 1px solid rgba(230, 81, 0, 0.08);
     }
 
     /* Botones */
@@ -118,9 +118,9 @@
         width: 100%; 
         padding: 14px; 
         margin: 6px 0 14px 0; 
-        border: 1.5px solid #E0E0E0; 
+        border: 1.5px solid #FFE0B2; 
         border-radius: 10px; 
-        background: #FAFAFA;
+        background: #FFFFFF;
         font-size: 15px;
         transition: border-color 0.2s ease;
     }
@@ -146,7 +146,7 @@
         box-shadow: var(--sombra-suave); 
         cursor: pointer; 
         text-align: center; 
-        border: 1px solid rgba(0,0,0,0.04);
+        border: 1px solid rgba(230, 81, 0, 0.08);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
@@ -180,7 +180,7 @@
         display: flex; 
         flex-direction: column; 
         justify-content: space-between; 
-        border: 1px solid rgba(0,0,0,0.04);
+        border: 1px solid rgba(230, 81, 0, 0.08);
         transition: transform 0.2s ease;
     }
 
@@ -324,7 +324,7 @@
         font-weight: 700; 
         text-transform: uppercase; 
     }
-    .estado-pendiente { background: #FFF3E0; color: #E65100; }
+    .estado-pendiente { background: #FFE0B2; color: #E65100; }
     .estado-asignado { background: #E1F5FE; color: #0288D1; }
     .estado-en_camino { background: #EDE7F6; color: #5E35B1; }
     .estado-entregado { background: #E8F5E9; color: #2E7D32; }
