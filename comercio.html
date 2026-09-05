@@ -342,6 +342,101 @@
             to { transform: translateY(0); opacity: 1; } 
         }
     }
+
+      /* Estructura fija para Modal Checkout */
+.modal-checkout-flex {
+    display: flex;
+    flex-direction: column;
+    max-height: 85dvh; /* Alto óptimo para móviles */
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+.modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #FFE0B2;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #FFFFFF;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--color-principal);
+}
+
+.modal-body {
+    padding: 16px 20px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex: 1; /* Absorbe el espacio disponible manteniendo los botones visibles */
+}
+
+.modal-footer {
+    padding: 14px 20px;
+    background: #FFFFFF;
+    border-top: 1px solid #FFE0B2;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    box-shadow: 0 -4px 10px rgba(0,0,0,0.05);
+}
+
+.modal-footer .btn {
+    flex: 1;
+    margin: 0;
+}
+
+/* Clases de apoyo limpias */
+#resumenItemsCarrito {
+    max-height: 100px;
+    overflow-y: auto;
+    border-bottom: 1px solid #FFE0B2;
+    margin-bottom: 12px;
+}
+
+.input-grupo-buscar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.input-grupo-buscar input {
+    margin: 0;
+}
+
+.mapa-leyenda {
+    color: #666;
+    display: block;
+    margin-bottom: 12px;
+    font-size: 11px;
+}
+
+.desglose-resumen {
+    background: #FFF8E1;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #FFE0B2;
+}
+
+.desglose-resumen p {
+    margin: 4px 0;
+    font-size: 13px;
+}
+
+.desglose-resumen hr {
+    border: none;
+    border-top: 1px solid #FFE0B2;
+    margin: 8px 0;
+}
+
+.total-texto {
+    margin: 0;
+    color: var(--color-secundario);
+    font-size: 1.1rem;
+}
 </style>
 </head>
 <body>
@@ -472,37 +567,47 @@
 </div>
 
 <!-- MODAL CHECKOUT -->
+<!-- MODAL CHECKOUT RESTRUCTURADO -->
 <div id="modalCheckout" class="modal oculto">
-    <div class="modal-contenido">
-        <h2>🛍️ Confirmar Pedido</h2>
-        <div id="resumenItemsCarrito" style="max-height: 120px; overflow-y: auto; border-bottom: 1px solid #ddd; margin-bottom: 10px;"></div>
+    <div class="modal-contenido modal-checkout-flex">
         
-        <label><b>Escribe tu dirección de entrega o búscala en el mapa:</b></label>
-        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-            <input type="text" id="direccionEscrita" style="margin:0;" required placeholder="Ej. Av. Insurgentes Sur 123, CDMX">
-            <button type="button" class="btn btn-modo" style="margin:0; white-space:nowrap;" onclick="buscarDireccionEnMapa()">🔍 Buscar</button>
+        <!-- CABECERA FIJA -->
+        <div class="modal-header">
+            <h2>🛍️ Confirmar Pedido</h2>
+            <span class="cerrar-modal" onclick="cerrarModalCheckout()">&times;</span>
         </div>
 
-        <label><b>📱 Tu número de teléfono (para el repartidor):</b></label>
-        <div style="margin-bottom: 10px;">
-            <input type="tel" id="telefonoCliente" required placeholder="Ej. 55 1234 5678" style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px;">
+        <!-- CUERPO CON SCROLL -->
+        <div class="modal-body">
+            <div id="resumenItemsCarrito"></div>
+            
+            <label><b>Escribe tu dirección de entrega o búscala en el mapa:</b></label>
+            <div class="input-grupo-buscar">
+                <input type="text" id="direccionEscrita" required placeholder="Ej. Av. Insurgentes Sur 123, CDMX">
+                <button type="button" class="btn btn-modo" onclick="buscarDireccionEnMapa()">🔍 Buscar</button>
+            </div>
+
+            <label><b>📱 Tu número de teléfono (para el repartidor):</b></label>
+            <input type="tel" id="telefonoCliente" required placeholder="Ej. 55 1234 5678">
+
+            <div id="mapaEntrega"></div>
+            <small class="mapa-leyenda">🔵 Marcador Azul = Comercio | 🔴 Marcador Rojo = Tu Entrega</small>
+
+            <div class="desglose-resumen">
+                <p>Distancia Comercio → Cliente: <b><span id="txtDistancia">0.0</span> km</b></p>
+                <p>Subtotal Productos: <b>$<span id="txtSubtotal">0.00</span></b></p>
+                <p>Costo de Envío: <b>$<span id="txtCostoEnvio">25.00</span></b></p>
+                <hr>
+                <h3 class="total-texto">Total a Pagar: $<span id="txtTotalPagar">0.00</span></h3>
+            </div>
         </div>
 
-        <div id="mapaEntrega"></div>
-        <small style="color: #666;">🔵 Marcador Azul = Ubicación del Comercio | 🔴 Marcador Rojo = Tu Ubicación de Entrega</small>
-
-        <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin: 10px 0;">
-            <p style="margin: 4px 0;">Distancia Comercio → Cliente: <b><span id="txtDistancia">0.0</span> km</b></p>
-            <p style="margin: 4px 0;">Subtotal Productos: <b>$<span id="txtSubtotal">0.00</span></b></p>
-            <p style="margin: 4px 0;">Costo de Envío: <b>$<span id="txtCostoEnvio">25.00</span></b></p>
-            <hr>
-            <h3 style="margin: 5px 0; color: #27ae60;">Total a Pagar: $<span id="txtTotalPagar">0.00</span></h3>
+        <!-- PIE FIJO CON BOTONES SIEMPRE VISIBLES -->
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secundario" onclick="cerrarModalCheckout()">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="btnEnviarPedidoFinal" onclick="procesarPedidoFinal()">Hacer Pedido</button>
         </div>
 
-        <div style="display: flex; justify-content: space-between; margin-top: 15px;">
-            <button class="btn btn-secundario" onclick="cerrarModalCheckout()">Cancelar</button>
-            <button class="btn btn-primary" id="btnEnviarPedidoFinal" onclick="procesarPedidoFinal()">Hacer Pedido</button>
-        </div>
     </div>
 </div>
 
