@@ -1344,46 +1344,68 @@ async function recalcularTotales() {
     }
 }
 
-// FUNCIÓN DE ENVÍO CON VALIDACIÓN DE SEGURIDAD
+// FUNCIÓN DE ENVÍO CON VALIDACIÓN DE SEGURIDAD Y LÍMITE DE 7 KM
 async function enviarPedidoWhatsApp() {
-    const distanciaKm = parseFloat(document.getElementById('txtDistancia').innerText) || 0;
-    const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
-    const costoEnvio = parseFloat(document.getElementById('txtCostoEnvio').innerText) || 0;
-    const totalPagar = parseFloat(document.getElementById('txtTotalPagar').innerText) || 0;
+    // 1. Obtener distancia soportando diferentes IDs de HTML
+    const elemDist = document.getElementById('txtDistancia') || document.getElementById('txtDist');
+    const distanciaKm = elemDist ? parseFloat(elemDist.innerText) || 0 : 0;
 
-    // Validación 1: Bloqueo estricto > 10km
-    if (distanciaKm > 10) {
-        alert(`ERROR: No se puede enviar. La distancia actual es de ${distanciaKm.toFixed(2)} km (Límite: 10 km).`);
+    // Validación de Cobertura: Bloqueo estricto a los 7 km
+    if (distanciaKm > 7) {
+        alert(`ERROR: No se puede enviar. La distancia actual es de ${distanciaKm.toFixed(2)} km (Límite máximo: 7 km).`);
         return;
     }
 
-    const direccion = document.getElementById('direccionEscrita').value;
-    const telefonoCliente = document.getElementById('telefonoCliente') ? document.getElementById('telefonoCliente').value : "";
+    // 2. Cálculo de Subtotal e Importes (Soporta 'cantidad' o 'cant')
+    const subtotal = carrito.reduce((acc, item) => acc + (item.precio * (item.cantidad || item.cant || 1)), 0);
+    
+    const elemEnv = document.getElementById('txtCostoEnvio') || document.getElementById('txtEnv');
+    const costoEnvio = elemEnv ? parseFloat(elemEnv.innerText) || 0 : 0;
+
+    const elemTot = document.getElementById('txtTotalPagar') || document.getElementById('txtTot');
+    const totalPagar = elemTot ? parseFloat(elemTot.innerText) || (subtotal + costoEnvio) : (subtotal + costoEnvio);
+
+    // 3. Obtener Dirección y Teléfono
+    const inputDir = document.getElementById('direccionEscrita') || document.getElementById('chkDir');
+    const inputTel = document.getElementById('telefonoCliente') || document.getElementById('chkTel');
+
+    const direccion = inputDir ? inputDir.value : "";
+    const telefonoCliente = inputTel ? inputTel.value : "";
 
     if (!direccion.trim()) {
         alert("Por favor ingresa la dirección de entrega.");
         return;
     }
 
-    // Deshabilitar botón durante el envío
-    const btnSubmit = document.querySelector('#modalCheckout button[onclick*="enviar"], #modalCheckout button[type="submit"], #btnConfirmarPedido');
+    // Deshabilitar el botón de envío durante el proceso
+    const btnSubmit = document.querySelector('#modalCheckout button[onclick*="enviar"], #modalCheckout button[type="submit"], #btnConfirmarPedido, #btnConfirmar');
     if (btnSubmit) btnSubmit.disabled = true;
 
-    // REGLA > $500: Si supera los 500 entra como 'revision_admin', si no 'pendiente'
+    // --- REGLA DE NOTIFICACIÓN ADMIN (> $500) ---
+    // Si sobrepasa $500 va a 'revision_admin', activando la vista en el panel del administrador
     const estadoInicial = totalPagar > 500 ? 'revision_admin' : 'pendiente';
-    const coordsComercio = obtenerCoordsComercioActivo();
+
+    // Obtener coordenadas de origen (Comercio)
+    const coordsComercio = (typeof obtenerCoordsComercioActivo === 'function') 
+        ? obtenerCoordsComercioActivo() 
+        : (typeof getCoordsCom === 'function' ? getCoordsCom() : { lat: 19.5694, lng: -99.7669 });
+
+    // Preparar el nombre del comercio activo
+    const objComercio = (typeof comercioSeleccionadoObjeto !== 'undefined' && comercioSeleccionadoObjeto) 
+        ? comercioSeleccionadoObjeto 
+        : ((typeof comercioSel !== 'undefined' && comercioSel) ? comercioSel : null);
 
     const payloadPedido = {
         cliente_nombre: user ? user.email.split('@')[0] : 'Cliente',
         cliente_email: user ? user.email : 'anonimo@correo.com',
         telefono_cliente: telefonoCliente,
         direccion_entrega: `${direccion} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
-        producto_nombre: carrito.map(i => `${i.cantidad}x ${i.nombre}`).join(', '),
+        producto_nombre: carrito.map(i => `${i.cantidad || i.cant || 1}x ${i.nombre}`).join(', '),
         subtotal: subtotal,
         costo_envio: costoEnvio,
         precio: totalPagar,
-        comercio_id: comercioSeleccionadoObjeto ? comercioSeleccionadoObjeto.id : null,
-        comercio_nombre: comercioSeleccionadoObjeto ? comercioSeleccionadoObjeto.nombre : 'Comercio',
+        comercio_id: objComercio ? objComercio.id : null,
+        comercio_nombre: objComercio ? objComercio.nombre : 'Comercio',
         lat_origen: coordsComercio.lat,
         lng_origen: coordsComercio.lng,
         lat_destino: coordsEntrega.lat,
@@ -1391,7 +1413,7 @@ async function enviarPedidoWhatsApp() {
         estado: estadoInicial
     };
 
-    // Registrar en la base de datos de Supabase
+    // Registrar en Supabase
     const { data, error } = await supabaseClient.from('pedidos').insert([payloadPedido]);
 
     if (btnSubmit) btnSubmit.disabled = false;
@@ -1400,15 +1422,17 @@ async function enviarPedidoWhatsApp() {
         alert("Error al registrar el pedido: " + error.message);
     } else {
         if (totalPagar > 500) {
-            alert("⚠️ Su pedido supera los $500 y ha sido enviado al Administrador para su aprobación. Podrá ver el avance cuando sea liberado.");
+            alert("⚠️ Su pedido supera los $500 pesos y fue enviado a la pantalla del Administrador para su aprobación.");
         } else {
             alert("¡Pedido registrado exitosamente!");
         }
 
         // Limpiar carrito y cerrar modal
         carrito = [];
-        actualizarBarraCarrito();
-        cerrarModalCheckout();
+        if (typeof actualizarBarraCarrito === 'function') actualizarBarraCarrito();
+        if (typeof actCar === 'function') actCar();
+        if (typeof cerrarModalCheckout === 'function') cerrarModalCheckout();
+        if (typeof cerrarCheckout === 'function') cerrarCheckout();
     }
 }
     
