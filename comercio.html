@@ -1145,7 +1145,7 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
     }
 });
 
-  // CARRITO Y CHECKOUT
+ // CARRITO Y CHECKOUT
 function agregarAlCarrito(id, nombre, precio) {
     const existente = carrito.find(item => item.id === id);
     if (existente) existente.cantidad++;
@@ -1280,8 +1280,6 @@ async function recalcularTotales() {
 
             if (mapaEntrega) {
                 if (lineaRuta) mapaEntrega.removeLayer(lineaRuta);
-                
-                // CAMBIO: Cambiar color de línea si excede los 10km
                 const colorLinea = distanciaKm > 10 ? '#e74c3c' : '#27ae60';
                 lineaRuta = L.polyline(coordenadasPolyline, { color: colorLinea, weight: 5, opacity: 0.8 }).addTo(mapaEntrega);
 
@@ -1327,23 +1325,37 @@ async function recalcularTotales() {
     document.getElementById('txtSubtotal').innerText = subtotal.toFixed(2);
     document.getElementById('txtCostoEnvio').innerText = costoEnvio.toFixed(2);
     document.getElementById('txtTotalPagar').innerText = total.toFixed(2);
+
+    // --- BLOQUEO AUTOMÁTICO EN TIEMPO REAL SI PASA DE 10 KM ---
+    const btnSubmit = document.querySelector('#modalCheckout button[onclick*="enviar"], #modalCheckout button[type="submit"], #btnConfirmarPedido');
+    
+    if (distanciaKm > 10) {
+        if (btnSubmit) {
+            btnSubmit.disabled = true;
+            btnSubmit.innerText = "Fuera de Cobertura (>10km)";
+            btnSubmit.style.backgroundColor = "#95a5a6";
+        }
+    } else {
+        if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.innerText = "Confirmar Pedido";
+            btnSubmit.style.backgroundColor = "";
+        }
+    }
 }
 
-// NUEVA FUNCIÓN: Llama a esta función desde el botón de "Confirmar / Enviar Pedido"
+// FUNCIÓN DE ENVÍO CON VALIDACIÓN DE SEGURIDAD
 function enviarPedidoWhatsApp() {
     const distanciaKm = parseFloat(document.getElementById('txtDistancia').innerText) || 0;
     const totalPagar = parseFloat(document.getElementById('txtTotalPagar').innerText) || 0;
 
-    // 1. Bloqueo si sobrepasa los 10 km
+    // Validación 1: Bloqueo estricto > 10km
     if (distanciaKm > 10) {
-        alert(`No se puede realizar el pedido. La distancia es de ${distanciaKm.toFixed(2)} km y el límite máximo de entrega es 10 km.`);
+        alert(`ERROR: No se puede enviar. La distancia actual es de ${distanciaKm.toFixed(2)} km (Límite: 10 km).`);
         return;
     }
 
-    // Configura aquí el número del administrador
-    const TEL_ADMINISTRADOR = "5210000000000"; 
-    
-    // Obtener número del comercio activo o usar admin por defecto
+    const TEL_ADMINISTRADOR = "5210000000000"; // Cambiar por tu número real
     const TEL_COMERCIO = (comercioSeleccionadoObjeto && comercioSeleccionadoObjeto.telefono) 
                          ? comercioSeleccionadoObjeto.telefono 
                          : TEL_ADMINISTRADOR;
@@ -1358,12 +1370,12 @@ function enviarPedidoWhatsApp() {
                   `*Total:* $${totalPagar.toFixed(2)}\n` +
                   `*Dirección:* ${direccion}`;
 
-    // 2. Si el total supera los $500, se manda primero al Administrador
+    // Validación 2: Ruteo al Admin si sobrepasa $500
     let telefonoDestino = TEL_COMERCIO;
     if (totalPagar > 500) {
         telefonoDestino = TEL_ADMINISTRADOR;
-        mensaje = `⚠️ *[VERIFICACIÓN POR MONTO MAYOR A $500]*\n\n` + mensaje;
-        alert("El pedido supera los $500 pesos. Se enviará a revisión previa con el Administrador.");
+        mensaje = `⚠️ *[REVISIÓN SEGURIDAD - PEDIDO MAYOR A $500]*\n\n` + mensaje;
+        alert("El monto supera los $500 pesos. Su pedido se enviará al Administrador para validación.");
     }
 
     window.open(`https://wa.me/${telefonoDestino}?text=${encodeURIComponent(mensaje)}`, '_blank');
