@@ -129,7 +129,7 @@
         </div>
     </div>
 
-  <script>
+ <script>
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
     const EMAIL_ADMIN = "q.h.ricardoarturo@gmail.com";
@@ -330,7 +330,7 @@
                 dist = d.routes[0].distance / 1000;
                 const pts = d.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
                 if (rutaLine) mapaE.removeLayer(rutaLine);
-                const colorRuta = dist > 10 ? '#e74c3c' : '#27ae60';
+                const colorRuta = dist > 7 ? '#e74c3c' : '#27ae60';
                 rutaLine = L.polyline(pts, { color: colorRuta, weight: 4 }).addTo(mapaE);
                 mapaE.fitBounds(rutaLine.getBounds());
             }
@@ -343,12 +343,12 @@
         document.getElementById('txtEnv').innerText = env.toFixed(2);
         document.getElementById('txtTot').innerText = tot.toFixed(2);
 
-        // Bloqueo visual por distancia > 10km
+        // Bloqueo visual por distancia > 7km
         const btnConfirmar = document.getElementById('btnConfirmar');
         if (btnConfirmar) {
-            if (dist > 10) {
+            if (dist > 7) {
                 btnConfirmar.disabled = true;
-                btnConfirmar.innerText = "Fuera de Cobertura (>10km)";
+                btnConfirmar.innerText = "Fuera de Cobertura (>7km)";
                 btnConfirmar.style.backgroundColor = "#95a5a6";
             } else {
                 btnConfirmar.disabled = false;
@@ -359,59 +359,70 @@
     }
 
     async function procesarPedido() {
-        const dist = parseFloat(document.getElementById('txtDist').innerText) || 0;
-        if (dist > 10) {
-            alert(`ERROR: La distancia de entrega (${dist.toFixed(2)} km) excede el límite de 10 km.`);
-            return;
-        }
-
-        const dir = document.getElementById('chkDir').value;
-        const tel = document.getElementById('chkTel').value;
-        if (!dir.trim() || !tel.trim()) return alert("Por favor ingresa la dirección y teléfono de contacto.");
-
-        const btn = document.getElementById('btnConfirmar');
-        if (btn) btn.disabled = true;
-
-        const sub = carrito.reduce((a, i) => a + (i.precio * i.cant), 0);
-        const env = parseFloat(document.getElementById('txtEnv').innerText) || 0;
-        const tot = sub + env;
-        const cCom = getCoordsCom();
-
-        // Si el total supera 500 entra como 'revision_admin', de lo contrario 'pendiente'
-        const est = tot > 500 ? 'revision_admin' : 'pendiente';
-
-        const payload = {
-            cliente_nombre: user ? user.email.split('@')[0] : 'Cliente',
-            cliente_email: user ? user.email : '',
-            telefono_cliente: tel,
-            direccion_entrega: `${dir} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
-            producto_nombre: carrito.map(i => `${i.cant}x ${i.nombre}`).join(', '),
-            subtotal: sub,
-            costo_envio: env,
-            precio: tot,
-            comercio_id: comercioSel ? comercioSel.id : null,
-            comercio_nombre: comercioSel ? comercioSel.nombre : 'Comercio',
-            lat_origen: cCom.lat,
-            lng_origen: cCom.lng,
-            lat_destino: coordsEntrega.lat,
-            lng_destino: coordsEntrega.lng,
-            estado: est
-        };
-
-        const { error } = await supabaseClient.from('pedidos').insert([payload]);
-        if (btn) btn.disabled = false;
-
-        if (error) {
-            alert("Error al procesar pedido: " + error.message);
-        } else {
-            if (tot > 500) {
-                alert("⚠️ Su pedido supera los $500 y ha sido enviado al Administrador para su aprobación.");
-            } else {
-                alert("¡Pedido registrado exitosamente!");
+        try {
+            const dist = parseFloat(document.getElementById('txtDist').innerText) || 0;
+            if (dist > 7) {
+                alert(`ERROR: La distancia de entrega (${dist.toFixed(2)} km) excede el límite de 7 km.`);
+                return;
             }
-            carrito = [];
-            actCar();
-            cerrarCheckout();
+
+            const dirInput = document.getElementById('chkDir') || document.getElementById('direccionEscrita');
+            const telInput = document.getElementById('chkTel') || document.getElementById('telefonoCliente');
+
+            const dir = dirInput ? dirInput.value : '';
+            const tel = telInput ? telInput.value : '';
+
+            if (!dir.trim() || !tel.trim()) return alert("Por favor ingresa la dirección y teléfono de contacto.");
+
+            const btn = document.getElementById('btnConfirmar');
+            if (btn) btn.disabled = true;
+
+            const sub = carrito.reduce((a, i) => a + (i.precio * (i.cant || i.cantidad || 1)), 0);
+            const env = parseFloat(document.getElementById('txtEnv').innerText) || 0;
+            const tot = sub + env;
+            const cCom = getCoordsCom();
+
+            // Si el total supera 500 entra como 'revision_admin', de lo contrario 'pendiente'
+            const est = tot > 500 ? 'revision_admin' : 'pendiente';
+
+            const payload = {
+                cliente_nombre: user ? user.email.split('@')[0] : 'Cliente',
+                cliente_email: user ? user.email : '',
+                telefono_cliente: tel,
+                direccion_entrega: `${dir} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
+                producto_nombre: carrito.map(i => `${i.cant || i.cantidad || 1}x ${i.nombre}`).join(', '),
+                subtotal: sub,
+                costo_envio: env,
+                precio: tot,
+                comercio_id: comercioSel ? comercioSel.id : null,
+                comercio_nombre: comercioSel ? comercioSel.nombre : 'Comercio',
+                lat_origen: cCom.lat,
+                lng_origen: cCom.lng,
+                lat_destino: coordsEntrega.lat,
+                lng_destino: coordsEntrega.lng,
+                estado: est
+            };
+
+            const { error } = await supabaseClient.from('pedidos').insert([payload]);
+            if (btn) btn.disabled = false;
+
+            if (error) {
+                alert("Error al procesar pedido: " + error.message);
+            } else {
+                if (tot > 500) {
+                    alert("⚠️ Su pedido supera los $500 y ha sido enviado al Administrador para su aprobación.");
+                } else {
+                    alert("¡Pedido registrado exitosamente!");
+                }
+                carrito = [];
+                actCar();
+                cerrarCheckout();
+            }
+        } catch (err) {
+            console.error("Error inesperado al enviar el pedido:", err);
+            alert("Ocurrió un error inesperado al procesar el pedido.");
+            const btn = document.getElementById('btnConfirmar');
+            if (btn) btn.disabled = false;
         }
     }
 
@@ -443,11 +454,23 @@
         cargarRevAdmin();
         cargarTablaAdmin();
         cargarMetricasAdmin();
-        supabaseClient.channel('live_admin').on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
-            cargarRevAdmin(); 
-            cargarTablaAdmin(); 
-            cargarMetricasAdmin();
-        }).subscribe();
+        
+        // Escucha Realtime mejorada para notificaciones en tiempo real al administrador
+        supabaseClient.channel('live_admin')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
+                if (payload.new && payload.new.estado === 'revision_admin') {
+                    alert(`🚨 ¡NUEVA ALERTA! Se ha recibido un pedido de $${Number(payload.new.precio).toFixed(2)} pesos que requiere tu aprobación.`);
+                }
+                cargarRevAdmin(); 
+                cargarTablaAdmin(); 
+                cargarMetricasAdmin();
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedidos' }, () => {
+                cargarRevAdmin(); 
+                cargarTablaAdmin(); 
+                cargarMetricasAdmin();
+            })
+            .subscribe();
     }
 
     async function cargarRevAdmin() {
