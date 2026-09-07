@@ -129,364 +129,378 @@
         </div>
     </div>
 
-    <script>
-        const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
-        const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
-        const EMAIL_ADMIN = "q.h.ricardoarturo@gmail.com"; // Tu correo para acceso de Administrador
+   <script>
+    const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
+    const EMAIL_ADMIN = "q.h.ricardoarturo@gmail.com";
 
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // Corrección aquí: usar SUPABASE_ANON_KEY
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        let user = null, miComercio = null, comercioSel = null, carrito = [];
-        let coordsEntrega = { lat: 19.5694, lng: -99.7669 };
-        let mapaC = null, marcC = null, mapaE = null, marcCom = null, marcCli = null, rutaLine = null;
+    let user = null, miComercio = null, comercioSel = null, carrito = [];
+    let coordsEntrega = { lat: 19.5694, lng: -99.7669 };
+    let mapaC = null, marcC = null, mapaE = null, marcCom = null, marcCli = null, rutaLine = null;
 
-     // --- AUTENTICACIÓN EMAIL / CONTRASEÑA ---
-async function loginEmail(e) {
-    e.preventDefault();
-    const email = document.getElementById('txtEmail').value;
-    const password = document.getElementById('txtPassword').value;
-
-    const { data, error } = await supabaseClient.auth.signInWithPassword({
-        email: email,
-        password: password
+    // Listener de sesión automático
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (session) {
+            user = session.user;
+            actUserBar();
+            evalRol();
+        } else {
+            user = null;
+            document.getElementById('barraUsuario').classList.add('oculto');
+            ocultar();
+            show('pLogin');
+        }
     });
 
-    if (error) {
-        alert("Error al iniciar sesión: " + error.message);
+    // --- AUTENTICACIÓN EMAIL / CONTRASEÑA ---
+    async function loginEmail(e) {
+        e.preventDefault();
+        const email = document.getElementById('txtEmail').value;
+        const password = document.getElementById('txtPassword').value;
+
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+            email: email,
+            password: password
+        });
+
+        if (error) {
+            alert("Error al iniciar sesión: " + error.message);
+        }
     }
-}
 
-async function registrarEmail() {
-    const email = document.getElementById('txtEmail').value;
-    const password = document.getElementById('txtPassword').value;
+    async function registrarEmail() {
+        const email = document.getElementById('txtEmail').value;
+        const password = document.getElementById('txtPassword').value;
 
-    if (!email || !password) return alert("Por favor ingresa un correo y contraseña para registrarte.");
+        if (!email || !password) return alert("Por favor ingresa un correo y contraseña para registrarte.");
 
-    const { data, error } = await supabaseClient.auth.signUp({
-        email: email,
-        password: password
-    });
+        const { data, error } = await supabaseClient.auth.signUp({
+            email: email,
+            password: password
+        });
 
-    if (error) {
-        alert("Error en el registro: " + error.message);
-    } else {
-        alert("Registro exitoso. Si tienes verificación de correo activa en Supabase, revisa tu bandeja de entrada.");
+        if (error) {
+            alert("Error en el registro: " + error.message);
+        } else {
+            alert("Registro exitoso. Si tienes verificación de correo activa en Supabase, revisa tu bandeja de entrada.");
+        }
     }
-}
 
-async function cerrarSesion() {
-    await supabaseClient.auth.signOut();
-}
+    async function cerrarSesion() {
+        await supabaseClient.auth.signOut();
+    }
 
-        function show(id) { document.getElementById(id).classList.remove('oculto'); }
-        function ocultar() { ['pLogin','pClienteComercios','pClienteProds','pRegComercio','pDuenio','pAdmin'].forEach(i => document.getElementById(i).classList.add('oculto')); }
+    function show(id) { document.getElementById(id).classList.remove('oculto'); }
+    function ocultar() { ['pLogin','pClienteComercios','pClienteProds','pRegComercio','pDuenio','pAdmin'].forEach(i => document.getElementById(i).classList.add('oculto')); }
 
-        function actUserBar() {
-            show('barraUsuario');
-            document.getElementById('lblUser').innerText = user.email;
+    function actUserBar() {
+        show('barraUsuario');
+        document.getElementById('lblUser').innerText = user.email;
+    }
+
+    async function evalRol() {
+        ocultar();
+        if (user.email === EMAIL_ADMIN) {
+            document.getElementById('lblRol').innerText = 'ADMINISTRADOR';
+            show('pAdmin');
+            cargarAdmin();
+            return;
         }
 
-        async function evalRol() {
-            ocultar();
-            if (user.email === EMAIL_ADMIN) {
-                document.getElementById('lblRol').innerText = 'ADMINISTRADOR';
-                show('pAdmin');
-                cargarAdmin();
-                return;
-            }
-
-            const { data: c } = await supabaseClient.from('comercios').select('*').eq('owner_id', user.id).single();
-            if (c) {
-                miComercio = c;
-                document.getElementById('lblRol').innerText = 'DUEÑO';
-                show('pDuenio');
-                cargarDuenio();
-            } else {
-                document.getElementById('lblRol').innerText = 'CLIENTE';
-                show('pClienteComercios');
-                cargarComercios();
-            }
-        }
-
-        // --- MÓDULOS DE COMERCIO Y PEDIDOS ---
-        async function cargarComercios() {
-            ocultar();
+        const { data: c } = await supabaseClient.from('comercios').select('*').eq('owner_id', user.id).single();
+        if (c) {
+            miComercio = c;
+            document.getElementById('lblRol').innerText = 'DUEÑO';
+            show('pDuenio');
+            cargarDuenio();
+        } else {
+            document.getElementById('lblRol').innerText = 'CLIENTE';
             show('pClienteComercios');
-            const { data: cs } = await supabaseClient.from('comercios').select('*');
-            document.getElementById('listaComercios').innerHTML = (cs && cs.length) ? cs.map(c => `
-                <div class="tarjeta">
-                    <img src="${c.logo_url || 'https://via.placeholder.com/150'}">
-                    <h4>${c.nombre}</h4>
-                    <button class="btn btn-p" onclick="verProds('${c.id}')">Ver Menú</button>
-                </div>
-            `).join('') : '<p>Sin comercios disponibles</p>';
+            cargarComercios();
         }
+    }
 
-        async function verProds(id) {
-            const { data: c } = await supabaseClient.from('comercios').select('*').eq('id', id).single();
-            comercioSel = c;
-            ocultar();
-            show('pClienteProds');
-            document.getElementById('txtComercioSel').innerText = c.nombre;
+    // --- MÓDULOS DE COMERCIO Y PEDIDOS ---
+    async function cargarComercios() {
+        ocultar();
+        show('pClienteComercios');
+        const { data: cs } = await supabaseClient.from('comercios').select('*');
+        document.getElementById('listaComercios').innerHTML = (cs && cs.length) ? cs.map(c => `
+            <div class="tarjeta">
+                <img src="${c.logo_url || 'https://via.placeholder.com/150'}">
+                <h4>${c.nombre}</h4>
+                <button class="btn btn-p" onclick="verProds('${c.id}')">Ver Menú</button>
+            </div>
+        `).join('') : '<p>Sin comercios disponibles</p>';
+    }
 
-            const { data: ps } = await supabaseClient.from('productos').select('*').eq('comercio_id', id);
-            document.getElementById('listaProdsCliente').innerHTML = (ps && ps.length) ? ps.map(p => `
-                <div class="tarjeta">
-                    <img src="${p.imagen_url || 'https://via.placeholder.com/150'}">
-                    <h4>${p.nombre}</h4>
-                    <p>$${Number(p.precio).toFixed(2)}</p>
-                    <button class="btn btn-p" onclick="addCar('${p.id}', '${p.nombre}', ${p.precio})">+ Agregar</button>
-                </div>
-            `).join('') : '<p>Sin productos disponibles</p>';
+    async function verProds(id) {
+        const { data: c } = await supabaseClient.from('comercios').select('*').eq('id', id).single();
+        comercioSel = c;
+        ocultar();
+        show('pClienteProds');
+        document.getElementById('txtComercioSel').innerText = c.nombre;
+
+        const { data: ps } = await supabaseClient.from('productos').select('*').eq('comercio_id', id);
+        document.getElementById('listaProdsCliente').innerHTML = (ps && ps.length) ? ps.map(p => `
+            <div class="tarjeta">
+                <img src="${p.imagen_url || 'https://via.placeholder.com/150'}">
+                <h4>${p.nombre}</h4>
+                <p>$${Number(p.precio).toFixed(2)}</p>
+                <button class="btn btn-p" onclick="addCar('${p.id}', '${p.nombre}', ${p.precio})">+ Agregar</button>
+            </div>
+        `).join('') : '<p>Sin productos disponibles</p>';
+    }
+
+    function addCar(id, nombre, precio) {
+        const item = carrito.find(i => i.id === id);
+        if (item) item.cant++;
+        else carrito.push({ id, nombre, precio, cant: 1 });
+        actCar();
+    }
+
+    function actCar() {
+        const cant = carrito.reduce((a, i) => a + i.cant, 0);
+        const sub = carrito.reduce((a, i) => a + (i.precio * i.cant), 0);
+        if (cant > 0) {
+            show('barraCarrito');
+            document.getElementById('cantCar').innerText = cant;
+            document.getElementById('subCar').innerText = sub.toFixed(2);
+        } else {
+            document.getElementById('barraCarrito').classList.add('oculto');
         }
+    }
 
-        function addCar(id, nombre, precio) {
-            const item = carrito.find(i => i.id === id);
-            if (item) item.cant++;
-            else carrito.push({ id, nombre, precio, cant: 1 });
+    function getCoordsCom() {
+        if (!comercioSel || !comercioSel.direccion) return { lat: 19.5694, lng: -99.7669 };
+        const m = comercioSel.direccion.match(/GPS:\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+        return m ? { lat: parseFloat(m[1]), lng: parseFloat(m[2]) } : { lat: 19.5694, lng: -99.7669 };
+    }
+
+    function abrirCheckout() {
+        show('modalCheck');
+        document.getElementById('resumenCar').innerHTML = carrito.map(i => `<p>${i.cant}x ${i.nombre} - $${(i.precio * i.cant).toFixed(2)}</p>`).join('');
+        const cCom = getCoordsCom();
+        setTimeout(() => {
+            if (!mapaE) {
+                mapaE = L.map('mapaEntrega').setView([cCom.lat, cCom.lng], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaE);
+                marcCom = L.marker([cCom.lat, cCom.lng]).addTo(mapaE);
+                marcCli = L.marker([coordsEntrega.lat, coordsEntrega.lng], { draggable: true }).addTo(mapaE);
+                marcCli.on('dragend', e => {
+                    const p = e.target.getLatLng();
+                    coordsEntrega = { lat: p.lat, lng: p.lng };
+                    calcRuta();
+                });
+            } else {
+                mapaE.invalidateSize();
+                marcCom.setLatLng([cCom.lat, cCom.lng]);
+            }
+            calcRuta();
+        }, 300);
+    }
+
+    function cerrarCheckout() { document.getElementById('modalCheck').classList.add('oculto'); }
+
+    async function calcRuta() {
+        const sub = carrito.reduce((a, i) => a + (i.precio * i.cant), 0);
+        const cCom = getCoordsCom();
+        let dist = 0;
+        try {
+            const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${cCom.lng},${cCom.lat};${coordsEntrega.lng},${coordsEntrega.lat}?overview=full&geometries=geojson`);
+            const d = await r.json();
+            if (d.routes && d.routes[0]) {
+                dist = d.routes[0].distance / 1000;
+                const pts = d.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                if (rutaLine) mapaE.removeLayer(rutaLine);
+                rutaLine = L.polyline(pts, { color: '#27ae60', weight: 4 }).addTo(mapaE);
+                mapaE.fitBounds(rutaLine.getBounds());
+            }
+        } catch (e) {}
+
+        const env = 25 + (dist * 5);
+        const tot = sub + env;
+        document.getElementById('txtDist').innerText = dist.toFixed(2);
+        document.getElementById('txtEnv').innerText = env.toFixed(2);
+        document.getElementById('txtTot').innerText = tot.toFixed(2);
+    }
+
+    async function procesarPedido() {
+        const dir = document.getElementById('chkDir').value;
+        const tel = document.getElementById('chkTel').value;
+        if (!dir.trim() || !tel.trim()) return alert("Ingresa dirección y teléfono.");
+
+        const btn = document.getElementById('btnConfirmar');
+        btn.disabled = true;
+
+        const sub = carrito.reduce((a, i) => a + (i.precio * i.cant), 0);
+        const env = parseFloat(document.getElementById('txtEnv').innerText) || 0;
+        const tot = sub + env;
+        const cCom = getCoordsCom();
+
+        const est = tot > 500 ? 'revision_admin' : 'pendiente';
+
+        const payload = {
+            cliente_nombre: user.email.split('@')[0],
+            cliente_email: user.email,
+            telefono_cliente: tel,
+            direccion_entrega: `${dir} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
+            producto_nombre: carrito.map(i => `${i.cant}x ${i.nombre}`).join(', '),
+            subtotal: sub,
+            costo_envio: env,
+            precio: tot,
+            comercio_id: comercioSel.id,
+            comercio_nombre: comercioSel.nombre,
+            lat_origen: cCom.lat,
+            lng_origen: cCom.lng,
+            lat_destino: coordsEntrega.lat,
+            lng_destino: coordsEntrega.lng,
+            estado: est
+        };
+
+        const { error } = await supabaseClient.from('pedidos').insert([payload]);
+        btn.disabled = false;
+
+        if (error) {
+            alert("Error al procesar: " + error.message);
+        } else {
+            if (tot > 500) alert("⚠️ Pedido > $500 enviado a aprobación por el Administrador.");
+            else alert("¡Pedido registrado exitosamente!");
+            carrito = [];
             actCar();
+            cerrarCheckout();
         }
+    }
 
-        function actCar() {
-            const cant = carrito.reduce((a, i) => a + i.cant, 0);
-            const sub = carrito.reduce((a, i) => a + (i.precio * i.cant), 0);
-            if (cant > 0) {
-                show('barraCarrito');
-                document.getElementById('cantCar').innerText = cant;
-                document.getElementById('subCar').innerText = sub.toFixed(2);
-            } else {
-                document.getElementById('barraCarrito').classList.add('oculto');
+    // --- PANELES ---
+    function cargarDuenio() {
+        document.getElementById('duenioNom').innerText = miComercio.nombre;
+        cargarPedidosDuenio();
+        supabaseClient.channel('live_comercio').on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos', filter: `comercio_id=eq.${miComercio.id}` }, () => cargarPedidosDuenio()).subscribe();
+    }
+
+    async function cargarPedidosDuenio() {
+        const { data: peds } = await supabaseClient.from('pedidos').select('*').eq('comercio_id', miComercio.id).neq('estado', 'revision_admin').order('created_at', { ascending: false });
+        document.getElementById('listaPedidosDuenio').innerHTML = (peds && peds.length) ? peds.map(p => `
+            <div style="background:#f8f9fa; padding:8px; margin-bottom:6px; border-left:3px solid var(--p);">
+                <span class="badge st-${p.estado}">${p.estado}</span> <b>${p.cliente_nombre}</b> ($${Number(p.precio).toFixed(2)})<br>
+                <small>${p.producto_nombre}</small><br>
+                ${p.estado === 'pendiente' ? `<button class="btn btn-p" onclick="setEstado('${p.id}','preparado')">👨‍🍳 Aceptar</button>` : ''}
+                ${p.estado === 'preparado' ? `<button class="btn btn-w" onclick="setEstado('${p.id}','despachado')">📦 Despachar</button>` : ''}
+            </div>
+        `).join('') : '<p>Sin pedidos pendientes</p>';
+    }
+
+    async function setEstado(id, est) {
+        await supabaseClient.from('pedidos').update({ estado: est }).eq('id', id);
+        cargarPedidosDuenio();
+    }
+
+    function cargarAdmin() {
+        cargarRevAdmin();
+        cargarTablaAdmin();
+        cargarMetricasAdmin();
+        supabaseClient.channel('live_admin').on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
+            cargarRevAdmin(); cargarTablaAdmin(); cargarMetricasAdmin();
+        }).subscribe();
+    }
+
+    async function cargarRevAdmin() {
+        const { data: peds } = await supabaseClient.from('pedidos').select('*').eq('estado', 'revision_admin');
+        document.getElementById('listaAdminRevision').innerHTML = (peds && peds.length) ? peds.map(p => `
+            <div style="border:1px solid #ddd; padding:8px; margin-bottom:6px;">
+                <b>${p.comercio_nombre}</b> - Total: $${Number(p.precio).toFixed(2)}<br>
+                <small>Cliente: ${p.cliente_nombre} (${p.telefono_cliente})</small><br>
+                <button class="btn btn-d" onclick="decidirAdmin('${p.id}','cancelado')">❌ Cancelar</button>
+                <button class="btn btn-p" onclick="decidirAdmin('${p.id}','pendiente')">✅ Aceptar</button>
+            </div>
+        `).join('') : '<p>Sin pedidos retenidos</p>';
+    }
+
+    async function decidirAdmin(id, est) {
+        await supabaseClient.from('pedidos').update({ estado: est }).eq('id', id);
+        cargarRevAdmin();
+    }
+
+    async function cargarTablaAdmin() {
+        const { data: peds } = await supabaseClient.from('pedidos').select('*').order('created_at', { ascending: false });
+        document.getElementById('tablaGlobalPedidos').innerHTML = (peds && peds.length) ? `
+            <table>
+                <tr><th>Cliente</th><th>Comercio</th><th>Total</th><th>Estado</th></tr>
+                ${peds.map(p => `<tr><td>${p.cliente_nombre}</td><td>${p.comercio_nombre}</td><td>$${Number(p.precio).toFixed(2)}</td><td><span class="badge st-${p.estado}">${p.estado}</span></td></tr>`).join('')}
+            </table>
+        ` : '<p>Sin datos</p>';
+    }
+
+    async function cargarMetricasAdmin() {
+        const { count: c1 } = await supabaseClient.from('comercios').select('*', { count: 'exact', head: true });
+        const { count: c2 } = await supabaseClient.from('productos').select('*', { count: 'exact', head: true });
+        const { count: c3 } = await supabaseClient.from('pedidos').select('*', { count: 'exact', head: true });
+        document.getElementById('mCom').innerText = c1 || 0;
+        document.getElementById('mPro').innerText = c2 || 0;
+        document.getElementById('mPed').innerText = c3 || 0;
+    }
+
+    function mostrarRegComercio() {
+        ocultar();
+        show('pRegComercio');
+        setTimeout(() => {
+            if (!mapaC) {
+                mapaC = L.map('mapaComercio').setView([19.5694, -99.7669], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaC);
+                marcC = L.marker([19.5694, -99.7669], { draggable: true }).addTo(mapaC);
             }
+        }, 300);
+    }
+
+    async function guardarComercio(e) {
+        e.preventDefault();
+        const pos = marcC.getLatLng(), file = document.getElementById('regLogo').files[0];
+        let url = '';
+        if (file) {
+            const name = `${Date.now()}_${file.name}`;
+            const { data } = await supabaseClient.storage.from('logos').upload(name, file);
+            if (data) url = supabaseClient.storage.from('logos').getPublicUrl(name).data.publicUrl;
         }
+        await supabaseClient.from('comercios').insert([{
+            owner_id: user.id,
+            nombre: document.getElementById('regNom').value,
+            telefono: document.getElementById('regTel').value,
+            direccion: `${document.getElementById('regDir').value} (GPS: ${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)})`,
+            logo_url: url
+        }]);
+        evalRol();
+    }
 
-        function getCoordsCom() {
-            if (!comercioSel || !comercioSel.direccion) return { lat: 19.5694, lng: -99.7669 };
-            const m = comercioSel.direccion.match(/GPS:\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
-            return m ? { lat: parseFloat(m[1]), lng: parseFloat(m[2]) } : { lat: 19.5694, lng: -99.7669 };
+    async function guardarProd(e) {
+        e.preventDefault();
+        const file = document.getElementById('pImg').files[0];
+        let url = '';
+        if (file) {
+            const name = `${Date.now()}_${file.name}`;
+            const { data } = await supabaseClient.storage.from('productos').upload(name, file);
+            if (data) url = supabaseClient.storage.from('productos').getPublicUrl(name).data.publicUrl;
         }
+        await supabaseClient.from('productos').insert([{
+            comercio_id: miComercio.id,
+            nombre: document.getElementById('pNom').value,
+            precio: parseFloat(document.getElementById('pPre').value),
+            imagen_url: url
+        }]);
+        alert("Producto Guardado");
+        cargarDuenio();
+    }
 
-        function abrirCheckout() {
-            show('modalCheck');
-            document.getElementById('resumenCar').innerHTML = carrito.map(i => `<p>${i.cant}x ${i.nombre} - $${(i.precio * i.cant).toFixed(2)}</p>`).join('');
-            const cCom = getCoordsCom();
-            setTimeout(() => {
-                if (!mapaE) {
-                    mapaE = L.map('mapaEntrega').setView([cCom.lat, cCom.lng], 13);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaE);
-                    marcCom = L.marker([cCom.lat, cCom.lng]).addTo(mapaE);
-                    marcCli = L.marker([coordsEntrega.lat, coordsEntrega.lng], { draggable: true }).addTo(mapaE);
-                    marcCli.on('dragend', e => {
-                        const p = e.target.getLatLng();
-                        coordsEntrega = { lat: p.lat, lng: p.lng };
-                        calcRuta();
-                    });
-                } else {
-                    mapaE.invalidateSize();
-                    marcCom.setLatLng([cCom.lat, cCom.lng]);
-                }
-                calcRuta();
-            }, 300);
-        }
-
-        function cerrarCheckout() { document.getElementById('modalCheck').classList.add('oculto'); }
-
-        async function calcRuta() {
-            const sub = carrito.reduce((a, i) => a + (i.precio * i.cant), 0);
-            const cCom = getCoordsCom();
-            let dist = 0;
-            try {
-                const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${cCom.lng},${cCom.lat};${coordsEntrega.lng},${coordsEntrega.lat}?overview=full&geometries=geojson`);
-                const d = await r.json();
-                if (d.routes && d.routes[0]) {
-                    dist = d.routes[0].distance / 1000;
-                    const pts = d.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-                    if (rutaLine) mapaE.removeLayer(rutaLine);
-                    rutaLine = L.polyline(pts, { color: '#27ae60', weight: 4 }).addTo(mapaE);
-                    mapaE.fitBounds(rutaLine.getBounds());
-                }
-            } catch (e) {}
-
-            const env = 25 + (dist * 5);
-            const tot = sub + env;
-            document.getElementById('txtDist').innerText = dist.toFixed(2);
-            document.getElementById('txtEnv').innerText = env.toFixed(2);
-            document.getElementById('txtTot').innerText = tot.toFixed(2);
-        }
-
-        async function procesarPedido() {
-            const dir = document.getElementById('chkDir').value;
-            const tel = document.getElementById('chkTel').value;
-            if (!dir.trim() || !tel.trim()) return alert("Ingresa dirección y teléfono.");
-
-            const btn = document.getElementById('btnConfirmar');
-            btn.disabled = true;
-
-            const sub = carrito.reduce((a, i) => a + (i.precio * i.cant), 0);
-            const env = parseFloat(document.getElementById('txtEnv').innerText) || 0;
-            const tot = sub + env;
-            const cCom = getCoordsCom();
-
-            // REGLA $500
-            const est = tot > 500 ? 'revision_admin' : 'pendiente';
-
-            const payload = {
-                cliente_nombre: user.email.split('@')[0],
-                cliente_email: user.email,
-                telefono_cliente: tel,
-                direccion_entrega: `${dir} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
-                producto_nombre: carrito.map(i => `${i.cant}x ${i.nombre}`).join(', '),
-                subtotal: sub,
-                costo_envio: env,
-                precio: tot,
-                comercio_id: comercioSel.id,
-                comercio_nombre: comercioSel.nombre,
-                lat_origen: cCom.lat,
-                lng_origen: cCom.lng,
-                lat_destino: coordsEntrega.lat,
-                lng_destino: coordsEntrega.lng,
-                estado: est
-            };
-
-            const { error } = await supabaseClient.from('pedidos').insert([payload]);
-            btn.disabled = false;
-
-            if (error) {
-                alert("Error al procesar: " + error.message);
-            } else {
-                if (tot > 500) alert("⚠️ Pedido > $500 enviado a aprobación por el Administrador.");
-                else alert("¡Pedido registrado exitosamente!");
-                carrito = [];
-                actCar();
-                cerrarCheckout();
-            }
-        }
-
-        // --- PANELES ---
-        function cargarDuenio() {
-            document.getElementById('duenioNom').innerText = miComercio.nombre;
-            cargarPedidosDuenio();
-            supabaseClient.channel('live_comercio').on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos', filter: `comercio_id=eq.${miComercio.id}` }, () => cargarPedidosDuenio()).subscribe();
-        }
-
-        async function cargarPedidosDuenio() {
-            const { data: peds } = await supabaseClient.from('pedidos').select('*').eq('comercio_id', miComercio.id).neq('estado', 'revision_admin').order('created_at', { ascending: false });
-            document.getElementById('listaPedidosDuenio').innerHTML = (peds && peds.length) ? peds.map(p => `
-                <div style="background:#f8f9fa; padding:8px; margin-bottom:6px; border-left:3px solid var(--p);">
-                    <span class="badge st-${p.estado}">${p.estado}</span> <b>${p.cliente_nombre}</b> ($${Number(p.precio).toFixed(2)})<br>
-                    <small>${p.producto_nombre}</small><br>
-                    ${p.estado === 'pendiente' ? `<button class="btn btn-p" onclick="setEstado('${p.id}','preparado')">👨‍🍳 Aceptar</button>` : ''}
-                    ${p.estado === 'preparado' ? `<button class="btn btn-w" onclick="setEstado('${p.id}','despachado')">📦 Despachar</button>` : ''}
-                </div>
-            `).join('') : '<p>Sin pedidos pendientes</p>';
-        }
-
-        async function setEstado(id, est) {
-            await supabaseClient.from('pedidos').update({ estado: est }).eq('id', id);
-            cargarPedidosDuenio();
-        }
-
-        function cargarAdmin() {
-            cargarRevAdmin();
-            cargarTablaAdmin();
-            cargarMetricasAdmin();
-            supabaseClient.channel('live_admin').on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
-                cargarRevAdmin(); cargarTablaAdmin(); cargarMetricasAdmin();
-            }).subscribe();
-        }
-
-        async function cargarRevAdmin() {
-            const { data: peds } = await supabaseClient.from('pedidos').select('*').eq('estado', 'revision_admin');
-            document.getElementById('listaAdminRevision').innerHTML = (peds && peds.length) ? peds.map(p => `
-                <div style="border:1px solid #ddd; padding:8px; margin-bottom:6px;">
-                    <b>${p.comercio_nombre}</b> - Total: $${Number(p.precio).toFixed(2)}<br>
-                    <small>Cliente: ${p.cliente_nombre} (${p.telefono_cliente})</small><br>
-                    <button class="btn btn-d" onclick="decidirAdmin('${p.id}','cancelado')">❌ Cancelar</button>
-                    <button class="btn btn-p" onclick="decidirAdmin('${p.id}','pendiente')">✅ Aceptar</button>
-                </div>
-            `).join('') : '<p>Sin pedidos retenidos</p>';
-        }
-
-        async function decidirAdmin(id, est) {
-            await supabaseClient.from('pedidos').update({ estado: est }).eq('id', id);
-            cargarRevAdmin();
-        }
-
-        async function cargarTablaAdmin() {
-            const { data: peds } = await supabaseClient.from('pedidos').select('*').order('created_at', { ascending: false });
-            document.getElementById('tablaGlobalPedidos').innerHTML = (peds && peds.length) ? `
-                <table>
-                    <tr><th>Cliente</th><th>Comercio</th><th>Total</th><th>Estado</th></tr>
-                    ${peds.map(p => `<tr><td>${p.cliente_nombre}</td><td>${p.comercio_nombre}</td><td>$${Number(p.precio).toFixed(2)}</td><td><span class="badge st-${p.estado}">${p.estado}</span></td></tr>`).join('')}
-                </table>
-            ` : '<p>Sin datos</p>';
-        }
-
-        async function cargarMetricasAdmin() {
-            const { count: c1 } = await supabaseClient.from('comercios').select('*', { count: 'exact', head: true });
-            const { count: c2 } = await supabaseClient.from('productos').select('*', { count: 'exact', head: true });
-            const { count: c3 } = await supabaseClient.from('pedidos').select('*', { count: 'exact', head: true });
-            document.getElementById('mCom').innerText = c1 || 0;
-            document.getElementById('mPro').innerText = c2 || 0;
-            document.getElementById('mPed').innerText = c3 || 0;
-        }
-
-        function mostrarRegComercio() {
-            ocultar();
-            show('pRegComercio');
-            setTimeout(() => {
-                if (!mapaC) {
-                    mapaC = L.map('mapaComercio').setView([19.5694, -99.7669], 13);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaC);
-                    marcC = L.marker([19.5694, -99.7669], { draggable: true }).addTo(mapaC);
-                }
-            }, 300);
-        }
-
-        async function guardarComercio(e) {
-            e.preventDefault();
-            const pos = marcC.getLatLng(), file = document.getElementById('regLogo').files[0];
-            let url = '';
-            if (file) {
-                const name = `${Date.now()}_${file.name}`;
-                const { data } = await supabaseClient.storage.from('logos').upload(name, file);
-                if (data) url = supabaseClient.storage.from('logos').getPublicUrl(name).data.publicUrl;
-            }
-            await supabaseClient.from('comercios').insert([{
-                owner_id: user.id,
-                nombre: document.getElementById('regNom').value,
-                telefono: document.getElementById('regTel').value,
-                direccion: `${document.getElementById('regDir').value} (GPS: ${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)})`,
-                logo_url: url
-            }]);
+    async function eliminarComercio() {
+        if (confirm("¿Eliminar comercio?")) {
+            await supabaseClient.from('comercios').delete().eq('id', miComercio.id);
+            miComercio = null;
             evalRol();
         }
-
-        async function guardarProd(e) {
-            e.preventDefault();
-            const file = document.getElementById('pImg').files[0];
-            let url = '';
-            if (file) {
-                const name = `${Date.now()}_${file.name}`;
-                const { data } = await supabaseClient.storage.from('productos').upload(name, file);
-                if (data) url = supabaseClient.storage.from('productos').getPublicUrl(name).data.publicUrl;
-            }
-            await supabaseClient.from('productos').insert([{
-                comercio_id: miComercio.id,
-                nombre: document.getElementById('pNom').value,
-                precio: parseFloat(document.getElementById('pPre').value),
-                imagen_url: url
-            }]);
-            alert("Producto Guardado");
-            cargarDuenio();
-        }
-
-        async function eliminarComercio() {
-            if (confirm("¿Eliminar comercio?")) {
-                await supabaseClient.from('comercios').delete().eq('id', miComercio.id);
-                miComercio = null;
-                evalRol();
-            }
-        }
-    </script>
+    }
+</script>
 </body>
 </html>
