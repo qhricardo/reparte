@@ -1345,8 +1345,10 @@ async function recalcularTotales() {
 }
 
 // FUNCIÓN DE ENVÍO CON VALIDACIÓN DE SEGURIDAD
-function enviarPedidoWhatsApp() {
+async function enviarPedidoWhatsApp() {
     const distanciaKm = parseFloat(document.getElementById('txtDistancia').innerText) || 0;
+    const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+    const costoEnvio = parseFloat(document.getElementById('txtCostoEnvio').innerText) || 0;
     const totalPagar = parseFloat(document.getElementById('txtTotalPagar').innerText) || 0;
 
     // Validación 1: Bloqueo estricto > 10km
@@ -1355,30 +1357,59 @@ function enviarPedidoWhatsApp() {
         return;
     }
 
-    const TEL_ADMINISTRADOR = "7122239378"; // Cambiar por tu número real
-    const TEL_COMERCIO = (comercioSeleccionadoObjeto && comercioSeleccionadoObjeto.telefono) 
-                         ? comercioSeleccionadoObjeto.telefono 
-                         : TEL_ADMINISTRADOR;
-
     const direccion = document.getElementById('direccionEscrita').value;
-    const productos = carrito.map(i => `- ${i.cantidad}x ${i.nombre} ($${(i.precio * i.cantidad).toFixed(2)})`).join('\n');
+    const telefonoCliente = document.getElementById('telefonoCliente') ? document.getElementById('telefonoCliente').value : "";
 
-    let mensaje = `*NUEVO PEDIDO*\n` +
-                  `*Comercio:* ${comercioSeleccionadoObjeto ? comercioSeleccionadoObjeto.nombre : 'Comercio'}\n\n` +
-                  `*Productos:*\n${productos}\n\n` +
-                  `*Distancia:* ${distanciaKm.toFixed(2)} km\n` +
-                  `*Total:* $${totalPagar.toFixed(2)}\n` +
-                  `*Dirección:* ${direccion}`;
-
-    // Validación 2: Ruteo al Admin si sobrepasa $500
-    let telefonoDestino = TEL_COMERCIO;
-    if (totalPagar > 500) {
-        telefonoDestino = TEL_ADMINISTRADOR;
-        mensaje = `⚠️ *[REVISIÓN SEGURIDAD - PEDIDO MAYOR A $500]*\n\n` + mensaje;
-        alert("El monto supera los $500 pesos. Su pedido se enviará al Administrador para validación.");
+    if (!direccion.trim()) {
+        alert("Por favor ingresa la dirección de entrega.");
+        return;
     }
 
-    window.open(`https://wa.me/${telefonoDestino}?text=${encodeURIComponent(mensaje)}`, '_blank');
+    // Deshabilitar botón durante el envío
+    const btnSubmit = document.querySelector('#modalCheckout button[onclick*="enviar"], #modalCheckout button[type="submit"], #btnConfirmarPedido');
+    if (btnSubmit) btnSubmit.disabled = true;
+
+    // REGLA > $500: Si supera los 500 entra como 'revision_admin', si no 'pendiente'
+    const estadoInicial = totalPagar > 500 ? 'revision_admin' : 'pendiente';
+    const coordsComercio = obtenerCoordsComercioActivo();
+
+    const payloadPedido = {
+        cliente_nombre: user ? user.email.split('@')[0] : 'Cliente',
+        cliente_email: user ? user.email : 'anonimo@correo.com',
+        telefono_cliente: telefonoCliente,
+        direccion_entrega: `${direccion} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
+        producto_nombre: carrito.map(i => `${i.cantidad}x ${i.nombre}`).join(', '),
+        subtotal: subtotal,
+        costo_envio: costoEnvio,
+        precio: totalPagar,
+        comercio_id: comercioSeleccionadoObjeto ? comercioSeleccionadoObjeto.id : null,
+        comercio_nombre: comercioSeleccionadoObjeto ? comercioSeleccionadoObjeto.nombre : 'Comercio',
+        lat_origen: coordsComercio.lat,
+        lng_origen: coordsComercio.lng,
+        lat_destino: coordsEntrega.lat,
+        lng_destino: coordsEntrega.lng,
+        estado: estadoInicial
+    };
+
+    // Registrar en la base de datos de Supabase
+    const { data, error } = await supabaseClient.from('pedidos').insert([payloadPedido]);
+
+    if (btnSubmit) btnSubmit.disabled = false;
+
+    if (error) {
+        alert("Error al registrar el pedido: " + error.message);
+    } else {
+        if (totalPagar > 500) {
+            alert("⚠️ Su pedido supera los $500 y ha sido enviado al Administrador para su aprobación. Podrá ver el avance cuando sea liberado.");
+        } else {
+            alert("¡Pedido registrado exitosamente!");
+        }
+
+        // Limpiar carrito y cerrar modal
+        carrito = [];
+        actualizarBarraCarrito();
+        cerrarModalCheckout();
+    }
 }
     
    // PROCESAR PEDIDO Y VINCULAR CON EL RADAR DE REPARTIDORES
