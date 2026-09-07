@@ -1145,9 +1145,121 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
     }
 });
 
-   // CARRITO Y CHECKOUT
-  // Variable global para almacenar el estado de la distancia
-let distanciaEsValida = true;
+  // CARRITO Y CHECKOUT
+function agregarAlCarrito(id, nombre, precio) {
+    const existente = carrito.find(item => item.id === id);
+    if (existente) existente.cantidad++;
+    else carrito.push({ id, nombre, precio, cantidad: 1 });
+    actualizarBarraCarrito();
+}
+
+function actualizarBarraCarrito() {
+    const barra = document.getElementById('barraCarrito');
+    const cant = carrito.reduce((acc, item) => acc + item.cantidad, 0);
+    const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+
+    if (cant > 0) {
+        barra.classList.remove('oculto');
+        document.getElementById('cantCarrito').innerText = cant;
+        document.getElementById('subtotalCarrito').innerText = subtotal.toFixed(2);
+    } else {
+        barra.classList.add('oculto');
+    }
+}
+
+function obtenerCoordsComercioActivo() {
+    if (!comercioSeleccionadoObjeto || !comercioSeleccionadoObjeto.direccion) {
+        return { lat: 19.5694, lng: -99.7669 };
+    }
+    const match = comercioSeleccionadoObjeto.direccion.match(/GPS:\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+    if (match) {
+        return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
+    }
+    return { lat: 19.5694, lng: -99.7669 };
+}
+
+function abrirModalCheckout() {
+    document.getElementById('modalCheckout').classList.remove('oculto');
+    
+    const contenedorResumen = document.getElementById('resumenItemsCarrito');
+    contenedorResumen.innerHTML = carrito.map(i => `<p style="margin: 4px 0;"><b>${i.cantidad}x</b> ${i.nombre} - $${(i.precio * i.cantidad).toFixed(2)}</p>`).join('');
+
+    const coordsComercio = obtenerCoordsComercioActivo();
+
+    setTimeout(() => {
+        if (!mapaEntrega) {
+            mapaEntrega = L.map('mapaEntrega').setView([coordsComercio.lat, coordsComercio.lng], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaEntrega);
+
+            marcadorComercioEnMapa = L.marker([coordsComercio.lat, coordsComercio.lng])
+                .addTo(mapaEntrega)
+                .bindPopup(`<b>${comercioSeleccionadoObjeto ? comercioSeleccionadoObjeto.nombre : 'Comercio'}</b><br>Origen`)
+                .openPopup();
+
+            marcadorCliente = L.marker([coordsEntrega.lat, coordsEntrega.lng], { draggable: true }).addTo(mapaEntrega);
+
+            marcadorCliente.on('dragend', function (e) {
+                const pos = e.target.getLatLng();
+                coordsEntrega = { lat: pos.lat, lng: pos.lng };
+                obtenerNombreDireccion(pos.lat, pos.lng, 'direccionEscrita');
+                recalcularTotales();
+            });
+
+            mapaEntrega.on('click', function(e) {
+                marcadorCliente.setLatLng(e.latlng);
+                coordsEntrega = { lat: e.latlng.lat, lng: e.latlng.lng };
+                obtenerNombreDireccion(e.latlng.lat, e.latlng.lng, 'direccionEscrita');
+                recalcularTotales();
+            });
+        } else {
+            mapaEntrega.invalidateSize();
+            if (marcadorComercioEnMapa) {
+                marcadorComercioEnMapa.setLatLng([coordsComercio.lat, coordsComercio.lng]);
+            }
+        }
+        recalcularTotales();
+    }, 300);
+}
+
+function cerrarModalCheckout() {
+    document.getElementById('modalCheckout').classList.add('oculto');
+}
+
+async function buscarDireccionEnMapa() {
+    const direccion = document.getElementById('direccionEscrita').value;
+    if (!direccion.trim()) return;
+
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion)}`);
+        const results = await response.json();
+        if (results && results.length > 0) {
+            const lat = parseFloat(results[0].lat);
+            const lon = parseFloat(results[0].lon);
+            coordsEntrega = { lat, lng: lon };
+            
+            if (mapaEntrega && marcadorCliente) {
+                marcadorCliente.setLatLng([lat, lon]);
+            }
+            recalcularTotales();
+        } else {
+            alert("No se encontró la dirección especificada.");
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+async function obtenerNombreDireccion(lat, lng, elementIdInput) {
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+        const data = await response.json();
+        if (data && data.display_name) {
+            document.getElementById(elementIdInput).value = data.display_name;
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
 
 async function recalcularTotales() {
     const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
@@ -1169,9 +1281,9 @@ async function recalcularTotales() {
             if (mapaEntrega) {
                 if (lineaRuta) mapaEntrega.removeLayer(lineaRuta);
                 
-                // Si sobrepasa 10 km pinta la línea roja, si no, verde
-                const colorRuta = distanciaKm > 10 ? '#e74c3c' : '#27ae60';
-                lineaRuta = L.polyline(coordenadasPolyline, { color: colorRuta, weight: 5, opacity: 0.8 }).addTo(mapaEntrega);
+                // CAMBIO: Cambiar color de línea si excede los 10km
+                const colorLinea = distanciaKm > 10 ? '#e74c3c' : '#27ae60';
+                lineaRuta = L.polyline(coordenadasPolyline, { color: colorLinea, weight: 5, opacity: 0.8 }).addTo(mapaEntrega);
 
                 const bounds = L.latLngBounds([
                     [coordsComercio.lat, coordsComercio.lng],
@@ -1208,23 +1320,6 @@ async function recalcularTotales() {
         }
     }
 
-    // --- VALIDACIÓN DE DISTANCIA MÁXIMA (10 KM) ---
-    const btnConfirmar = document.getElementById('btnConfirmarPedido'); // Asegúrate de tener este ID en tu HTML
-    const msjErrorDistancia = document.getElementById('msjErrorDistancia'); // Opcional para mostrar aviso
-
-    if (distanciaKm > 10) {
-        distanciaEsValida = false;
-        if (btnConfirmar) btnConfirmar.disabled = true;
-        if (msjErrorDistancia) {
-            msjErrorDistancia.innerText = " Fuera de cobertura (Máximo 10 km)";
-            msjErrorDistancia.style.display = "block";
-        }
-    } else {
-        distanciaEsValida = true;
-        if (btnConfirmar) btnConfirmar.disabled = false;
-        if (msjErrorDistancia) msjErrorDistancia.style.display = "none";
-    }
-
     const costoEnvio = PRECIO_BASE_ENVIO + (distanciaKm * PRECIO_KM);
     const total = subtotal + costoEnvio;
 
@@ -1234,50 +1329,44 @@ async function recalcularTotales() {
     document.getElementById('txtTotalPagar').innerText = total.toFixed(2);
 }
 
-// --- FUNCIÓN PARA PROCESAR Y ENVIAR EL PEDIDO ---
-function enviarPedido() {
-    // 1. Bloqueo de seguridad por distancia
-    if (!distanciaEsValida) {
-        alert("No se puede realizar el pedido: la dirección supera el límite de 10 km de distancia.");
+// NUEVA FUNCIÓN: Llama a esta función desde el botón de "Confirmar / Enviar Pedido"
+function enviarPedidoWhatsApp() {
+    const distanciaKm = parseFloat(document.getElementById('txtDistancia').innerText) || 0;
+    const totalPagar = parseFloat(document.getElementById('txtTotalPagar').innerText) || 0;
+
+    // 1. Bloqueo si sobrepasa los 10 km
+    if (distanciaKm > 10) {
+        alert(`No se puede realizar el pedido. La distancia es de ${distanciaKm.toFixed(2)} km y el límite máximo de entrega es 10 km.`);
         return;
     }
 
-    const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
-    const distanciaKm = parseFloat(document.getElementById('txtDistancia').innerText);
-    const costoEnvio = PRECIO_BASE_ENVIO + (distanciaKm * PRECIO_KM);
-    const totalFinal = subtotal + costoEnvio;
+    // Configura aquí el número del administrador
+    const TEL_ADMINISTRADOR = "5210000000000"; 
+    
+    // Obtener número del comercio activo o usar admin por defecto
+    const TEL_COMERCIO = (comercioSeleccionadoObjeto && comercioSeleccionadoObjeto.telefono) 
+                         ? comercioSeleccionadoObjeto.telefono 
+                         : TEL_ADMINISTRADOR;
 
     const direccion = document.getElementById('direccionEscrita').value;
-    const productosTexto = carrito.map(i => `- ${i.cantidad}x ${i.nombre} ($${(i.precio * i.cantidad).toFixed(2)})`).join('\n');
+    const productos = carrito.map(i => `- ${i.cantidad}x ${i.nombre} ($${(i.precio * i.cantidad).toFixed(2)})`).join('\n');
 
-    // Números de contacto (asegúrate de colocar el código de país sin + ni espacios, ej: 521...)
-    const TELEFONO_ADMIN = "5210000000000"; 
-    const TELEFONO_COMERCIO = (comercioSeleccionadoObjeto && comercioSeleccionadoObjeto.telefono) 
-                                ? comercioSeleccionadoObjeto.telefono 
-                                : TELEFONO_ADMIN;
+    let mensaje = `*NUEVO PEDIDO*\n` +
+                  `*Comercio:* ${comercioSeleccionadoObjeto ? comercioSeleccionadoObjeto.nombre : 'Comercio'}\n\n` +
+                  `*Productos:*\n${productos}\n\n` +
+                  `*Distancia:* ${distanciaKm.toFixed(2)} km\n` +
+                  `*Total:* $${totalPagar.toFixed(2)}\n` +
+                  `*Dirección:* ${direccion}`;
 
-    // 2. Lógica para definir el destinatario si sobrepasa $500
-    let destinoTelefono = TELEFONO_COMERCIO;
-    let encabezadoAlerta = "";
-
-    if (totalFinal > 500) {
-        destinoTelefono = TELEFONO_ADMIN;
-        encabezadoAlerta = "⚠️ *[REVISIÓN DE SEGURIDAD - PEDIDO > $500]*\n\n";
-        alert("Su pedido supera los $500. Se enviará primero a la administración para verificación previa.");
+    // 2. Si el total supera los $500, se manda primero al Administrador
+    let telefonoDestino = TEL_COMERCIO;
+    if (totalPagar > 500) {
+        telefonoDestino = TEL_ADMINISTRADOR;
+        mensaje = `⚠️ *[VERIFICACIÓN POR MONTO MAYOR A $500]*\n\n` + mensaje;
+        alert("El pedido supera los $500 pesos. Se enviará a revisión previa con el Administrador.");
     }
 
-    // Construcción del mensaje para WhatsApp
-    const mensaje = `${encabezadoAlerta}*NUEVO PEDIDO*\n` +
-                    `*Comercio:* ${comercioSeleccionadoObjeto ? comercioSeleccionadoObjeto.nombre : 'N/A'}\n` +
-                    `*Productos:*\n${productosTexto}\n\n` +
-                    `*Subtotal:* $${subtotal.toFixed(2)}\n` +
-                    `*Envío (${distanciaKm.toFixed(2)} km):* $${costoEnvio.toFixed(2)}\n` +
-                    `*TOTAL FINAL:* $${totalFinal.toFixed(2)}\n\n` +
-                    `*Dirección de entrega:* ${direccion}\n` +
-                    `*Ubicación GPS:* https://maps.google.com/?q=${coordsEntrega.lat},${coordsEntrega.lng}`;
-
-    const urlWhatsApp = `https://wa.me/${destinoTelefono}?text=${encodeURIComponent(mensaje)}`;
-    window.open(urlWhatsApp, '_blank');
+    window.open(`https://wa.me/${telefonoDestino}?text=${encodeURIComponent(mensaje)}`, '_blank');
 }
     
    // PROCESAR PEDIDO Y VINCULAR CON EL RADAR DE REPARTIDORES
