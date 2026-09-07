@@ -24,14 +24,19 @@
         <button class="btn btn-d" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
 
-    <!-- ACCESO ÚNICO CON GOOGLE -->
-    <div id="pLogin" class="card" style="max-width: 350px; margin: 40px auto; text-align:center; padding: 25px;">
-        <h2>🛒 Reparte Ixtlahuaca</h2>
-        <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Acceso exclusivo mediante tu cuenta de Google</p>
-        <button class="btn btn-p" onclick="loginGoogle()" style="width:100%; padding: 12px; font-size: 15px;">
-            🌐 Iniciar Sesión con Google
-        </button>
-    </div>
+   <!-- ACCESO ÚNICO CON CORREO Y CONTRASEÑA -->
+<div id="pLogin" class="card" style="max-width: 350px; margin: 40px auto; text-align:center; padding: 25px;">
+    <h2>🛒 Reparte Ixtlahuaca</h2>
+    <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Ingresa con tus credenciales</p>
+    
+    <form onsubmit="loginEmail(event)">
+        <input type="email" id="txtEmail" placeholder="Correo electrónico" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+        <input type="password" id="txtPassword" placeholder="Contraseña" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+        <br>
+        <button type="submit" class="btn btn-p" style="width: 95%; margin-top: 15px; padding: 10px; font-size: 14px;">Entrar</button>
+        <button type="button" class="btn btn-s" onclick="registrarEmail()" style="width: 95%; margin-top: 8px; padding: 8px; font-size: 12px;">Crear Cuenta Nueva</button>
+    </form>
+</div>
 
     <!-- PANTALLAS DEL SISTEMA (SE MUESTRAN SEGÚN TU ROL TRAS AUTENTICARTE) -->
     <div id="pClienteComercios" class="oculto">
@@ -135,43 +140,43 @@
         let coordsEntrega = { lat: 19.5694, lng: -99.7669 };
         let mapaC = null, marcC = null, mapaE = null, marcCom = null, marcCli = null, rutaLine = null;
 
-        // --- AUTENTICACIÓN GOOGLE ---
-        async function loginGoogle() {
-            const { error } = await supabaseClient.auth.signInWithOAuth({
-                provider: 'google',
-                options: { redirectTo: window.location.origin }
-            });
-            if (error) alert("Error al conectar con Google: " + error.message);
-        }
+     // --- AUTENTICACIÓN EMAIL / CONTRASEÑA ---
+async function loginEmail(e) {
+    e.preventDefault();
+    const email = document.getElementById('txtEmail').value;
+    const password = document.getElementById('txtPassword').value;
 
-        async function cerrarSesion() {
-            await supabaseClient.auth.signOut();
-        }
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email: email,
+        password: password
+    });
 
-        window.onload = async () => {
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session) {
-                user = session.user;
-                actUserBar();
-                evalRol();
-            } else {
-                ocultar();
-                show('pLogin');
-            }
+    if (error) {
+        alert("Error al iniciar sesión: " + error.message);
+    }
+}
 
-            supabaseClient.auth.onAuthStateChange((e, session) => {
-                if (session) {
-                    user = session.user;
-                    actUserBar();
-                    evalRol();
-                } else {
-                    user = null;
-                    ocultar();
-                    show('pLogin');
-                    document.getElementById('barraUsuario').classList.add('oculto');
-                }
-            });
-        };
+async function registrarEmail() {
+    const email = document.getElementById('txtEmail').value;
+    const password = document.getElementById('txtPassword').value;
+
+    if (!email || !password) return alert("Por favor ingresa un correo y contraseña para registrarte.");
+
+    const { data, error } = await supabaseClient.auth.signUp({
+        email: email,
+        password: password
+    });
+
+    if (error) {
+        alert("Error en el registro: " + error.message);
+    } else {
+        alert("Registro exitoso. Si tienes verificación de correo activa en Supabase, revisa tu bandeja de entrada.");
+    }
+}
+
+async function cerrarSesion() {
+    await supabaseClient.auth.signOut();
+}
 
         function show(id) { document.getElementById(id).classList.remove('oculto'); }
         function ocultar() { ['pLogin','pClienteComercios','pClienteProds','pRegComercio','pDuenio','pAdmin'].forEach(i => document.getElementById(i).classList.add('oculto')); }
