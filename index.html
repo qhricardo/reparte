@@ -3,37 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reparte Ixtlahuaca - Sistema Integral</title>
+    <title>Reparte Ixtlahuaca - Acceso Google</title>
 
     <!-- Librerías Externas -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <!-- CSS En una sola línea -->
+    <!-- CSS en una sola línea -->
     <style>:root{--p:#27ae60;--d:#e74c3c;--w:#f39c12;--dark:#2c3e50;}body{font-family:sans-serif;margin:0;padding:10px;background:#f4f6f7;}.card{background:#fff;padding:15px;border-radius:8px;margin-bottom:15px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}.oculto{display:none!important;}.btn{padding:8px 14px;border:none;border-radius:5px;font-weight:bold;cursor:pointer;margin:2px;}.btn-p{background:var(--p);color:#fff;}.btn-d{background:var(--d);color:#fff;}.btn-w{background:var(--w);color:#fff;}.btn-s{background:#7f8c8d;color:#fff;}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}.tarjeta{border:1px solid #ddd;padding:10px;border-radius:6px;text-align:center;background:#fff;}.tarjeta img{width:100%;height:120px;object-fit:cover;border-radius:4px;}#mapaComercio,#mapaEntrega{height:250px;width:100%;border-radius:6px;margin:8px 0;}.modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;}.modal-content{background:#fff;padding:20px;border-radius:8px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;}#barraCarrito{position:fixed;bottom:15px;left:15px;right:15px;max-width:500px;margin:auto;background:var(--dark);color:#fff;padding:10px 20px;border-radius:25px;display:flex;justify-content:space-between;align-items:center;z-index:999;}.badge{padding:3px 7px;border-radius:10px;color:#fff;font-size:11px;font-weight:bold;}.st-revision_admin{background:#8e44ad;}.st-pendiente{background:var(--w);}.st-preparado{background:#3498db;}.st-despachado{background:#e67e22;}.st-cancelado{background:var(--d);}table{width:100%;border-collapse:collapse;font-size:12px;}th,td{border:1px solid #ddd;padding:6px;text-align:left;}</style>
 </head>
 <body>
 
-    <!-- BARRA DE SESIÓN DE USUARIO -->
+    <!-- BARRA DE SESIÓN -->
     <div id="barraUsuario" class="card oculto" style="display:flex; justify-content:space-between; align-items:center;">
         <div>
             <b id="lblUser"></b>
             <span id="lblRol" class="badge" style="background:#666;"></span>
         </div>
-        <button class="btn btn-d" onclick="supabaseClient.auth.signOut()">Cerrar Sesión</button>
+        <button class="btn btn-d" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
 
-    <!-- PANTALLA: LOGIN -->
-    <div id="pLogin" class="card" style="text-align:center;">
+    <!-- ACCESO ÚNICO CON GOOGLE -->
+    <div id="pLogin" class="card" style="max-width: 350px; margin: 40px auto; text-align:center; padding: 25px;">
         <h2>🛒 Reparte Ixtlahuaca</h2>
-        <p>Inicia sesión para realizar pedidos o gestionar tu establecimiento.</p>
-        <button class="btn btn-p" onclick="supabaseClient.auth.signInWithOAuth({provider:'google'})">
-            Ingresar con Google
+        <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Acceso exclusivo mediante tu cuenta de Google</p>
+        <button class="btn btn-p" onclick="loginGoogle()" style="width:100%; padding: 12px; font-size: 15px;">
+            🌐 Iniciar Sesión con Google
         </button>
     </div>
 
-    <!-- PANTALLA CLIENTE: LISTA DE COMERCIOS -->
+    <!-- PANTALLAS DEL SISTEMA (SE MUESTRAN SEGÚN TU ROL TRAS AUTENTICARTE) -->
     <div id="pClienteComercios" class="oculto">
         <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
             <h3>Comercios Disponibles</h3>
@@ -42,80 +42,66 @@
         <div id="listaComercios" class="grid"></div>
     </div>
 
-    <!-- PANTALLA CLIENTE: MENÚ DE PRODUCTOS -->
     <div id="pClienteProds" class="oculto">
         <div class="card">
-            <button class="btn btn-s" onclick="cargarComercios()">← Volver a Comercios</button>
+            <button class="btn btn-s" onclick="cargarComercios()">← Volver</button>
             <h3 id="txtComercioSel"></h3>
             <div id="listaProdsCliente" class="grid"></div>
         </div>
     </div>
 
-    <!-- PANTALLA REGISTRO DE COMERCIO -->
     <div id="pRegComercio" class="card oculto">
         <h3>Registrar Mi Comercio</h3>
         <form onsubmit="guardarComercio(event)">
-            <input type="text" id="regNom" placeholder="Nombre del Comercio" required style="width:98%; margin:4px 0; padding:6px;"><br>
+            <input type="text" id="regNom" placeholder="Nombre Comercio" required style="width:98%; margin:4px 0; padding:6px;"><br>
             <input type="tel" id="regTel" placeholder="Teléfono" required style="width:98%; margin:4px 0; padding:6px;"><br>
             <input type="text" id="regDir" placeholder="Dirección escrita" required style="width:98%; margin:4px 0; padding:6px;"><br>
-            <label style="font-size:12px;">Ubicación en el Mapa:</label>
             <div id="mapaComercio"></div>
-            <label style="font-size:12px;">Logo del Comercio:</label><br>
             <input type="file" id="regLogo" accept="image/*" required style="margin:8px 0;"><br>
             <button type="button" class="btn btn-s" onclick="cargarComercios()">Cancelar</button>
             <button type="submit" class="btn btn-p">Guardar Comercio</button>
         </form>
     </div>
 
-    <!-- PANTALLA PANEL DUEÑO DE COMERCIO -->
     <div id="pDuenio" class="oculto">
         <div class="card">
             <h2 id="duenioNom"></h2>
             <button class="btn btn-d" onclick="eliminarComercio()">🗑️ Eliminar Mi Comercio</button>
         </div>
-
         <div class="card">
-            <h3>+ Agregar Nuevo Producto</h3>
+            <h3>+ Nuevo Producto</h3>
             <form onsubmit="guardarProd(event)">
-                <input type="text" id="pNom" placeholder="Nombre del Producto" required style="width:98%; margin:4px 0; padding:6px;"><br>
+                <input type="text" id="pNom" placeholder="Producto" required style="width:98%; margin:4px 0; padding:6px;"><br>
                 <input type="number" step="0.01" id="pPre" placeholder="Precio ($)" required style="width:98%; margin:4px 0; padding:6px;"><br>
                 <input type="file" id="pImg" accept="image/*" required style="margin:8px 0;"><br>
-                <button type="submit" class="btn btn-p">Publicar Producto</button>
+                <button type="submit" class="btn btn-p">Publicar</button>
             </form>
         </div>
-
         <div class="card">
-            <h3>📦 Pedidos Recibidos</h3>
+            <h3>Pedidos Recibidos</h3>
             <div id="listaPedidosDuenio"></div>
         </div>
     </div>
 
-    <!-- PANTALLA PANEL ADMINISTRADOR CENTRAL -->
     <div id="pAdmin" class="oculto">
-        <div class="card" style="border-left: 5px solid #8e44ad;">
-            <h3>🛡️ Panel de Administración General</h3>
-            <div style="display:flex; gap:15px; margin-bottom:10px;">
+        <div class="card" style="border-left:5px solid #8e44ad;">
+            <h3>🛡️ Panel Administrador Central</h3>
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
                 <div>Comercios: <b id="mCom">0</b></div>
                 <div>Productos: <b id="mPro">0</b></div>
-                <div>Pedidos Totales: <b id="mPed">0</b></div>
+                <div>Pedidos: <b id="mPed">0</b></div>
             </div>
         </div>
-
-        <!-- MÓDULO DE REVISIÓN PEDIDOS > $500 -->
         <div class="card" style="border: 2px solid var(--d);">
             <h3 style="color:var(--d);">⚠️ Pedidos Retenidos (> $500)</h3>
-            <p style="font-size:12px; color:#666;">Requieren autorización manual antes de enviarse al comercio.</p>
             <div id="listaAdminRevision"></div>
         </div>
-
-        <!-- VISUALIZACIÓN DE TODOS LOS PEDIDOS, COMERCIOS Y COSTOS -->
         <div class="card">
             <h3>📋 Historial de Todos los Pedidos</h3>
             <div id="tablaGlobalPedidos" style="overflow-x:auto;"></div>
         </div>
     </div>
 
-    <!-- BARRA FLOTANTE CARRITO -->
     <div id="barraCarrito" class="oculto">
         <div>
             <span id="cantCar" class="badge" style="background:var(--d);">0</span>
@@ -124,45 +110,43 @@
         <button class="btn btn-p" onclick="abrirCheckout()">Ver Carrito</button>
     </div>
 
-    <!-- MODAL CHECKOUT -->
     <div id="modalCheck" class="modal oculto">
         <div class="modal-content">
             <h3>Confirmar Pedido</h3>
             <div id="resumenCar"></div>
-            <hr>
-            <input type="text" id="chkDir" placeholder="Escribe tu dirección de entrega" required style="width:95%; margin:6px 0; padding:6px;">
-            <input type="tel" id="chkTel" placeholder="Teléfono de contacto" required style="width:95%; margin:6px 0; padding:6px;">
-            
-            <label style="font-size:12px;">Arrastra el marcador a tu punto exacto de entrega:</label>
+            <input type="text" id="chkDir" placeholder="Dirección de entrega" required style="width:95%; margin:6px 0; padding:6px;">
+            <input type="tel" id="chkTel" placeholder="Teléfono" required style="width:95%; margin:6px 0; padding:6px;">
             <div id="mapaEntrega"></div>
-
-            <div style="margin:10px 0; font-size:13px;">
-                Distancia: <b id="txtDist">0.0</b> km | Costo Envío: $<b><span id="txtEnv">0.00</span></b>
-            </div>
+            <div>Distancia: <b id="txtDist">0.0</b> km | Envío: $<b><span id="txtEnv">0.00</span></b></div>
             <h3 style="color:var(--p);">Total: $<span id="txtTot">0.00</span></h3>
-
-            <div style="text-align:right;">
-                <button class="btn btn-s" onclick="cerrarCheckout()">Cancelar</button>
-                <button class="btn btn-p" id="btnConfirmar" onclick="procesarPedido()">Confirmar Pedido</button>
-            </div>
+            <button class="btn btn-s" onclick="cerrarCheckout()">Cancelar</button>
+            <button class="btn btn-p" id="btnConfirmar" onclick="procesarPedido()">Confirmar Pedido</button>
         </div>
     </div>
 
     <script>
         const SUPABASE_URL = "https://TU_SUPABASE_URL.supabase.co";
         const SUPABASE_KEY = "TU_SUPABASE_ANON_KEY";
-        const EMAIL_ADMIN = "admin@ejemplo.com";
+        const EMAIL_ADMIN = "tu_correo@gmail.com"; // Tu correo para acceso de Administrador
 
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        let user = null;
-        let miComercio = null;
-        let comercioSel = null;
-        let carrito = [];
+        let user = null, miComercio = null, comercioSel = null, carrito = [];
         let coordsEntrega = { lat: 19.5694, lng: -99.7669 };
+        let mapaC = null, marcC = null, mapaE = null, marcCom = null, marcCli = null, rutaLine = null;
 
-        let mapaC = null, marcC = null;
-        let mapaE = null, marcCom = null, marcCli = null, rutaLine = null;
+        // --- AUTENTICACIÓN GOOGLE ---
+        async function loginGoogle() {
+            const { error } = await supabaseClient.auth.signInWithOAuth({
+                provider: 'google',
+                options: { redirectTo: window.location.origin }
+            });
+            if (error) alert("Error al conectar con Google: " + error.message);
+        }
+
+        async function cerrarSesion() {
+            await supabaseClient.auth.signOut();
+        }
 
         window.onload = async () => {
             const { data: { session } } = await supabaseClient.auth.getSession();
@@ -170,11 +154,14 @@
                 user = session.user;
                 actUserBar();
                 evalRol();
+            } else {
+                ocultar();
+                show('pLogin');
             }
 
-            supabaseClient.auth.onAuthStateChange(async (e, s) => {
-                if (s) {
-                    user = s.user;
+            supabaseClient.auth.onAuthStateChange((e, session) => {
+                if (session) {
+                    user = session.user;
                     actUserBar();
                     evalRol();
                 } else {
@@ -186,15 +173,8 @@
             });
         };
 
-        function show(id) {
-            document.getElementById(id).classList.remove('oculto');
-        }
-
-        function ocultar() {
-            ['pLogin', 'pClienteComercios', 'pClienteProds', 'pRegComercio', 'pDuenio', 'pAdmin'].forEach(i => {
-                document.getElementById(i).classList.add('oculto');
-            });
-        }
+        function show(id) { document.getElementById(id).classList.remove('oculto'); }
+        function ocultar() { ['pLogin','pClienteComercios','pClienteProds','pRegComercio','pDuenio','pAdmin'].forEach(i => document.getElementById(i).classList.add('oculto')); }
 
         function actUserBar() {
             show('barraUsuario');
@@ -223,18 +203,18 @@
             }
         }
 
+        // --- MÓDULOS DE COMERCIO Y PEDIDOS ---
         async function cargarComercios() {
             ocultar();
             show('pClienteComercios');
             const { data: cs } = await supabaseClient.from('comercios').select('*');
-            const cont = document.getElementById('listaComercios');
-            cont.innerHTML = (cs && cs.length) ? cs.map(c => `
+            document.getElementById('listaComercios').innerHTML = (cs && cs.length) ? cs.map(c => `
                 <div class="tarjeta">
                     <img src="${c.logo_url || 'https://via.placeholder.com/150'}">
                     <h4>${c.nombre}</h4>
                     <button class="btn btn-p" onclick="verProds('${c.id}')">Ver Menú</button>
                 </div>
-            `).join('') : '<p>No hay comercios registrados.</p>';
+            `).join('') : '<p>Sin comercios disponibles</p>';
         }
 
         async function verProds(id) {
@@ -245,15 +225,14 @@
             document.getElementById('txtComercioSel').innerText = c.nombre;
 
             const { data: ps } = await supabaseClient.from('productos').select('*').eq('comercio_id', id);
-            const cont = document.getElementById('listaProdsCliente');
-            cont.innerHTML = (ps && ps.length) ? ps.map(p => `
+            document.getElementById('listaProdsCliente').innerHTML = (ps && ps.length) ? ps.map(p => `
                 <div class="tarjeta">
                     <img src="${p.imagen_url || 'https://via.placeholder.com/150'}">
                     <h4>${p.nombre}</h4>
                     <p>$${Number(p.precio).toFixed(2)}</p>
                     <button class="btn btn-p" onclick="addCar('${p.id}', '${p.nombre}', ${p.precio})">+ Agregar</button>
                 </div>
-            `).join('') : '<p>Sin productos disponibles.</p>';
+            `).join('') : '<p>Sin productos disponibles</p>';
         }
 
         function addCar(id, nombre, precio) {
@@ -264,16 +243,14 @@
         }
 
         function actCar() {
-            const bar = document.getElementById('barraCarrito');
             const cant = carrito.reduce((a, i) => a + i.cant, 0);
             const sub = carrito.reduce((a, i) => a + (i.precio * i.cant), 0);
-
             if (cant > 0) {
-                bar.classList.remove('oculto');
+                show('barraCarrito');
                 document.getElementById('cantCar').innerText = cant;
                 document.getElementById('subCar').innerText = sub.toFixed(2);
             } else {
-                bar.classList.add('oculto');
+                document.getElementById('barraCarrito').classList.add('oculto');
             }
         }
 
@@ -285,10 +262,7 @@
 
         function abrirCheckout() {
             show('modalCheck');
-            document.getElementById('resumenCar').innerHTML = carrito.map(i => `
-                <p style="margin:4px 0;">${i.cant}x ${i.nombre} - <b>$${(i.precio * i.cant).toFixed(2)}</b></p>
-            `).join('');
-
+            document.getElementById('resumenCar').innerHTML = carrito.map(i => `<p>${i.cant}x ${i.nombre} - $${(i.precio * i.cant).toFixed(2)}</p>`).join('');
             const cCom = getCoordsCom();
             setTimeout(() => {
                 if (!mapaE) {
@@ -296,7 +270,6 @@
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaE);
                     marcCom = L.marker([cCom.lat, cCom.lng]).addTo(mapaE);
                     marcCli = L.marker([coordsEntrega.lat, coordsEntrega.lng], { draggable: true }).addTo(mapaE);
-
                     marcCli.on('dragend', e => {
                         const p = e.target.getLatLng();
                         coordsEntrega = { lat: p.lat, lng: p.lng };
@@ -310,15 +283,12 @@
             }, 300);
         }
 
-        function cerrarCheckout() {
-            document.getElementById('modalCheck').classList.add('oculto');
-        }
+        function cerrarCheckout() { document.getElementById('modalCheck').classList.add('oculto'); }
 
         async function calcRuta() {
             const sub = carrito.reduce((a, i) => a + (i.precio * i.cant), 0);
             const cCom = getCoordsCom();
             let dist = 0;
-
             try {
                 const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${cCom.lng},${cCom.lat};${coordsEntrega.lng},${coordsEntrega.lat}?overview=full&geometries=geojson`);
                 const d = await r.json();
@@ -333,7 +303,6 @@
 
             const env = 25 + (dist * 5);
             const tot = sub + env;
-
             document.getElementById('txtDist').innerText = dist.toFixed(2);
             document.getElementById('txtEnv').innerText = env.toFixed(2);
             document.getElementById('txtTot').innerText = tot.toFixed(2);
@@ -342,8 +311,7 @@
         async function procesarPedido() {
             const dir = document.getElementById('chkDir').value;
             const tel = document.getElementById('chkTel').value;
-
-            if (!dir.trim() || !tel.trim()) return alert("Completa dirección y teléfono.");
+            if (!dir.trim() || !tel.trim()) return alert("Ingresa dirección y teléfono.");
 
             const btn = document.getElementById('btnConfirmar');
             btn.disabled = true;
@@ -353,7 +321,7 @@
             const tot = sub + env;
             const cCom = getCoordsCom();
 
-            // REGLA CLAVE: SI EXCEDE $500 PASA A 'revision_admin'
+            // REGLA $500
             const est = tot > 500 ? 'revision_admin' : 'pendiente';
 
             const payload = {
@@ -380,44 +348,31 @@
             if (error) {
                 alert("Error al procesar: " + error.message);
             } else {
-                if (tot > 500) {
-                    alert("⚠️ Su pedido supera los $500 pesos. Fue retenido para autorización previa del Administrador.");
-                } else {
-                    alert("¡Pedido enviado con éxito al comercio!");
-                }
+                if (tot > 500) alert("⚠️ Pedido > $500 enviado a aprobación por el Administrador.");
+                else alert("¡Pedido registrado exitosamente!");
                 carrito = [];
                 actCar();
                 cerrarCheckout();
             }
         }
 
+        // --- PANELES ---
         function cargarDuenio() {
             document.getElementById('duenioNom').innerText = miComercio.nombre;
             cargarPedidosDuenio();
-
-            supabaseClient
-                .channel('live_comercio')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos', filter: `comercio_id=eq.${miComercio.id}` }, () => cargarPedidosDuenio())
-                .subscribe();
+            supabaseClient.channel('live_comercio').on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos', filter: `comercio_id=eq.${miComercio.id}` }, () => cargarPedidosDuenio()).subscribe();
         }
 
         async function cargarPedidosDuenio() {
-            const { data: peds } = await supabaseClient
-                .from('pedidos')
-                .select('*')
-                .eq('comercio_id', miComercio.id)
-                .neq('estado', 'revision_admin')
-                .order('created_at', { ascending: false });
-
-            const cont = document.getElementById('listaPedidosDuenio');
-            cont.innerHTML = (peds && peds.length) ? peds.map(p => `
+            const { data: peds } = await supabaseClient.from('pedidos').select('*').eq('comercio_id', miComercio.id).neq('estado', 'revision_admin').order('created_at', { ascending: false });
+            document.getElementById('listaPedidosDuenio').innerHTML = (peds && peds.length) ? peds.map(p => `
                 <div style="background:#f8f9fa; padding:8px; margin-bottom:6px; border-left:3px solid var(--p);">
                     <span class="badge st-${p.estado}">${p.estado}</span> <b>${p.cliente_nombre}</b> ($${Number(p.precio).toFixed(2)})<br>
                     <small>${p.producto_nombre}</small><br>
-                    ${p.estado === 'pendiente' ? `<button class="btn btn-p" onclick="setEstado('${p.id}','preparado')">👨‍🍳 Aceptar y Preparar</button>` : ''}
-                    ${p.estado === 'preparado' ? `<button class="btn btn-w" onclick="setEstado('${p.id}','despachado')">📦 Despachar a Repartidor</button>` : ''}
+                    ${p.estado === 'pendiente' ? `<button class="btn btn-p" onclick="setEstado('${p.id}','preparado')">👨‍🍳 Aceptar</button>` : ''}
+                    ${p.estado === 'preparado' ? `<button class="btn btn-w" onclick="setEstado('${p.id}','despachado')">📦 Despachar</button>` : ''}
                 </div>
-            `).join('') : '<p>No hay pedidos pendientes.</p>';
+            `).join('') : '<p>Sin pedidos pendientes</p>';
         }
 
         async function setEstado(id, est) {
@@ -429,30 +384,21 @@
             cargarRevAdmin();
             cargarTablaAdmin();
             cargarMetricasAdmin();
-
-            supabaseClient
-                .channel('live_admin')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
-                    cargarRevAdmin();
-                    cargarTablaAdmin();
-                    cargarMetricasAdmin();
-                })
-                .subscribe();
+            supabaseClient.channel('live_admin').on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
+                cargarRevAdmin(); cargarTablaAdmin(); cargarMetricasAdmin();
+            }).subscribe();
         }
 
         async function cargarRevAdmin() {
             const { data: peds } = await supabaseClient.from('pedidos').select('*').eq('estado', 'revision_admin');
-            const cont = document.getElementById('listaAdminRevision');
-
-            cont.innerHTML = (peds && peds.length) ? peds.map(p => `
-                <div style="border:1px solid #ddd; padding:8px; margin-bottom:6px; background:#fff;">
+            document.getElementById('listaAdminRevision').innerHTML = (peds && peds.length) ? peds.map(p => `
+                <div style="border:1px solid #ddd; padding:8px; margin-bottom:6px;">
                     <b>${p.comercio_nombre}</b> - Total: $${Number(p.precio).toFixed(2)}<br>
                     <small>Cliente: ${p.cliente_nombre} (${p.telefono_cliente})</small><br>
-                    <small>Productos: ${p.producto_nombre}</small><br>
-                    <button class="btn btn-d" onclick="decidirAdmin('${p.id}', 'cancelado')">❌ Cancelar</button>
-                    <button class="btn btn-p" onclick="decidirAdmin('${p.id}', 'pendiente')">✅ Aceptar y Enviar a Comercio</button>
+                    <button class="btn btn-d" onclick="decidirAdmin('${p.id}','cancelado')">❌ Cancelar</button>
+                    <button class="btn btn-p" onclick="decidirAdmin('${p.id}','pendiente')">✅ Aceptar</button>
                 </div>
-            `).join('') : '<p>Sin pedidos retenidos en este momento.</p>';
+            `).join('') : '<p>Sin pedidos retenidos</p>';
         }
 
         async function decidirAdmin(id, est) {
@@ -462,43 +408,18 @@
 
         async function cargarTablaAdmin() {
             const { data: peds } = await supabaseClient.from('pedidos').select('*').order('created_at', { ascending: false });
-            const cont = document.getElementById('tablaGlobalPedidos');
-
-            cont.innerHTML = (peds && peds.length) ? `
+            document.getElementById('tablaGlobalPedidos').innerHTML = (peds && peds.length) ? `
                 <table>
-                    <thead>
-                        <tr>
-                            <th>Cliente</th>
-                            <th>Comercio</th>
-                            <th>Productos</th>
-                            <th>Subtotal</th>
-                            <th>Envío</th>
-                            <th>Total</th>
-                            <th>Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${peds.map(p => `
-                            <tr>
-                                <td>${p.cliente_nombre}<br><small>${p.telefono_cliente}</small></td>
-                                <td>${p.comercio_nombre}</td>
-                                <td>${p.producto_nombre}</td>
-                                <td>$${Number(p.subtotal || 0).toFixed(2)}</td>
-                                <td>$${Number(p.costo_envio || 0).toFixed(2)}</td>
-                                <td><b>$${Number(p.precio).toFixed(2)}</b></td>
-                                <td><span class="badge st-${p.estado}">${p.estado}</span></td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
+                    <tr><th>Cliente</th><th>Comercio</th><th>Total</th><th>Estado</th></tr>
+                    ${peds.map(p => `<tr><td>${p.cliente_nombre}</td><td>${p.comercio_nombre}</td><td>$${Number(p.precio).toFixed(2)}</td><td><span class="badge st-${p.estado}">${p.estado}</span></td></tr>`).join('')}
                 </table>
-            ` : '<p>Sin historial de pedidos.</p>';
+            ` : '<p>Sin datos</p>';
         }
 
         async function cargarMetricasAdmin() {
             const { count: c1 } = await supabaseClient.from('comercios').select('*', { count: 'exact', head: true });
             const { count: c2 } = await supabaseClient.from('productos').select('*', { count: 'exact', head: true });
             const { count: c3 } = await supabaseClient.from('pedidos').select('*', { count: 'exact', head: true });
-
             document.getElementById('mCom').innerText = c1 || 0;
             document.getElementById('mPro').innerText = c2 || 0;
             document.getElementById('mPed').innerText = c3 || 0;
@@ -518,16 +439,13 @@
 
         async function guardarComercio(e) {
             e.preventDefault();
-            const pos = marcC.getLatLng();
-            const file = document.getElementById('regLogo').files[0];
+            const pos = marcC.getLatLng(), file = document.getElementById('regLogo').files[0];
             let url = '';
-
             if (file) {
                 const name = `${Date.now()}_${file.name}`;
                 const { data } = await supabaseClient.storage.from('logos').upload(name, file);
                 if (data) url = supabaseClient.storage.from('logos').getPublicUrl(name).data.publicUrl;
             }
-
             await supabaseClient.from('comercios').insert([{
                 owner_id: user.id,
                 nombre: document.getElementById('regNom').value,
@@ -535,7 +453,6 @@
                 direccion: `${document.getElementById('regDir').value} (GPS: ${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)})`,
                 logo_url: url
             }]);
-
             evalRol();
         }
 
@@ -543,26 +460,23 @@
             e.preventDefault();
             const file = document.getElementById('pImg').files[0];
             let url = '';
-
             if (file) {
                 const name = `${Date.now()}_${file.name}`;
                 const { data } = await supabaseClient.storage.from('productos').upload(name, file);
                 if (data) url = supabaseClient.storage.from('productos').getPublicUrl(name).data.publicUrl;
             }
-
             await supabaseClient.from('productos').insert([{
                 comercio_id: miComercio.id,
                 nombre: document.getElementById('pNom').value,
                 precio: parseFloat(document.getElementById('pPre').value),
                 imagen_url: url
             }]);
-
-            alert("Producto guardado exitosamente");
+            alert("Producto Guardado");
             cargarDuenio();
         }
 
         async function eliminarComercio() {
-            if (confirm("¿Estás seguro de eliminar tu comercio?")) {
+            if (confirm("¿Eliminar comercio?")) {
                 await supabaseClient.from('comercios').delete().eq('id', miComercio.id);
                 miComercio = null;
                 evalRol();
