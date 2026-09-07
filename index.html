@@ -129,12 +129,11 @@
         </div>
     </div>
 
-   <script>
+  <script>
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
     const EMAIL_ADMIN = "q.h.ricardoarturo@gmail.com";
 
-    // Corrección aquí: usar SUPABASE_ANON_KEY
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let user = null, miComercio = null, comercioSel = null, carrito = [];
@@ -186,6 +185,21 @@
             alert("Error en el registro: " + error.message);
         } else {
             alert("Registro exitoso. Si tienes verificación de correo activa en Supabase, revisa tu bandeja de entrada.");
+        }
+    }
+
+    async function recuperarPassword() {
+        const email = document.getElementById('txtEmail').value;
+        if (!email) return alert("Ingresa tu correo para enviarte el enlace de recuperación.");
+
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.href
+        });
+
+        if (error) {
+            alert("Error al enviar el correo: " + error.message);
+        } else {
+            alert("Se ha enviado un enlace a tu correo para restablecer la contraseña.");
         }
     }
 
@@ -316,44 +330,67 @@
                 dist = d.routes[0].distance / 1000;
                 const pts = d.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
                 if (rutaLine) mapaE.removeLayer(rutaLine);
-                rutaLine = L.polyline(pts, { color: '#27ae60', weight: 4 }).addTo(mapaE);
+                const colorRuta = dist > 10 ? '#e74c3c' : '#27ae60';
+                rutaLine = L.polyline(pts, { color: colorRuta, weight: 4 }).addTo(mapaE);
                 mapaE.fitBounds(rutaLine.getBounds());
             }
         } catch (e) {}
 
         const env = 25 + (dist * 5);
         const tot = sub + env;
+
         document.getElementById('txtDist').innerText = dist.toFixed(2);
         document.getElementById('txtEnv').innerText = env.toFixed(2);
         document.getElementById('txtTot').innerText = tot.toFixed(2);
+
+        // Bloqueo visual por distancia > 10km
+        const btnConfirmar = document.getElementById('btnConfirmar');
+        if (btnConfirmar) {
+            if (dist > 10) {
+                btnConfirmar.disabled = true;
+                btnConfirmar.innerText = "Fuera de Cobertura (>10km)";
+                btnConfirmar.style.backgroundColor = "#95a5a6";
+            } else {
+                btnConfirmar.disabled = false;
+                btnConfirmar.innerText = "Confirmar Pedido";
+                btnConfirmar.style.backgroundColor = "";
+            }
+        }
     }
 
     async function procesarPedido() {
+        const dist = parseFloat(document.getElementById('txtDist').innerText) || 0;
+        if (dist > 10) {
+            alert(`ERROR: La distancia de entrega (${dist.toFixed(2)} km) excede el límite de 10 km.`);
+            return;
+        }
+
         const dir = document.getElementById('chkDir').value;
         const tel = document.getElementById('chkTel').value;
-        if (!dir.trim() || !tel.trim()) return alert("Ingresa dirección y teléfono.");
+        if (!dir.trim() || !tel.trim()) return alert("Por favor ingresa la dirección y teléfono de contacto.");
 
         const btn = document.getElementById('btnConfirmar');
-        btn.disabled = true;
+        if (btn) btn.disabled = true;
 
         const sub = carrito.reduce((a, i) => a + (i.precio * i.cant), 0);
         const env = parseFloat(document.getElementById('txtEnv').innerText) || 0;
         const tot = sub + env;
         const cCom = getCoordsCom();
 
+        // Si el total supera 500 entra como 'revision_admin', de lo contrario 'pendiente'
         const est = tot > 500 ? 'revision_admin' : 'pendiente';
 
         const payload = {
-            cliente_nombre: user.email.split('@')[0],
-            cliente_email: user.email,
+            cliente_nombre: user ? user.email.split('@')[0] : 'Cliente',
+            cliente_email: user ? user.email : '',
             telefono_cliente: tel,
             direccion_entrega: `${dir} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
             producto_nombre: carrito.map(i => `${i.cant}x ${i.nombre}`).join(', '),
             subtotal: sub,
             costo_envio: env,
             precio: tot,
-            comercio_id: comercioSel.id,
-            comercio_nombre: comercioSel.nombre,
+            comercio_id: comercioSel ? comercioSel.id : null,
+            comercio_nombre: comercioSel ? comercioSel.nombre : 'Comercio',
             lat_origen: cCom.lat,
             lng_origen: cCom.lng,
             lat_destino: coordsEntrega.lat,
@@ -362,20 +399,23 @@
         };
 
         const { error } = await supabaseClient.from('pedidos').insert([payload]);
-        btn.disabled = false;
+        if (btn) btn.disabled = false;
 
         if (error) {
-            alert("Error al procesar: " + error.message);
+            alert("Error al procesar pedido: " + error.message);
         } else {
-            if (tot > 500) alert("⚠️ Pedido > $500 enviado a aprobación por el Administrador.");
-            else alert("¡Pedido registrado exitosamente!");
+            if (tot > 500) {
+                alert("⚠️ Su pedido supera los $500 y ha sido enviado al Administrador para su aprobación.");
+            } else {
+                alert("¡Pedido registrado exitosamente!");
+            }
             carrito = [];
             actCar();
             cerrarCheckout();
         }
     }
 
-    // --- PANELES ---
+    // --- PANELES DE ADMINISTRACIÓN Y DUEÑO ---
     function cargarDuenio() {
         document.getElementById('duenioNom').innerText = miComercio.nombre;
         cargarPedidosDuenio();
@@ -404,44 +444,85 @@
         cargarTablaAdmin();
         cargarMetricasAdmin();
         supabaseClient.channel('live_admin').on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
-            cargarRevAdmin(); cargarTablaAdmin(); cargarMetricasAdmin();
+            cargarRevAdmin(); 
+            cargarTablaAdmin(); 
+            cargarMetricasAdmin();
         }).subscribe();
     }
 
     async function cargarRevAdmin() {
-        const { data: peds } = await supabaseClient.from('pedidos').select('*').eq('estado', 'revision_admin');
-        document.getElementById('listaAdminRevision').innerHTML = (peds && peds.length) ? peds.map(p => `
-            <div style="border:1px solid #ddd; padding:8px; margin-bottom:6px;">
-                <b>${p.comercio_nombre}</b> - Total: $${Number(p.precio).toFixed(2)}<br>
-                <small>Cliente: ${p.cliente_nombre} (${p.telefono_cliente})</small><br>
-                <button class="btn btn-d" onclick="decidirAdmin('${p.id}','cancelado')">❌ Cancelar</button>
-                <button class="btn btn-p" onclick="decidirAdmin('${p.id}','pendiente')">✅ Aceptar</button>
+        const contenedor = document.getElementById('listaAdminRevision');
+        if (!contenedor) return;
+
+        const { data: peds, error } = await supabaseClient.from('pedidos').select('*').eq('estado', 'revision_admin').order('created_at', { ascending: false });
+
+        if (error) {
+            contenedor.innerHTML = '<p>Error al obtener revisiones.</p>';
+            return;
+        }
+
+        contenedor.innerHTML = (peds && peds.length) ? peds.map(p => `
+            <div style="border:1px solid #e74c3c; background:#fff5f5; padding:10px; margin-bottom:8px; border-radius:6px;">
+                <h4 style="margin:0 0 5px 0; color:#c0392b;">⚠️ Pedido > $500 ($${Number(p.precio).toFixed(2)})</h4>
+                <b>Comercio:</b> ${p.comercio_nombre}<br>
+                <b>Cliente:</b> ${p.cliente_nombre} (${p.cliente_email})<br>
+                <b>Teléfono:</b> ${p.telefono_cliente || 'No provisto'}<br>
+                <b>Productos:</b> ${p.producto_nombre}<br>
+                <b>Dirección:</b> ${p.direccion_entrega}<br>
+                <div style="margin-top:8px;">
+                    <button class="btn btn-p" onclick="decidirAdmin('${p.id}','pendiente')">✅ Aceptar (Liberar al Comercio)</button>
+                    <button class="btn btn-d" style="background:#e74c3c;" onclick="decidirAdmin('${p.id}','cancelado')">❌ Cancelar</button>
+                </div>
             </div>
-        `).join('') : '<p>Sin pedidos retenidos</p>';
+        `).join('') : '<p>Sin pedidos retenidos para revisión.</p>';
     }
 
     async function decidirAdmin(id, est) {
-        await supabaseClient.from('pedidos').update({ estado: est }).eq('id', id);
-        cargarRevAdmin();
+        const accion = est === 'pendiente' ? 'Aceptar y liberar al comercio' : 'Cancelar';
+        if (!confirm(`¿Deseas ${accion} este pedido?`)) return;
+
+        const { error } = await supabaseClient.from('pedidos').update({ estado: est }).eq('id', id);
+        if (error) {
+            alert("Error al actualizar el pedido: " + error.message);
+        } else {
+            cargarAdmin();
+        }
     }
 
     async function cargarTablaAdmin() {
         const { data: peds } = await supabaseClient.from('pedidos').select('*').order('created_at', { ascending: false });
-        document.getElementById('tablaGlobalPedidos').innerHTML = (peds && peds.length) ? `
-            <table>
-                <tr><th>Cliente</th><th>Comercio</th><th>Total</th><th>Estado</th></tr>
-                ${peds.map(p => `<tr><td>${p.cliente_nombre}</td><td>${p.comercio_nombre}</td><td>$${Number(p.precio).toFixed(2)}</td><td><span class="badge st-${p.estado}">${p.estado}</span></td></tr>`).join('')}
+        const contenedor = document.getElementById('tablaGlobalPedidos');
+        if (!contenedor) return;
+
+        contenedor.innerHTML = (peds && peds.length) ? `
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:#eee; text-align:left;">
+                        <th>Cliente</th><th>Comercio</th><th>Total</th><th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${peds.map(p => `
+                        <tr style="border-bottom:1px solid #ddd;">
+                            <td>${p.cliente_nombre}</td>
+                            <td>${p.comercio_nombre}</td>
+                            <td>$${Number(p.precio).toFixed(2)}</td>
+                            <td><span class="badge st-${p.estado}">${p.estado}</span></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
             </table>
-        ` : '<p>Sin datos</p>';
+        ` : '<p>Sin registros globales de pedidos.</p>';
     }
 
     async function cargarMetricasAdmin() {
         const { count: c1 } = await supabaseClient.from('comercios').select('*', { count: 'exact', head: true });
         const { count: c2 } = await supabaseClient.from('productos').select('*', { count: 'exact', head: true });
         const { count: c3 } = await supabaseClient.from('pedidos').select('*', { count: 'exact', head: true });
-        document.getElementById('mCom').innerText = c1 || 0;
-        document.getElementById('mPro').innerText = c2 || 0;
-        document.getElementById('mPed').innerText = c3 || 0;
+        
+        if (document.getElementById('mCom')) document.getElementById('mCom').innerText = c1 || 0;
+        if (document.getElementById('mPro')) document.getElementById('mPro').innerText = c2 || 0;
+        if (document.getElementById('mPed')) document.getElementById('mPed').innerText = c3 || 0;
     }
 
     function mostrarRegComercio() {
