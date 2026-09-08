@@ -1517,12 +1517,17 @@ async function procesarPedidoFinal() {
 }
     // PANEL DE DUEÑO, HORA DE PEDIDO Y REFRESH DE ESTADOS
     async function cargarPanelDuenio() {
-        ocultarTodasLasPantallas();
-        document.getElementById('pantallaDuenio').classList.remove('oculto');
-        document.getElementById('nombreComercioDuenio').innerText = `🏬 ${miComercio.nombre}`;
-        document.getElementById('infoComercioDuenio').innerText = `Dirección: ${miComercio.direccion || 'N/A'} | Horario: ${miComercio.horario || 'N/A'}`;
-        cargarProductosDuenio();
-    }
+    ocultarTodasLasPantallas();
+    document.getElementById('pantallaDuenio').classList.remove('oculto');
+    document.getElementById('nombreComercioDuenio').innerText = `🏬 ${miComercio.nombre}`;
+    document.getElementById('infoComercioDuenio').innerText = `Dirección: ${miComercio.direccion || 'N/A'} | Horario: ${miComercio.horario || 'N/A'}`;
+    
+    // 1. Cargar catálogo de productos
+    cargarProductosDuenio();
+    
+    // 2. Activar la escucha en vivo y recargar pedidos recibidos
+    activarEscuchaPedidosEnTiempoReal();
+}
 
     window.eliminarMiComercio = async function() {
         if (!miComercio) return;
@@ -1563,35 +1568,54 @@ async function procesarPedidoFinal() {
     }
 }
 
-    function activarEscuchaPedidosEnTiempoReal() {
-        if (!miComercio) return;
-        cargarPedidosInicialesDuenio();
+   function activarEscuchaPedidosEnTiempoReal() {
+    if (!miComercio || !miComercio.id) return;
+    
+    // Carga inicial
+    cargarPedidosInicialesDuenio();
 
-        // Suscripción en Tiempo Real para nuevos pedidos o actualizaciones de estado por parte de repartidores
-        supabaseClient
-            .channel('pedidos_en_vivo')
-            .on('postgres_changes', {
-                event: '*', // Escucha INSERTs y UPDATEs (cuando el repartidor toma el pedido)
-                schema: 'public',
-                table: 'pedidos',
-                filter: `comercio_id=eq.${miComercio.id}`
-            }, payload => {
-                if (payload.eventType === 'INSERT') {
-                    lanzarNotificacionDuenio(payload.new);
-                }
-                cargarPedidosInicialesDuenio();
-            })
-            .subscribe();
-    }
+    // Suscripción al canal
+    supabaseClient
+        .channel(`pedidos_comercio_${miComercio.id}`)
+        .on('postgres_changes', {
+            event: '*', 
+            schema: 'public',
+            table: 'pedidos',
+            filter: `comercio_id=eq.${miComercio.id}`
+        }, payload => {
+            const pedido = payload.new;
 
-    async function cargarPedidosInicialesDuenio() {
-    const { data: pedidos } = await supabaseClient
+            // Notificar si se inserta un pedido 'pendiente' o si pasa a 'pendiente' desde 'revision_admin'
+            if (payload.eventType === 'INSERT' && pedido.estado === 'pendiente') {
+                lanzarNotificacionDuenio(pedido);
+            } else if (payload.eventType === 'UPDATE' && payload.old?.estado === 'revision_admin' && pedido.estado === 'pendiente') {
+                lanzarNotificacionDuenio(pedido);
+            }
+
+            // Refrescar lista de pedidos en pantalla
+            cargarPedidosInicialesDuenio();
+        })
+        .subscribe();
+}
+
+   async function cargarPedidosInicialesDuenio() {
+    if (!miComercio || !miComercio.id) return;
+
+    const { data: pedidos, error } = await supabaseClient
         .from('pedidos')
         .select('*')
         .eq('comercio_id', miComercio.id)
         .order('created_at', { ascending: false });
 
     const cont = document.getElementById('listaPedidosRecibidos');
+    if (!cont) return;
+
+    if (error) {
+        console.error("Error al cargar pedidos del comercio:", error);
+        cont.innerHTML = "<p style='color:red;'>Error al cargar pedidos.</p>";
+        return;
+    }
+
     if (!pedidos || pedidos.length === 0) {
         cont.innerHTML = "<p style='color:#7f8c8d;'>Aún no hay pedidos recibidos.</p>";
         return;
@@ -1602,11 +1626,9 @@ async function procesarPedidoFinal() {
         const estadoTexto = (p.estado || 'pendiente').replace('_', ' ');
         const claseEstado = obtenerClaseEstado(p.estado);
 
-        // Si tu columna 'precio' incluye envío, se resta p.costo_envio (o p.envio)
-        const subtotalProductos = p.subtotal 
-        ? Number(p.subtotal) 
-        : (Number(p.precio || 0) - Number(p.costo_envio || p.envio || 0));
-        // --- LÓGICA DE BOTONES PARA EL COMERCIO ---
+        // Cálculo seguro
+        const subtotal = Number(p.subtotal) || (Number(p.precio || 0) - Number(p.costo_envio || p.envio || 0)) || 0;
+
         let botonAccion = '';
         if (p.estado === 'pendiente') {
             botonAccion = `<button type="button" class="btn btn-primary" onclick="cambiarEstadoPedido('${p.id}', 'preparado')">👨‍🍳 Marcar Preparado</button>`;
@@ -1614,6 +1636,8 @@ async function procesarPedidoFinal() {
             botonAccion = `<button type="button" class="btn btn-success" onclick="cambiarEstadoPedido('${p.id}', 'despachado')">📦 Marcar Despachado (Enviar a Radar)</button>`;
         } else if (p.estado === 'despachado') {
             botonAccion = `<span style="font-size:12px; color:#e67e22; font-weight:bold;">⏳ Esperando que un repartidor lo tome...</span>`;
+        } else if (p.estado === 'revision_admin') {
+            botonAccion = `<span style="font-size:12px; color:#c0392b; font-weight:bold;">⚠️ En revisión por el Administrador (>$500)</span>`;
         }
 
         return `
@@ -1622,10 +1646,10 @@ async function procesarPedidoFinal() {
                     <span class="badge-estado ${claseEstado}">${estadoTexto}</span>
                     <span style="font-size: 12px; color: #7f8c8d; font-weight: bold;">🕒 ${horaFormateada}</span>
                 </div>
-                <p style="margin:2px 0;"><b>Cliente:</b> ${p.cliente_nombre}</p>
-                <p style="margin:2px 0;"><b>Productos:</b> ${p.producto_nombre}</p>
-                <p style="margin:2px 0;"><b>Ubicación:</b> ${p.direccion_entrega}</p>
-                <p style="margin:2px 0; color:#27ae60;"><b>Total:</b> $${Number(subtotalProductos).toFixed(2)}</p>
+                <p style="margin:2px 0;"><b>Cliente:</b> ${p.cliente_nombre || 'Desconocido'}</p>
+                <p style="margin:2px 0;"><b>Productos:</b> ${p.producto_nombre || ''}</p>
+                <p style="margin:2px 0;"><b>Ubicación:</b> ${p.direccion_entrega || ''}</p>
+                <p style="margin:2px 0; color:#27ae60;"><b>Total Productos:</b> $${subtotal.toFixed(2)}</p>
                 <div style="margin-top: 8px;">
                     ${botonAccion}
                 </div>
