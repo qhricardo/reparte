@@ -659,11 +659,19 @@ let supabaseClient = null;
 let usuarioActual = null;
 let miComercio = null;
 let carrito = [];
+
+// Variables de Mapas (Leaflet)
+let mapEntrega = null;
+let markerEntrega = null;
+let mapRegistro = null;
+let markerRegistro = null;
+
 let coordsEntrega = null;
+let coordsRegistroComercio = { lat: 19.5694, lng: -99.7669 };
 let comercioSeleccionadoObjeto = null;
 
 // ==========================================
-// INICIALIZACIÓN DE SUPABASE Y EVENTOS HTML
+// INICIALIZACIÓN
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON_KEY !== 'undefined') {
@@ -674,10 +682,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // Vincular Eventos de Botones HTML
     vincularEventosUI();
 
-    // Escuchar Cambios de Sesión (OAuth Google)
     supabaseClient.auth.onAuthStateChange(async (event, session) => {
         if (session) {
             usuarioActual = session.user;
@@ -690,22 +696,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     await verificarSesionUsuario();
-
-    if (typeof inicializarMapaEntrega === 'function') {
-        inicializarMapaEntrega();
-    }
 });
 
 function vincularEventosUI() {
     const btnLoginGoogle = document.getElementById('btnLoginGoogle');
-    if (btnLoginGoogle) {
-        btnLoginGoogle.addEventListener('click', loginWithGoogle);
-    }
+    if (btnLoginGoogle) btnLoginGoogle.addEventListener('click', loginWithGoogle);
 
     const btnCerrarSesion = document.getElementById('btnCerrarSesion');
-    if (btnCerrarSesion) {
-        btnCerrarSesion.addEventListener('click', logout);
-    }
+    if (btnCerrarSesion) btnCerrarSesion.addEventListener('click', logout);
 
     const btnIrCrearComercio = document.getElementById('btnIrCrearComercio');
     if (btnIrCrearComercio) {
@@ -713,29 +711,26 @@ function vincularEventosUI() {
             ocultarTodasLasPantallas();
             const pReg = document.getElementById('pantallaRegistroComercio');
             if (pReg) pReg.classList.remove('oculto');
+            setTimeout(inicializarMapaRegistroComercio, 300);
         });
     }
 
     const btnCancelarRegistro = document.getElementById('btnCancelarRegistro');
-    if (btnCancelarRegistro) {
-        btnCancelarRegistro.addEventListener('click', irAInicio);
-    }
+    if (btnCancelarRegistro) btnCancelarRegistro.addEventListener('click', irAInicio);
 
     const btnVolverComercios = document.getElementById('btnVolverComercios');
-    if (btnVolverComercios) {
-        btnVolverComercios.addEventListener('click', irAInicio);
+    if (btnVolverComercios) btnVolverComercios.addEventListener('click', irAInicio);
+
+    const formRegistroComercio = document.getElementById('formRegistroComercio');
+    if (formRegistroComercio) {
+        formRegistroComercio.addEventListener('submit', registrarComercioSubmit);
     }
 }
 
 async function verificarSesionUsuario() {
     if (!supabaseClient) return;
-
     const { data: { session }, error } = await supabaseClient.auth.getSession();
-    
-    if (error) {
-        console.error("Error al obtener la sesión:", error);
-        return;
-    }
+    if (error) return console.error("Error al obtener la sesión:", error);
 
     if (session) {
         usuarioActual = session.user;
@@ -752,18 +747,11 @@ async function verificarSesionUsuario() {
 // ==========================================
 async function loginWithGoogle() {
     if (!supabaseClient) return alert("Supabase no está configurado.");
-    
     const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-            redirectTo: window.location.origin + window.location.pathname
-        }
+        options: { redirectTo: window.location.origin + window.location.pathname }
     });
-
-    if (error) {
-        console.error("Error al iniciar sesión con Google:", error);
-        alert("Error de autenticación: " + error.message);
-    }
+    if (error) alert("Error de autenticación: " + error.message);
 }
 
 async function logout() {
@@ -775,7 +763,6 @@ async function logout() {
         usuarioActual = null;
         miComercio = null;
         actualizarInterfazUsuario(false);
-        irAInicio();
         window.location.reload();
     }
 }
@@ -792,17 +779,12 @@ function actualizarInterfazUsuario(sesionIniciada) {
         }
         irAInicio();
     } else {
-        // 1. Primero oculta todo
         ocultarTodasLasPantallas();
-        // 2. Muestra ÚNICAMENTE el login
         if (pantallaLogin) pantallaLogin.classList.remove('oculto');
         if (barraUsuario) barraUsuario.classList.add('oculto');
     }
 }
 
-// ==========================================
-// ROL Y BOTÓN MODO COMPRADOR / DUEÑO
-// ==========================================
 async function verificarSiEsDuenio() {
     if (!usuarioActual || !supabaseClient) return;
 
@@ -814,18 +796,14 @@ async function verificarSiEsDuenio() {
     const btnCambiarModo = document.getElementById('btnCambiarModo');
     const badgeRol = document.getElementById('badgeRol');
 
-    if (error) {
-        console.error("Error al consultar comercio:", error);
-        return;
-    }
+    if (error) return console.error("Error al consultar comercio:", error);
 
     if (comercios && comercios.length > 0) {
         miComercio = comercios[0];
         if (badgeRol) badgeRol.innerText = "Dueño de Comercio";
         if (btnCambiarModo) {
             btnCambiarModo.classList.remove('oculto');
-            // Alterna según la pantalla visible actual
-            btnCambiarModo.innerText = "🛒 Modo Comprador";
+            btnCambiarModo.innerText = "⚙️ Panel Dueño";
             btnCambiarModo.onclick = () => {
                 const pantallaDuenio = document.getElementById('pantallaDuenio');
                 if (pantallaDuenio && !pantallaDuenio.classList.contains('oculto')) {
@@ -845,50 +823,7 @@ async function verificarSiEsDuenio() {
 }
 
 // ==========================================
-// CARGAR COMERCIOS CON IMAGEN CORREGIDA
-// ==========================================
-async function cargarComerciosCliente() {
-    const contenedor = document.getElementById('listaComercios');
-    if (!contenedor) return;
-
-    contenedor.innerHTML = "<p>Cargando comercios...</p>";
-
-    const { data: comercios, error } = await supabaseClient
-        .from('comercios')
-        .select('*');
-
-    if (error) {
-        console.error("Error al cargar comercios:", error);
-        contenedor.innerHTML = "<p style='color:red;'>Error al cargar la lista de comercios.</p>";
-        return;
-    }
-
-    if (!comercios || comercios.length === 0) {
-        contenedor.innerHTML = "<p style='color:#666;'>No hay comercios registrados por el momento.</p>";
-        return;
-    }
-
-    contenedor.innerHTML = comercios.map(c => {
-        // Valida la URL de la imagen en diferentes campos posibles de la BD
-        const urlImagen = c.logo || c.logo_url || c.imagen || c.imagen_url || 'https://via.placeholder.com/80?text=Comercio';
-
-        return `
-            <div class="card card-comercio" style="cursor:pointer; border:1px solid #e0e0e0; padding:15px; margin-bottom:10px; border-radius:8px;" onclick="verProductosComercio('${c.id}', '${c.nombre.replace(/'/g, "\\'")}')">
-                <div style="display:flex; align-items:center; gap:15px;">
-                    <img src="${urlImagen}" alt="${c.nombre}" style="width:80px; height:80px; object-fit:cover; border-radius:6px; background-color:#eee;" onerror="this.src='https://via.placeholder.com/80?text=Sin+Imagen';">
-                    <div>
-                        <h3 style="margin:0 0 5px 0;">${c.nombre}</h3>
-                        <p style="margin:0; font-size:14px; color:#666;">📍 ${c.direccion || 'Sin dirección'}</p>
-                        <p style="margin:0; font-size:12px; color:#888;">🕒 Horario: ${c.horario || 'No especificado'}</p>
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-// ==========================================
-// NAVEGACIÓN
+// NAVEGACIÓN Y VISTAS
 // ==========================================
 function ocultarTodasLasPantallas() {
     const pantallas = [
@@ -913,17 +848,155 @@ async function irAInicio() {
         if (login) login.classList.remove('oculto');
         return;
     }
-    
     ocultarTodasLasPantallas();
     const cliente = document.getElementById('pantallaClienteComercios');
     if (cliente) cliente.classList.remove('oculto');
-
-    // Cargar la lista de comercios registrados desde Supabase
     await cargarComerciosCliente();
 }
 
-    // ==========================================
-// CARGAR COMERCIOS Y PRODUCTOS (CLIENTE)
+// ==========================================
+// MAPAS (LEAFLET)
+// ==========================================
+function inicializarMapaRegistroComercio() {
+    const cont = document.getElementById('mapaRegistroComercio');
+    if (!cont) return;
+
+    const latDef = 19.5694, lngDef = -99.7669;
+
+    if (!mapRegistro) {
+        mapRegistro = L.map('mapaRegistroComercio').setView([latDef, lngDef], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(mapRegistro);
+
+        markerRegistro = L.marker([latDef, lngDef], { draggable: true }).addTo(mapRegistro);
+        coordsRegistroComercio = { lat: latDef, lng: lngDef };
+
+        markerRegistro.on('dragend', function (e) {
+            const pos = e.target.getLatLng();
+            coordsRegistroComercio = { lat: pos.lat, lng: pos.lng };
+        });
+
+        mapRegistro.on('click', function (e) {
+            markerRegistro.setLatLng(e.latlng);
+            coordsRegistroComercio = { lat: e.latlng.lat, lng: e.latlng.lng };
+        });
+    } else {
+        mapRegistro.invalidateSize();
+    }
+}
+
+function inicializarMapaEntrega() {
+    const cont = document.getElementById('mapaEntrega');
+    if (!cont) return;
+
+    const latDef = 19.5694, lngDef = -99.7669;
+
+    if (!mapEntrega) {
+        mapEntrega = L.map('mapaEntrega').setView([latDef, lngDef], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(mapEntrega);
+
+        markerEntrega = L.marker([latDef, lngDef], { draggable: true }).addTo(mapEntrega);
+        coordsEntrega = { lat: latDef, lng: lngDef };
+
+        const actualizarCoordenadas = (latlng) => {
+            coordsEntrega = { lat: latlng.lat, lng: latlng.lng };
+            calcularDistanciaYEnvio();
+        };
+
+        markerEntrega.on('dragend', (e) => actualizarCoordenadas(e.target.getLatLng()));
+        mapEntrega.on('click', (e) => {
+            markerEntrega.setLatLng(e.latlng);
+            actualizarCoordenadas(e.latlng);
+        });
+    } else {
+        mapEntrega.invalidateSize();
+    }
+}
+
+function calcularDistanciaYEnvio() {
+    if (!coordsEntrega) return;
+    const origen = obtenerCoordsComercioActivo();
+    
+    // Fórmula de Haversine para calcular la distancia en KM
+    const R = 6371;
+    const dLat = (coordsEntrega.lat - origen.lat) * Math.PI / 180;
+    const dLng = (coordsEntrega.lng - origen.lng) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(origen.lat * Math.PI / 180) * Math.cos(coordsEntrega.lat * Math.PI / 180) *
+              Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const dist = R * c;
+
+    const costoEnvio = dist <= 2 ? 25 : 25 + Math.ceil(dist - 2) * 10;
+
+    const txtDist = document.getElementById('txtDistancia');
+    const txtEnvio = document.getElementById('txtCostoEnvio');
+
+    if (txtDist) txtDist.innerText = `${dist.toFixed(2)} km`;
+    if (txtEnvio) txtEnvio.innerText = `$${costoEnvio.toFixed(2)}`;
+
+    recalcularTotalesCheckout();
+}
+
+function obtenerCoordsComercioActivo() {
+    if (comercioSeleccionadoObjeto && comercioSeleccionadoObjeto.lat && comercioSeleccionadoObjeto.lng) {
+        return { lat: parseFloat(comercioSeleccionadoObjeto.lat), lng: parseFloat(comercioSeleccionadoObjeto.lng) };
+    }
+    return { lat: 19.5694, lng: -99.7669 };
+}
+
+// ==========================================
+// REGISTRO DE COMERCIO
+// ==========================================
+async function registrarComercioSubmit(e) {
+    e.preventDefault();
+    if (!usuarioActual) return alert("Debes iniciar sesión.");
+
+    const nombre = document.getElementById('regNombreComercio').value.trim();
+    const telefono = document.getElementById('regTelefonoComercio').value.trim();
+    const direccion = document.getElementById('regDireccionComercio').value.trim();
+    const horario = document.getElementById('regHorarioComercio').value.trim();
+    const archivoLogo = document.getElementById('regLogoComercioArchivo').files[0];
+
+    if (!archivoLogo) return alert("Selecciona una imagen o logo para tu comercio.");
+
+    try {
+        const ext = archivoLogo.name.split('.').pop();
+        const rutaLogo = `logos/${usuarioActual.id}_${Date.now()}.${ext}`;
+
+        const { error: upErr } = await supabaseClient.storage.from('comercios').upload(rutaLogo, archivoLogo);
+        if (upErr) throw upErr;
+
+        const { data: urlData } = supabaseClient.storage.from('comercios').getPublicUrl(rutaLogo);
+
+        const payload = {
+            duenio_id: usuarioActual.id,
+            nombre: nombre,
+            telefono: telefono,
+            direccion: direccion,
+            horario: horario,
+            imagen: urlData.publicUrl,
+            logo: urlData.publicUrl,
+            lat: coordsRegistroComercio.lat,
+            lng: coordsRegistroComercio.lng
+        };
+
+        const { error: insErr } = await supabaseClient.from('comercios').insert([payload]);
+        if (insErr) throw insErr;
+
+        alert("¡Comercio registrado con éxito!");
+        await verificarSiEsDuenio();
+        cargarPanelDuenio();
+    } catch (err) {
+        alert("Error al registrar comercio: " + err.message);
+    }
+}
+
+// ==========================================
+// CLIENTE Y COMERCIOS
 // ==========================================
 async function cargarComerciosCliente() {
     const contenedor = document.getElementById('listaComercios');
@@ -931,37 +1004,35 @@ async function cargarComerciosCliente() {
 
     contenedor.innerHTML = "<p>Cargando comercios...</p>";
 
-    const { data: comercios, error } = await supabaseClient
-        .from('comercios')
-        .select('*');
+    const { data: comercios, error } = await supabaseClient.from('comercios').select('*');
 
     if (error) {
-        console.error("Error al cargar comercios:", error);
-        contenedor.innerHTML = "<p style='color:red;'>Error al cargar la lista de comercios.</p>";
+        contenedor.innerHTML = "<p style='color:red;'>Error al cargar comercios.</p>";
         return;
     }
 
     if (!comercios || comercios.length === 0) {
-        contenedor.innerHTML = "<p style='color:#666;'>No hay comercios registrados por el momento.</p>";
+        contenedor.innerHTML = "<p>No hay comercios disponibles.</p>";
         return;
     }
 
-    contenedor.innerHTML = comercios.map(c => `
-        <div class="card card-comercio" style="cursor:pointer; border:1px solid #e0e0e0; padding:15px; margin-bottom:10px; border-radius:8px;" onclick="verProductosComercio('${c.id}', '${c.nombre.replace(/'/g, "\\'")}')">
-            <div style="display:flex; align-items:center; gap:15px;">
-                <img src="${c.logo || c.imagen || 'https://via.placeholder.com/80'}" alt="${c.nombre}" style="width:80px; height:80px; object-fit:cover; border-radius:6px;">
+    contenedor.innerHTML = comercios.map(c => {
+        const urlImg = c.imagen || c.logo || c.logo_url || c.imagen_url || 'https://via.placeholder.com/100?text=Comercio';
+        return `
+            <div class="card card-comercio" style="cursor:pointer; border:1px solid #ddd; padding:12px; margin-bottom:12px; border-radius:8px; display:flex; gap:12px; align-items:center;" onclick="verProductosComercio('${c.id}', '${c.nombre.replace(/'/g, "\\'")}', ${c.lat || 19.5694}, ${c.lng || -99.7669})">
+                <img src="${urlImg}" alt="${c.nombre}" style="width:80px; height:80px; object-fit:cover; border-radius:6px; background:#f0f0f0;" onerror="this.src='https://via.placeholder.com/80?text=Sin+Imagen';">
                 <div>
-                    <h3 style="margin:0 0 5px 0;">${c.nombre}</h3>
-                    <p style="margin:0; font-size:14px; color:#666;">📍 ${c.direccion || 'Sin dirección'}</p>
-                    <p style="margin:0; font-size:12px; color:#888;">🕒 Horario: ${c.horario || 'No especificado'}</p>
+                    <h3 style="margin:0 0 4px 0;">${c.nombre}</h3>
+                    <p style="margin:0; font-size:13px; color:#555;">📍 ${c.direccion || 'Sin dirección'}</p>
+                    <p style="margin:0; font-size:12px; color:#777;">🕒 Horario: ${c.horario || 'No especificado'}</p>
                 </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
-async function verProductosComercio(idComercio, nombreComercio) {
-    comercioSeleccionadoObjeto = { id: idComercio, nombre: nombreComercio };
+async function verProductosComercio(idComercio, nombreComercio, lat, lng) {
+    comercioSeleccionadoObjeto = { id: idComercio, nombre: nombreComercio, lat: lat, lng: lng };
 
     ocultarTodasLasPantallas();
     const pantallaProds = document.getElementById('pantallaClienteProductos');
@@ -975,25 +1046,21 @@ async function verProductosComercio(idComercio, nombreComercio) {
 
     contenedor.innerHTML = "<p>Cargando productos...</p>";
 
-    const { data: productos, error } = await supabaseClient
-        .from('productos')
-        .select('*')
-        .eq('comercio_id', idComercio);
+    const { data: productos, error } = await supabaseClient.from('productos').select('*').eq('comercio_id', idComercio);
 
     if (error) {
-        console.error("Error al cargar productos:", error);
-        contenedor.innerHTML = "<p style='color:red;'>Error al obtener los productos.</p>";
+        contenedor.innerHTML = "<p style='color:red;'>Error al cargar productos.</p>";
         return;
     }
 
     if (!productos || productos.length === 0) {
-        contenedor.innerHTML = "<p>Este comercio aún no tiene productos disponibles.</p>";
+        contenedor.innerHTML = "<p>Este comercio aún no tiene productos.</p>";
         return;
     }
 
     contenedor.innerHTML = productos.map(p => `
         <div class="card tarjeta-producto" style="border:1px solid #ddd; padding:10px; border-radius:6px; margin-bottom:10px;">
-            <img src="${p.imagen}" alt="${p.nombre}" style="width:100%; height:120px; object-fit:cover; border-radius:4px;">
+            <img src="${p.imagen || 'https://via.placeholder.com/120?text=Producto'}" alt="${p.nombre}" style="width:100%; height:120px; object-fit:cover; border-radius:4px;" onerror="this.src='https://via.placeholder.com/120?text=Sin+Imagen';">
             <h4>${p.nombre}</h4>
             <p style="font-size:12px; color:#666;">${p.descripcion || ''}</p>
             <p style="font-weight:bold; color:#27ae60;">$${Number(p.precio).toFixed(2)}</p>
@@ -1003,13 +1070,14 @@ async function verProductosComercio(idComercio, nombreComercio) {
         </div>
     `).join('');
 }
+
 // ==========================================
-// GESTIÓN DEL CARRITO
+// CARRITO Y CHECKOUT
 // ==========================================
 function agregarAlCarrito(idProd, nombre, precio) {
-    const itemExistente = carrito.find(p => p.id === idProd);
-    if (itemExistente) {
-        itemExistente.cantidad++;
+    const item = carrito.find(p => p.id === idProd);
+    if (item) {
+        item.cantidad++;
     } else {
         carrito.push({ id: idProd, nombre: nombre, precio: parseFloat(precio), cantidad: 1 });
     }
@@ -1020,29 +1088,25 @@ function actualizarBarraCarrito() {
     const totalProductos = carrito.reduce((acc, p) => acc + p.cantidad, 0);
     const subtotal = carrito.reduce((acc, p) => acc + (p.precio * p.cantidad), 0);
 
-    const cantCarrito = document.getElementById('cantCarrito');
-    const subtotalCarrito = document.getElementById('subtotalCarrito');
-    const barraCarrito = document.getElementById('barraCarrito');
+    const cant = document.getElementById('cantCarrito');
+    const sub = document.getElementById('subtotalCarrito');
+    const barra = document.getElementById('barraCarrito');
 
-    if (cantCarrito) cantCarrito.innerText = totalProductos;
-    if (subtotalCarrito) subtotalCarrito.innerText = subtotal.toFixed(2);
+    if (cant) cant.innerText = totalProductos;
+    if (sub) sub.innerText = subtotal.toFixed(2);
 
-    if (barraCarrito) {
-        if (totalProductos > 0) {
-            barraCarrito.classList.remove('oculto');
-        } else {
-            barraCarrito.classList.add('oculto');
-        }
+    if (barra) {
+        if (totalProductos > 0) barra.classList.remove('oculto');
+        else barra.classList.add('oculto');
     }
 }
 
 function abrirModalCheckout() {
     if (carrito.length === 0) return alert("El carrito está vacío.");
-    
     const modal = document.getElementById('modalCheckout');
     if (modal) modal.classList.remove('oculto');
-
     renderizarDetalleCarritoCheckout();
+    setTimeout(inicializarMapaEntrega, 300);
 }
 
 function cerrarModalCheckout() {
@@ -1054,39 +1118,27 @@ function renderizarDetalleCarritoCheckout() {
     const cont = document.getElementById('resumenItemsCarrito');
     if (!cont) return;
 
-    if (carrito.length === 0) {
-        cont.innerHTML = "<p>El carrito está vacío.</p>";
-        cerrarModalCheckout();
-        return;
-    }
-
-    let html = '<ul style="list-style:none; padding:0; margin:0 0 15px 0;">';
     let subtotal = 0;
+    let html = '<ul style="list-style:none; padding:0; margin:0 0 15px 0;">';
 
     carrito.forEach(p => {
-        const totalProd = p.precio * p.cantidad;
-        subtotal += totalProd;
+        const total = p.precio * p.cantidad;
+        subtotal += total;
         html += `
             <li style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:4px;">
-                <div>
-                    <b>${p.nombre}</b><br>
-                    <small>$${p.precio.toFixed(2)} x ${p.cantidad} = $${totalProd.toFixed(2)}</small>
-                </div>
+                <div><b>${p.nombre}</b><br><small>$${p.precio.toFixed(2)} x ${p.cantidad} = $${total.toFixed(2)}</small></div>
                 <div>
                     <button type="button" class="btn btn-sm btn-secundario" onclick="cambiarCantidadCart('${p.id}', -1)">-</button>
                     <button type="button" class="btn btn-sm btn-secundario" onclick="cambiarCantidadCart('${p.id}', 1)">+</button>
                     <button type="button" class="btn btn-sm btn-danger" onclick="eliminarDelCarrito('${p.id}')">🗑️</button>
                 </div>
-            </li>
-        `;
+            </li>`;
     });
     html += '</ul>';
-
     cont.innerHTML = html;
 
-    const subtotalElem = document.getElementById('txtSubtotal');
-    if (subtotalElem) subtotalElem.innerText = subtotal.toFixed(2);
-
+    const sub = document.getElementById('txtSubtotal');
+    if (sub) sub.innerText = subtotal.toFixed(2);
     recalcularTotalesCheckout();
 }
 
@@ -1094,9 +1146,8 @@ function cambiarCantidadCart(idProd, cambio) {
     const item = carrito.find(p => p.id === idProd);
     if (item) {
         item.cantidad += cambio;
-        if (item.cantidad <= 0) {
-            eliminarDelCarrito(idProd);
-        } else {
+        if (item.cantidad <= 0) eliminarDelCarrito(idProd);
+        else {
             renderizarDetalleCarritoCheckout();
             actualizarBarraCarrito();
         }
@@ -1107,6 +1158,7 @@ function eliminarDelCarrito(idProd) {
     carrito = carrito.filter(p => p.id !== idProd);
     renderizarDetalleCarritoCheckout();
     actualizarBarraCarrito();
+    if (carrito.length === 0) cerrarModalCheckout();
 }
 
 function recalcularTotalesCheckout() {
@@ -1115,489 +1167,138 @@ function recalcularTotalesCheckout() {
     const costoEnvio = envElem ? parseFloat(envElem.innerText.replace('$', '').trim()) || 0 : 0;
     const total = subtotal + costoEnvio;
 
-    const txtTotalPagar = document.getElementById('txtTotalPagar');
-    if (txtTotalPagar) txtTotalPagar.innerText = total.toFixed(2);
+    const txtTotal = document.getElementById('txtTotalPagar');
+    if (txtTotal) txtTotal.innerText = total.toFixed(2);
 }
 
 // ==========================================
-// PROCESAMIENTO Y CONFIRMACIÓN DE PEDIDO
+// PROCESAR PEDIDO
 // ==========================================
 async function procesarPedido() {
     try {
-        const distElem = document.getElementById('txtDistancia');
-        const distTexto = distElem ? distElem.innerText.replace('km', '').trim() : "0";
-        const dist = parseFloat(distTexto) || 0;
-
-        if (dist > 7) {
-            alert(`ERROR: La distancia de entrega (${dist.toFixed(2)} km) excede el límite de 7 km.`);
-            return;
-        }
-
         const dirInput = document.getElementById('direccionEscrita');
         const telInput = document.getElementById('telefonoCliente');
 
         const dir = dirInput ? dirInput.value.trim() : '';
         const tel = telInput ? telInput.value.trim() : '';
 
-        if (!dir || !tel) {
-            alert("Por favor ingresa la dirección de entrega y un teléfono de contacto.");
-            return;
-        }
+        if (!dir || !tel) return alert("Ingresa la dirección y teléfono de entrega.");
 
         const btn = document.getElementById('btnConfirmar');
-        if (btn) {
-            btn.disabled = true;
-            btn.innerText = "Procesando...";
-        }
+        if (btn) { btn.disabled = true; btn.innerText = "Procesando..."; }
 
-        let currentUser = usuarioActual;
-        if (!currentUser && supabaseClient && supabaseClient.auth) {
-            const { data } = await supabaseClient.auth.getUser();
-            currentUser = data?.user || null;
-        }
-
-        const nombreCliente = currentUser?.user_metadata?.full_name 
-            || currentUser?.user_metadata?.name 
-            || currentUser?.email?.split('@')[0] 
-            || 'Cliente';
-
-        const subtotalProductos = carrito.reduce((acc, item) => acc + (parseFloat(item.precio) * (item.cantidad || 1)), 0);
+        const subtotal = carrito.reduce((acc, p) => acc + (p.precio * p.cantidad), 0);
         const envElem = document.getElementById('txtCostoEnvio');
         const costoEnvio = envElem ? parseFloat(envElem.innerText.replace('$', '').trim()) || 0 : 0;
-        const totalFinal = subtotalProductos + costoEnvio;
+        const totalFinal = subtotal + costoEnvio;
 
-        const comercioObj = comercioSeleccionadoObjeto || (typeof comercioSel !== 'undefined' ? comercioSel : null);
-        const cCom = typeof obtenerCoordsComercioActivo === 'function' ? obtenerCoordsComercioActivo() : { lat: 19.5694, lng: -99.7669 };
-        
+        const cCom = obtenerCoordsComercioActivo();
         const latDest = coordsEntrega ? coordsEntrega.lat : cCom.lat;
         const lngDest = coordsEntrega ? coordsEntrega.lng : cCom.lng;
 
-        const estadoInicial = totalFinal > 500 ? 'revision_admin' : 'pendiente';
-
-        const payloadPedido = {
-            cliente_nombre: nombreCliente,
-            cliente_email: currentUser ? currentUser.email : '',
+        const payload = {
+            cliente_nombre: usuarioActual?.user_metadata?.full_name || usuarioActual?.email || 'Cliente',
+            cliente_email: usuarioActual ? usuarioActual.email : '',
             telefono_cliente: tel,
             direccion_entrega: `${dir} (GPS: ${latDest.toFixed(6)}, ${lngDest.toFixed(6)})`,
-            producto_nombre: carrito.map(i => `${i.cantidad || 1}x ${i.nombre}`).join(', '),
-            subtotal: subtotalProductos,
+            producto_nombre: carrito.map(i => `${i.cantidad}x ${i.nombre}`).join(', '),
+            subtotal: subtotal,
             costo_envio: costoEnvio,
             precio: totalFinal,
-            comercio_id: comercioObj ? comercioObj.id : null,
-            comercio_nombre: comercioObj ? comercioObj.nombre : 'Comercio',
+            comercio_id: comercioSeleccionadoObjeto ? comercioSeleccionadoObjeto.id : null,
+            comercio_nombre: comercioSeleccionadoObjeto ? comercioSeleccionadoObjeto.nombre : 'Comercio',
             lat_origen: cCom.lat,
             lng_origen: cCom.lng,
             lat_destino: latDest,
             lng_destino: lngDest,
-            estado: estadoInicial
+            estado: totalFinal > 500 ? 'revision_admin' : 'pendiente'
         };
 
-        const { error } = await supabaseClient.from('pedidos').insert([payloadPedido]);
+        const { error } = await supabaseClient.from('pedidos').insert([payload]);
 
-        if (btn) {
-            btn.disabled = false;
-            btn.innerText = "Confirmar Pedido";
-        }
+        if (btn) { btn.disabled = false; btn.innerText = "Confirmar Pedido"; }
 
-        if (error) {
-            console.error("Error devuelto por Supabase:", error);
-            alert("Error al procesar el pedido: " + error.message);
-        } else {
-            if (totalFinal > 500) {
-                alert("⚠️ Su pedido supera los $500 y ha sido enviado al Administrador para su aprobación.");
-            } else {
-                alert("¡Pedido registrado exitosamente!");
-            }
-            carrito = [];
-            actualizarBarraCarrito();
-            cerrarModalCheckout();
-        }
+        if (error) throw error;
 
+        alert(totalFinal > 500 ? "⚠️ Pedido enviado a revisión por el Administrador (>$500)." : "¡Pedido realizado con éxito!");
+        carrito = [];
+        actualizarBarraCarrito();
+        cerrarModalCheckout();
     } catch (err) {
-        console.error("Excepción en procesarPedido:", err);
-        alert("Ocurrió un error al procesar el pedido: " + err.message);
+        alert("Error al procesar pedido: " + err.message);
         const btn = document.getElementById('btnConfirmar');
-        if (btn) {
-            btn.disabled = false;
-            btn.innerText = "Confirmar Pedido";
-        }
+        if (btn) { btn.disabled = false; btn.innerText = "Confirmar Pedido"; }
     }
 }
 
 // ==========================================
-// PANEL DE DUEÑO Y REALTIME
+// PANEL DE DUEÑO
 // ==========================================
 async function cargarPanelDuenio() {
     ocultarTodasLasPantallas();
     const pantalla = document.getElementById('pantallaDuenio');
     if (pantalla) pantalla.classList.remove('oculto');
-    
+
     if (miComercio) {
         const lblNombre = document.getElementById('nombreComercioDuenio');
         const lblInfo = document.getElementById('infoComercioDuenio');
         if (lblNombre) lblNombre.innerText = `🏬 ${miComercio.nombre}`;
         if (lblInfo) lblInfo.innerText = `Dirección: ${miComercio.direccion || 'N/A'} | Horario: ${miComercio.horario || 'N/A'}`;
-        
+
         await cargarProductosDuenio();
         await cargarPedidosInicialesDuenio();
-        activarEscuchaPedidosEnTiempoReal();
     }
 }
 
-function activarEscuchaPedidosEnTiempoReal() {
-    if (!miComercio || !miComercio.id) return;
-
-    supabaseClient
-        .channel(`canal-comercio-${miComercio.id}`)
-        .on('postgres_changes', {
-            event: '*',
-            schema: 'public',
-            table: 'pedidos',
-            filter: `comercio_id=eq.${miComercio.id}`
-        }, payload => {
-            console.log("⚡ Cambio en tiempo real detectado:", payload);
-            const nuevoPedido = payload.new;
-
-            if (nuevoPedido && (nuevoPedido.estado === 'pendiente' || nuevoPedido.estado === 'aceptado')) {
-                if (payload.eventType === 'INSERT' || (payload.eventType === 'UPDATE' && payload.old?.estado === 'revision_admin')) {
-                    lanzarNotificacionDuenio(nuevoPedido);
-                }
-            }
-            cargarPedidosInicialesDuenio();
-        })
-        .subscribe((status) => {
-            console.log(`📡 Estado Realtime Comercio: ${status}`);
-        });
-}
-
-async function cargarPedidosInicialesDuenio() {
-    if (!miComercio || !miComercio.id) return;
-
-    const { data: pedidos, error } = await supabaseClient
-        .from('pedidos')
-        .select('*')
-        .eq('comercio_id', miComercio.id)
-        .order('created_at', { ascending: false });
-
-    const cont = document.getElementById('listaPedidosRecibidos');
-    if (!cont) return;
-
-    if (error) {
-        console.error("Error al obtener pedidos:", error);
-        cont.innerHTML = "<p style='color:red;'>Error al cargar pedidos.</p>";
-        return;
-    }
-
-    if (!pedidos || pedidos.length === 0) {
-        cont.innerHTML = "<p style='color:#7f8c8d;'>Aún no hay pedidos recibidos.</p>";
-        return;
-    }
-
-    cont.innerHTML = pedidos.map(p => {
-        const horaFormateada = formatearFechaHora(p.created_at);
-        const estadoTexto = (p.estado || 'pendiente').replace('_', ' ');
-        const subtotalProductos = Number(p.subtotal) || (Number(p.precio || 0) - Number(p.costo_envio || p.envio || 0)) || 0;
-
-        let botonAccion = '';
-        if (p.estado === 'pendiente') {
-            botonAccion = `<button type="button" class="btn btn-primary" onclick="cambiarEstadoPedido('${p.id}', 'preparado')">👨‍🍳 Marcar Preparado</button>`;
-        } else if (p.estado === 'preparado') {
-            botonAccion = `<button type="button" class="btn btn-success" onclick="cambiarEstadoPedido('${p.id}', 'despachado')">📦 Marcar Despachado (Enviar a Radar)</button>`;
-        } else if (p.estado === 'despachado') {
-            botonAccion = `<span style="font-size:12px; color:#e67e22; font-weight:bold;">⏳ Esperando que un repartidor lo tome...</span>`;
-        } else if (p.estado === 'revision_admin') {
-            botonAccion = `<span style="font-size:12px; color:#c0392b; font-weight:bold;">⚠️ En revisión por el Administrador (>$500)</span>`;
-        }
-
-        return `
-            <div style="background: #f8f9fa; padding: 12px; border-left: 4px solid #27ae60; margin-bottom: 10px; border-radius: 4px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <span style="font-weight:bold; text-transform:capitalize;">${estadoTexto}</span>
-                    <span style="font-size: 12px; color: #7f8c8d; font-weight: bold;">🕒 ${horaFormateada}</span>
-                </div>
-                <p style="margin:2px 0;"><b>Cliente:</b> ${p.cliente_nombre || 'Cliente'}</p>
-                <p style="margin:2px 0;"><b>Teléfono:</b> ${p.telefono_cliente || 'N/A'}</p>
-                <p style="margin:2px 0;"><b>Productos:</b> ${p.producto_nombre || ''}</p>
-                <p style="margin:2px 0;"><b>Ubicación:</b> ${p.direccion_entrega || ''}</p>
-                <p style="margin:2px 0; color:#27ae60;"><b>Total Productos:</b> $${subtotalProductos.toFixed(2)}</p>
-                <div style="margin-top: 8px;">
-                    ${botonAccion}
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-window.eliminarMiComercio = async function() {
-    if (!miComercio) return;
-    if (confirm("⚠️ ¿Deseas ELIMINAR tu comercio por completo y todos sus productos?")) {
-        try {
-            await supabaseClient.from('productos').delete().eq('comercio_id', miComercio.id);
-            const { error } = await supabaseClient.from('comercios').delete().eq('id', miComercio.id);
-            if (error) throw error;
-            alert("Tu comercio ha sido eliminado.");
-            miComercio = null;
-            await verificarSiEsDuenio();
-            irAInicio();
-        } catch (err) {
-            alert("Error: " + err.message);
-        }
-    }
-};
-
-function formatearFechaHora(fechaIso) {
-    if (!fechaIso) return 'Reciente';
-    const fecha = new Date(fechaIso);
-    return fecha.toLocaleString('es-MX', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-        day: '2-digit',
-        month: 'short'
-    });
-}
-
-function lanzarNotificacionDuenio(nuevoPedido) {
-    const toast = document.createElement('div');
-    toast.className = 'notificacion-toast';
-    toast.style.cssText = "position:fixed; bottom:20px; right:20px; background:#27ae60; color:white; padding:15px; border-radius:8px; z-index:9999;";
-    toast.innerHTML = `🔔 ¡Nuevo Pedido de $${Number(nuevoPedido.precio || 0).toFixed(2)}!`;
-    document.body.appendChild(toast);
-
-    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-    audio.play().catch(() => {});
-
-    setTimeout(() => toast.remove(), 5000);
-}
-
-window.cambiarEstadoPedido = async function(idPedido, nuevoEstado) {
-    const { error } = await supabaseClient
-        .from('pedidos')
-        .update({ estado: nuevoEstado })
-        .eq('id', idPedido);
-
-    if (error) {
-        alert("Error al actualizar el estado: " + error.message);
-    } else {
-        cargarPedidosInicialesDuenio();
-    }
-};
-
-// ==========================================
-// GESTIÓN DE PRODUCTOS
-// ==========================================
 async function cargarProductosDuenio() {
-    if (!miComercio || !miComercio.id) return;
-
-    const { data: productos, error } = await supabaseClient
-        .from('productos')
-        .select('*')
-        .eq('comercio_id', miComercio.id);
-
+    if (!miComercio) return;
+    const { data: productos, error } = await supabaseClient.from('productos').select('*').eq('comercio_id', miComercio.id);
     const lista = document.getElementById('listaProductosDuenio');
     if (!lista) return;
-    lista.innerHTML = "";
 
-    if (error) {
-        console.error("Error al obtener productos:", error);
-        lista.innerHTML = "<p>Error al cargar productos.</p>";
-        return;
-    }
-
-    if (!productos || productos.length === 0) {
-        lista.innerHTML = "<p>Aún no has publicado productos.</p>";
+    if (error || !productos || productos.length === 0) {
+        lista.innerHTML = "<p>No hay productos registrados.</p>";
         return;
     }
 
     window.productosDuenioCache = productos;
-
-    productos.forEach(p => {
-        const card = document.createElement('div');
-        card.className = 'tarjeta-producto';
-        card.innerHTML = `
-            <img src="${p.imagen}" alt="${p.nombre}" style="width:100%; height:120px; object-fit:cover; border-radius:4px;">
-            <div class="info-producto" style="padding:8px 0;">
-                <h4>${p.nombre}</h4>
-                <p style="font-size: 12px; color: #666; margin: 4px 0;">${p.descripcion || ''}</p>
-                <div class="precio" style="font-weight:bold; color:#27ae60;">$${Number(p.precio).toFixed(2)}</div>
-                <div style="display: flex; gap: 6px; margin-top: 8px;">
-                    <button type="button" class="btn btn-secundario" style="flex:1;" onclick="prepararEdicionProducto('${p.id}')">✏️ Editar</button>
-                    <button type="button" class="btn btn-danger" style="flex:1;" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar</button>
-                </div>
-            </div>
-        `;
-        lista.appendChild(card);
-    });
+    lista.innerHTML = productos.map(p => `
+        <div class="tarjeta-producto" style="border:1px solid #ddd; padding:10px; margin-bottom:10px; border-radius:6px;">
+            <img src="${p.imagen}" style="width:100%; height:100px; object-fit:cover; border-radius:4px;">
+            <h4>${p.nombre}</h4>
+            <p>$${Number(p.precio).toFixed(2)}</p>
+            <button type="button" class="btn btn-danger btn-sm" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar</button>
+        </div>
+    `).join('');
 }
 
-window.prepararEdicionProducto = function(idProducto) {
-    const modal = document.getElementById('modalEditarProducto');
-    if (!modal) return alert("Error interno: No se encuentra el modal en el HTML.");
+async function eliminarProducto(id) {
+    if (confirm("¿Eliminar producto?")) {
+        await supabaseClient.from('productos').delete().eq('id', id);
+        cargarProductosDuenio();
+    }
+}
 
-    const productos = window.productosDuenioCache || [];
-    const prod = productos.find(item => String(item.id) === String(idProducto));
+async function cargarPedidosInicialesDuenio() {
+    if (!miComercio) return;
+    const { data: pedidos } = await supabaseClient.from('pedidos').select('*').eq('comercio_id', miComercio.id).order('created_at', { ascending: false });
+    const cont = document.getElementById('listaPedidosRecibidos');
+    if (!cont) return;
 
-    if (!prod) return alert("No se encontraron los datos del producto seleccionado.");
-
-    const setVal = (id, val) => {
-        const el = document.getElementById(id);
-        if (el) el.value = val;
-    };
-
-    setVal('editProdId', prod.id);
-    setVal('editProdNombre', prod.nombre || '');
-    setVal('editProdPrecio', prod.precio || 0);
-    setVal('editProdDescripcion', prod.descripcion || '');
-    setVal('editProdImagenActual', prod.imagen || '');
-
-    const preview = document.getElementById('previewImagenActual');
-    if (preview) {
-        preview.src = prod.imagen || '';
-        preview.style.display = prod.imagen ? 'block' : 'none';
+    if (!pedidos || pedidos.length === 0) {
+        cont.innerHTML = "<p>Sin pedidos recibidos.</p>";
+        return;
     }
 
-    const fileInput = document.getElementById('editProdImagenArchivo');
-    if (fileInput) fileInput.value = '';
-
-    modal.classList.remove('oculto');
-};
-
-window.cerrarModalEditarProducto = function() {
-    const modal = document.getElementById('modalEditarProducto');
-    if (modal) modal.classList.add('oculto');
-};
-
-window.eliminarProducto = async function(id) {
-    if (confirm("¿Eliminar este producto?")) {
-        const { error } = await supabaseClient.from('productos').delete().eq('id', id);
-        if (error) {
-            alert("Error al eliminar: " + error.message);
-        } else {
-            cargarProductosDuenio();
-        }
-    }
-};
-
-// ==========================================
-// FORMULARIOS (CREAR Y EDITAR PRODUCTO / REGISTRAR COMERCIO)
-// ==========================================
-document.addEventListener('DOMContentLoaded', () => {
-
-    const formProducto = document.getElementById('formProducto');
-    if (formProducto) {
-        formProducto.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btnGuardar = document.getElementById('btnGuardarProducto');
-            const archivoInput = document.getElementById('prodImagenArchivo');
-            const archivo = archivoInput ? archivoInput.files[0] : null;
-
-            if (!archivo) return alert("Selecciona una imagen.");
-
-            try {
-                if (btnGuardar) {
-                    btnGuardar.disabled = true;
-                    btnGuardar.innerText = "Subiendo imagen...";
-                }
-
-                const extension = archivo.name.split('.').pop();
-                const nombreArchivo = `${miComercio.id}/${Date.now()}.${extension}`;
-
-                const { error: uploadError } = await supabaseClient.storage
-                    .from('productos')
-                    .upload(nombreArchivo, archivo);
-
-                if (uploadError) throw uploadError;
-
-                const { data: publicUrlData } = supabaseClient.storage
-                    .from('productos')
-                    .getPublicUrl(nombreArchivo);
-
-                const producto = {
-                    comercio_id: miComercio.id,
-                    nombre: document.getElementById('prodNombre').value.trim(),
-                    precio: parseFloat(document.getElementById('prodPrecio').value),
-                    descripcion: document.getElementById('prodDescripcion').value.trim(),
-                    imagen: publicUrlData.publicUrl
-                };
-
-                const { error: insertError } = await supabaseClient.from('productos').insert([producto]);
-                if (insertError) throw insertError;
-
-                formProducto.reset();
-                cargarProductosDuenio();
-            } catch (err) {
-                alert("Error al crear producto: " + err.message);
-            } finally {
-                if (btnGuardar) {
-                    btnGuardar.disabled = false;
-                    btnGuardar.innerText = "Publicar Producto";
-                }
-            }
-        });
-    }
-
-    const formEditarProducto = document.getElementById('formEditarProducto');
-    if (formEditarProducto) {
-        formEditarProducto.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btnGuardar = document.getElementById('btnGuardarEdicionProd');
-            const idProducto = document.getElementById('editProdId').value;
-            const fileInput = document.getElementById('editProdImagenArchivo');
-            const archivoNuevo = fileInput ? fileInput.files[0] : null;
-            let urlImagenFinal = document.getElementById('editProdImagenActual').value;
-
-            try {
-                if (btnGuardar) {
-                    btnGuardar.disabled = true;
-                    btnGuardar.innerText = "Guardando cambios...";
-                }
-
-                if (archivoNuevo) {
-                    if (btnGuardar) btnGuardar.innerText = "Subiendo nueva imagen...";
-                    const extension = archivoNuevo.name.split('.').pop();
-                    const nombreArchivo = `${miComercio.id}/${Date.now()}_mod.${extension}`;
-
-                    const { error: uploadError } = await supabaseClient.storage
-                        .from('productos')
-                        .upload(nombreArchivo, archivoNuevo);
-
-                    if (uploadError) throw uploadError;
-
-                    const { data: publicUrlData } = supabaseClient.storage
-                        .from('productos')
-                        .getPublicUrl(nombreArchivo);
-
-                    urlImagenFinal = publicUrlData.publicUrl;
-                }
-
-                const datosActualizados = {
-                    nombre: document.getElementById('editProdNombre').value.trim(),
-                    precio: parseFloat(document.getElementById('editProdPrecio').value),
-                    descripcion: document.getElementById('editProdDescripcion').value.trim(),
-                    imagen: urlImagenFinal
-                };
-
-                const { error: updateError } = await supabaseClient
-                    .from('productos')
-                    .update(datosActualizados)
-                    .eq('id', idProducto);
-
-                if (updateError) throw updateError;
-
-                cerrarModalEditarProducto();
-                cargarProductosDuenio();
-
-            } catch (err) {
-                alert("Error al actualizar producto: " + err.message);
-            } finally {
-                if (btnGuardar) {
-                    btnGuardar.disabled = false;
-                    btnGuardar.innerText = "Guardar Cambios";
-                }
-            }
-        });
-    }
-});
+    cont.innerHTML = pedidos.map(p => `
+        <div style="background:#f9f9f9; padding:10px; border-left:4px solid #27ae60; margin-bottom:10px;">
+            <p><b>Cliente:</b> ${p.cliente_nombre}</p>
+            <p><b>Productos:</b> ${p.producto_nombre}</p>
+            <p><b>Total:</b> $${Number(p.precio).toFixed(2)}</p>
+            <p><b>Estado:</b> ${p.estado}</p>
+        </div>
+    `).join('');
+}
 </script>
 
 </body>
