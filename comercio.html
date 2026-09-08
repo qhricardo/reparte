@@ -786,16 +786,17 @@ function actualizarInterfazUsuario(sesionIniciada) {
     const labelUsuario = document.getElementById('labelUsuario');
 
     if (sesionIniciada) {
-        if (pantallaLogin) pantallaLogin.classList.add('oculto');
         if (barraUsuario) barraUsuario.classList.remove('oculto');
         if (labelUsuario && usuarioActual) {
             labelUsuario.innerText = usuarioActual.user_metadata?.full_name || usuarioActual.email;
         }
         irAInicio();
     } else {
+        // 1. Primero oculta todo
+        ocultarTodasLasPantallas();
+        // 2. Muestra ÚNICAMENTE el login
         if (pantallaLogin) pantallaLogin.classList.remove('oculto');
         if (barraUsuario) barraUsuario.classList.add('oculto');
-        ocultarTodasLasPantallas();
     }
 }
 
@@ -856,6 +857,7 @@ function irAInicio() {
         if (login) login.classList.remove('oculto');
         return;
     }
+    
     ocultarTodasLasPantallas();
     const cliente = document.getElementById('pantallaClienteComercios');
     if (cliente) cliente.classList.remove('oculto');
