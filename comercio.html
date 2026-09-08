@@ -1347,98 +1347,98 @@ async function recalcularTotales() {
 // FUNCIÓN DE ENVÍO CON VALIDACIÓN DE SEGURIDAD Y LÍMITE DE 7 KM
 async function procesarPedido() {
     try {
-        // 1. Obtención segura de distancia
-        const elemDist = document.getElementById('txtDistancia') || document.getElementById('txtDist');
-        const distanciaKm = elemDist ? parseFloat(elemDist.innerText) || 0 : 0;
+        // 1. Obtención y validación de la distancia
+        const distElem = document.getElementById('txtDist');
+        const distTexto = distElem ? distElem.innerText.trim() : "0";
+        const dist = parseFloat(distTexto) || 0;
 
-        // Validar límite de 7 km
-        if (distanciaKm > 7) {
-            alert(`ERROR: La distancia de entrega (${distanciaKm.toFixed(2)} km) supera el límite de 7 km.`);
+        if (dist > 7) {
+            alert(`ERROR: La distancia de entrega (${dist.toFixed(2)} km) excede el límite de 7 km.`);
             return;
         }
 
-        // 2. Obtención de importes
-        const subtotal = carrito.reduce((acc, item) => acc + ((item.precio || 0) * (item.cantidad || item.cant || 1)), 0);
-        
-        const elemEnv = document.getElementById('txtCostoEnvio') || document.getElementById('txtEnv');
-        const costoEnvio = elemEnv ? parseFloat(elemEnv.innerText) || 0 : 0;
+        // 2. Búsqueda exhaustiva de los campos de dirección y teléfono
+        const dirInput = document.getElementById('chkDir') || 
+                         document.getElementById('direccionEscrita') || 
+                         document.querySelector('#modalCheck input[type="text"]');
 
-        const elemTot = document.getElementById('txtTotalPagar') || document.getElementById('txtTot');
-        const totalPagar = elemTot ? parseFloat(elemTot.innerText) || (subtotal + costoEnvio) : (subtotal + costoEnvio);
+        const telInput = document.getElementById('chkTel') || 
+                         document.getElementById('telefonoCliente') || 
+                         document.querySelector('#modalCheck input[type="tel"]');
 
-        // 3. Dirección y Teléfono
-        const inputDir = document.getElementById('direccionEscrita') || document.getElementById('chkDir');
-        const inputTel = document.getElementById('telefonoCliente') || document.getElementById('chkTel');
+        const dir = dirInput ? dirInput.value.trim() : '';
+        const tel = telInput ? telInput.value.trim() : '';
 
-        const direccion = inputDir ? inputDir.value : "";
-        const telefonoCliente = inputTel ? inputTel.value : "";
-
-        if (!direccion.trim()) {
-            alert("Por favor ingresa la dirección de entrega.");
+        if (!dir || !tel) {
+            alert("Por favor ingresa la dirección de entrega y un teléfono de contacto.");
             return;
         }
 
-        // Deshabilitar botón durante el envío
-        const btnSubmit = document.querySelector('#modalCheckout button[onclick*="enviar"], #modalCheckout button[type="submit"], #btnConfirmarPedido, #btnConfirmar');
-        if (btnSubmit) btnSubmit.disabled = true;
+        // 3. Bloqueo temporal del botón para evitar clics dobles
+        const btn = document.getElementById('btnConfirmar');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = "Procesando...";
+        }
 
-        // Determinar estado según el monto (> $500)
-        const estadoInicial = totalPagar > 500 ? 'revision_admin' : 'pendiente';
+        // 4. Cálculo de Totales
+        const sub = carrito.reduce((a, i) => a + (i.precio * (i.cant || i.cantidad || 1)), 0);
+        const envElem = document.getElementById('txtEnv');
+        const env = envElem ? parseFloat(envElem.innerText) || 0 : 0;
+        const tot = sub + env;
+        const cCom = getCoordsCom();
 
-        // Obtener comercio activo
-        const objComercio = (typeof comercioSeleccionadoObjeto !== 'undefined' && comercioSeleccionadoObjeto) 
-            ? comercioSeleccionadoObjeto 
-            : ((typeof comercioSel !== 'undefined' && comercioSel) ? comercioSel : null);
+        // Asignación de estado según el monto total
+        const est = tot > 500 ? 'revision_admin' : 'pendiente';
 
-        const coordsCom = (typeof obtenerCoordsComercioActivo === 'function') 
-            ? obtenerCoordsComercioActivo() 
-            : (typeof getCoordsCom === 'function' ? getCoordsCom() : { lat: 19.5694, lng: -99.7669 });
-
-        const payloadPedido = {
-            cliente_nombre: user ? (user.email ? user.email.split('@')[0] : 'Cliente') : 'Cliente',
-            cliente_email: user ? user.email : 'anonimo@correo.com',
-            telefono_cliente: telefonoCliente,
-            direccion_entrega: `${direccion} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
-            producto_nombre: carrito.map(i => `${i.cantidad || i.cant || 1}x ${i.nombre}`).join(', '),
-            subtotal: subtotal,
-            costo_envio: costoEnvio,
-            precio: totalPagar,
-            comercio_id: objComercio ? objComercio.id : null,
-            comercio_nombre: objComercio ? objComercio.nombre : 'Comercio',
-            lat_origen: coordsCom.lat,
-            lng_origen: coordsCom.lng,
+        // 5. Preparación de la carga útil
+        const payload = {
+            cliente_nombre: user && user.email ? user.email.split('@')[0] : 'Cliente',
+            cliente_email: user ? user.email : '',
+            telefono_cliente: tel,
+            direccion_entrega: `${dir} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
+            producto_nombre: carrito.map(i => `${i.cant || i.cantidad || 1}x ${i.nombre}`).join(', '),
+            subtotal: sub,
+            costo_envio: env,
+            precio: tot,
+            comercio_id: comercioSel ? comercioSel.id : null,
+            comercio_nombre: comercioSel ? comercioSel.nombre : 'Comercio',
+            lat_origen: cCom.lat,
+            lng_origen: cCom.lng,
             lat_destino: coordsEntrega.lat,
             lng_destino: coordsEntrega.lng,
-            estado: estadoInicial
+            estado: est
         };
 
-        // Enviar a Supabase
-        const { data, error } = await supabaseClient.from('pedidos').insert([payloadPedido]);
+        // 6. Registro en Supabase
+        const { error } = await supabaseClient.from('pedidos').insert([payload]);
 
-        if (btnSubmit) btnSubmit.disabled = false;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "Confirmar Pedido";
+        }
 
         if (error) {
-            console.error("Error al insertar pedido:", error);
-            alert("Error al registrar el pedido: " + error.message);
+            console.error("Error devuelto por Supabase:", error);
+            alert("Error al procesar el pedido: " + error.message);
         } else {
-            if (totalPagar > 500) {
-                alert("⚠️ Su pedido supera los $500 pesos y ha sido enviado al Administrador para su revisión y aprobación.");
+            if (tot > 500) {
+                alert("⚠️ Su pedido supera los $500 y ha sido enviado al Administrador para su aprobación.");
             } else {
                 alert("¡Pedido registrado exitosamente!");
             }
-
-            // Resetear carrito y cerrar modal
             carrito = [];
-            if (typeof actualizarBarraCarrito === 'function') actualizarBarraCarrito();
-            if (typeof actCar === 'function') actCar();
-            if (typeof cerrarModalCheckout === 'function') cerrarModalCheckout();
-            if (typeof cerrarCheckout === 'function') cerrarCheckout();
+            actCar();
+            cerrarCheckout();
         }
     } catch (err) {
         console.error("Excepción en procesarPedido:", err);
-        alert("Ocurrió un error inesperado al procesar el pedido. Revisa la consola del navegador.");
-        const btnSubmit = document.querySelector('#modalCheckout button[onclick*="enviar"], #modalCheckout button[type="submit"], #btnConfirmarPedido, #btnConfirmar');
-        if (btnSubmit) btnSubmit.disabled = false;
+        alert("Ocurrió un error inesperado al procesar el pedido. Revisa la consola (F12).");
+        const btn = document.getElementById('btnConfirmar');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "Confirmar Pedido";
+        }
     }
 }
     
