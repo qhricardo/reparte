@@ -1833,6 +1833,45 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+
+function activarEscuchaPedidosEnTiempoReal() {
+    if (!miComercio || !miComercio.id) return;
+
+    // Crear/suscribir al canal específico del comercio
+    const canalComercio = supabaseClient
+        .channel(`pedidos-comercio-${miComercio.id}`)
+        .on(
+            'postgres_changes',
+            {
+                event: '*', // Escucha INSERT y UPDATE
+                schema: 'public',
+                table: 'pedidos',
+                filter: `comercio_id=eq.${miComercio.id}`
+            },
+            async (payload) => {
+                console.log('⚡ Pedido en tiempo real recibido/actualizado en Comercio:', payload);
+
+                const pedido = payload.new;
+
+                // Casos válidos:
+                // 1. Pedido nuevo < $500 (INSERT directo con estado 'pendiente')
+                // 2. Pedido > $500 aprobado por Admin (UPDATE de 'revision_admin' a 'pendiente')
+                if (pedido && (pedido.estado === 'pendiente' || pedido.estado === 'aceptado')) {
+                    alert(`🔔 ¡Nuevo pedido recibido! ID: ${pedido.id}`);
+
+                    // Si tienes una función para recargar la lista de pedidos en el panel del dueño, llámala aquí
+                    if (typeof cargarPanelDuenio === 'function') {
+                        cargarPanelDuenio();
+                    }
+                }
+            }
+        )
+        .subscribe((status) => {
+            console.log(`Estado de la suscripción Realtime del Comercio: ${status}`);
+        });
+}
+
+    
     // Formulario Editar Producto
     const formEditarProducto = document.getElementById('formEditarProducto');
     if (formEditarProducto) {
