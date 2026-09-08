@@ -1516,17 +1516,120 @@ async function procesarPedidoFinal() {
     btn.disabled = false;
 }
     // PANEL DE DUEÑO, HORA DE PEDIDO Y REFRESH DE ESTADOS
-    async function cargarPanelDuenio() {
+  // 1. Asegurar que al cargar el panel del dueño se obtenga el comercio Y LUEGO se active la escucha
+async function cargarPanelDuenio() {
     ocultarTodasLasPantallas();
     document.getElementById('pantallaDuenio').classList.remove('oculto');
-    document.getElementById('nombreComercioDuenio').innerText = `🏬 ${miComercio.nombre}`;
-    document.getElementById('infoComercioDuenio').innerText = `Dirección: ${miComercio.direccion || 'N/A'} | Horario: ${miComercio.horario || 'N/A'}`;
     
-    // 1. Cargar catálogo de productos
-    cargarProductosDuenio();
-    
-    // 2. Activar la escucha en vivo y recargar pedidos recibidos
-    activarEscuchaPedidosEnTiempoReal();
+    if (miComercio) {
+        document.getElementById('nombreComercioDuenio').innerText = `🏬 ${miComercio.nombre}`;
+        document.getElementById('infoComercioDuenio').innerText = `Dirección: ${miComercio.direccion || 'N/A'} | Horario: ${miComercio.horario || 'N/A'}`;
+        
+        // Cargar productos y pedidos existentes
+        await cargarProductosDuenio();
+        await cargarPedidosInicialesDuenio();
+        
+        // Activar canal Realtime para este comercio en específico
+        activarEscuchaPedidosEnTiempoReal();
+    }
+}
+
+// 2. Suscripción Realtime Unificada para el Comercio
+function activarEscuchaPedidosEnTiempoReal() {
+    if (!miComercio || !miComercio.id) return;
+
+    // Crear un canal dinámico e independiente por comercio
+    const canalComercio = supabaseClient
+        .channel(`canal-comercio-${miComercio.id}`)
+        .on('postgres_changes', {
+            event: '*', // Escucha INSERTs y UPDATEs (Admin aprueba o Cliente compra)
+            schema: 'public',
+            table: 'pedidos',
+            filter: `comercio_id=eq.${miComercio.id}`
+        }, payload => {
+            console.log("⚡ Cambio en tiempo real detectado para el comercio:", payload);
+            const nuevoPedido = payload.new;
+
+            // Notificar si es un pedido directo nuevo (<$500) o un pedido aprobado por Admin (>$500)
+            if (nuevoPedido && (nuevoPedido.estado === 'pendiente' || nuevoPedido.estado === 'aceptado')) {
+                if (payload.eventType === 'INSERT' || (payload.eventType === 'UPDATE' && payload.old?.estado === 'revision_admin')) {
+                    lanzarNotificacionDuenio(nuevoPedido);
+                }
+            }
+
+            // Recargar siempre la lista de pedidos en el panel
+            cargarPedidosInicialesDuenio();
+        })
+        .subscribe((status) => {
+            console.log(`📡 Estado de conexión Realtime del Comercio: ${status}`);
+        });
+}
+
+// 3. Carga y Filtro Seguro de Pedidos para el Comercio
+async function cargarPedidosInicialesDuenio() {
+    if (!miComercio || !miComercio.id) return;
+
+    const { data: pedidos, error } = await supabaseClient
+        .from('pedidos')
+        .select('*')
+        .eq('comercio_id', miComercio.id)
+        .order('created_at', { ascending: false });
+
+    const cont = document.getElementById('listaPedidosRecibidos');
+    if (!cont) return;
+
+    if (error) {
+        console.error("Error al obtener pedidos:", error);
+        cont.innerHTML = "<p style='color:red;'>Error al cargar pedidos.</p>";
+        return;
+    }
+
+    if (!pedidos || pedidos.length === 0) {
+        cont.innerHTML = "<p style='color:#7f8c8d;'>Aún no hay pedidos recibidos.</p>";
+        return;
+    }
+
+    // Filtrar pedidos visibles para el comercio (ocultar los que siguen en revisión del admin)
+    const pedidosVisibles = pedidos.filter(p => p.estado !== 'revision_admin');
+
+    if (pedidosVisibles.length === 0) {
+        cont.innerHTML = "<p style='color:#7f8c8d;'>No hay pedidos pendientes por preparar.</p>";
+        return;
+    }
+
+    cont.innerHTML = pedidosVisibles.map(p => {
+        const horaFormateada = formatearFechaHora(p.created_at);
+        const estadoTexto = (p.estado || 'pendiente').replace('_', ' ');
+        const claseEstado = obtenerClaseEstado(p.estado);
+
+        const subtotalProductos = Number(p.subtotal) || (Number(p.precio || 0) - Number(p.costo_envio || p.envio || 0)) || 0;
+
+        let botonAccion = '';
+        if (p.estado === 'pendiente') {
+            botonAccion = `<button type="button" class="btn btn-primary" onclick="cambiarEstadoPedido('${p.id}', 'preparado')">👨‍🍳 Marcar Preparado</button>`;
+        } else if (p.estado === 'preparado') {
+            botonAccion = `<button type="button" class="btn btn-success" onclick="cambiarEstadoPedido('${p.id}', 'despachado')">📦 Marcar Despachado (Enviar a Radar)</button>`;
+        } else if (p.estado === 'despachado') {
+            botonAccion = `<span style="font-size:12px; color:#e67e22; font-weight:bold;">⏳ Esperando que un repartidor lo tome...</span>`;
+        }
+
+        return `
+            <div style="background: #f8f9fa; padding: 12px; border-left: 4px solid #27ae60; margin-bottom: 10px; border-radius: 4px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span class="badge-estado ${claseEstado}">${estadoTexto}</span>
+                    <span style="font-size: 12px; color: #7f8c8d; font-weight: bold;">🕒 ${horaFormateada}</span>
+                </div>
+                <p style="margin:2px 0;"><b>Cliente:</b> ${p.cliente_nombre || 'Cliente'}</p>
+                <p style="margin:2px 0;"><b>Teléfono:</b> ${p.telefono_cliente || 'N/A'}</p>
+                <p style="margin:2px 0;"><b>Productos:</b> ${p.producto_nombre}</p>
+                <p style="margin:2px 0;"><b>Ubicación:</b> ${p.direccion_entrega}</p>
+                <p style="margin:2px 0; color:#27ae60;"><b>Total Productos:</b> $${subtotalProductos.toFixed(2)}</p>
+                <div style="margin-top: 8px;">
+                    ${botonAccion}
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
     window.eliminarMiComercio = async function() {
