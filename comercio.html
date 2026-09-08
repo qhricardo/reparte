@@ -1348,16 +1348,9 @@ async function recalcularTotales() {
 // FUNCIÓN DE ENVÍO CON VALIDACIÓN DE SEGURIDAD Y LÍMITE DE 7 KM
 async function procesarPedido() {
     try {
-        // 1. Obtener el usuario de la sesión actual de forma segura
-        let currentUser = typeof user !== 'undefined' ? user : null;
-        if (!currentUser && typeof supabaseClient !== 'undefined') {
-            const { data } = await supabaseClient.auth.getUser();
-            currentUser = data?.user || null;
-        }
-
-        // 2. Obtención y validación de la distancia
-        const distElem = document.getElementById('txtDist');
-        const distTexto = distElem ? distElem.innerText.trim() : "0";
+        // 1. Obtención y validación de la distancia (ID del HTML: txtDistancia)
+        const distElem = document.getElementById('txtDistancia');
+        const distTexto = distElem ? distElem.innerText.replace('km', '').trim() : "0";
         const dist = parseFloat(distTexto) || 0;
 
         if (dist > 7) {
@@ -1365,14 +1358,9 @@ async function procesarPedido() {
             return;
         }
 
-        // 3. Búsqueda de campos de dirección y teléfono
-        const dirInput = document.getElementById('chkDir') || 
-                         document.getElementById('direccionEscrita') || 
-                         document.querySelector('#modalCheck input[type="text"]');
-
-        const telInput = document.getElementById('chkTel') || 
-                         document.getElementById('telefonoCliente') || 
-                         document.querySelector('#modalCheck input[type="tel"]');
+        // 2. Obtención de Dirección y Teléfono (IDs del HTML: direccionEscrita, telefonoCliente)
+        const dirInput = document.getElementById('direccionEscrita');
+        const telInput = document.getElementById('telefonoCliente');
 
         const dir = dirInput ? dirInput.value.trim() : '';
         const tel = telInput ? telInput.value.trim() : '';
@@ -1382,43 +1370,56 @@ async function procesarPedido() {
             return;
         }
 
-        // 4. Deshabilitar botón para prevenir múltiples envíos
+        // 3. Bloquear el botón para evitar clics dobles (ID del HTML: btnConfirmar)
         const btn = document.getElementById('btnConfirmar');
         if (btn) {
             btn.disabled = true;
             btn.innerText = "Procesando...";
         }
 
-        // 5. Cálculo de Subtotal y Total
-        const sub = carrito.reduce((a, i) => a + (i.precio * (i.cant || i.cantidad || 1)), 0);
-        const envElem = document.getElementById('txtEnv');
-        const env = envElem ? parseFloat(envElem.innerText) || 0 : 0;
+        // 4. Obtener usuario de forma segura (sin depender de variable global user)
+        let currentUser = null;
+        if (typeof user !== 'undefined' && user) {
+            currentUser = user;
+        } else if (typeof supabaseClient !== 'undefined' && supabaseClient.auth) {
+            const { data } = await supabaseClient.auth.getUser();
+            currentUser = data?.user || null;
+        }
+
+        // 5. Cálculo de Subtotal y Costo de Envío (IDs del HTML: txtCostoEnvio)
+        const sub = carrito.reduce((a, i) => a + (parseFloat(i.precio) * (i.cant || i.cantidad || 1)), 0);
+        const envElem = document.getElementById('txtCostoEnvio');
+        const env = envElem ? parseFloat(envElem.innerText.replace('$', '').trim()) || 0 : 0;
         const tot = sub + env;
+
+        // Coordenadas de origen (Comercio) y destino
         const cCom = typeof getCoordsCom === 'function' ? getCoordsCom() : { lat: 19.5694, lng: -99.7669 };
+        const latDest = typeof coordsEntrega !== 'undefined' && coordsEntrega ? coordsEntrega.lat : cCom.lat;
+        const lngDest = typeof coordsEntrega !== 'undefined' && coordsEntrega ? coordsEntrega.lng : cCom.lng;
 
         // Definir estado según monto
         const est = tot > 500 ? 'revision_admin' : 'pendiente';
 
-        // 6. Construir objeto de datos del pedido
+        // 6. Preparación de la carga útil para Supabase
         const payload = {
             cliente_nombre: currentUser && currentUser.email ? currentUser.email.split('@')[0] : 'Cliente',
             cliente_email: currentUser ? currentUser.email : '',
             telefono_cliente: tel,
-            direccion_entrega: `${dir} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
+            direccion_entrega: `${dir} (GPS: ${latDest.toFixed(6)}, ${lngDest.toFixed(6)})`,
             producto_nombre: carrito.map(i => `${i.cant || i.cantidad || 1}x ${i.nombre}`).join(', '),
             subtotal: sub,
             costo_envio: env,
             precio: tot,
-            comercio_id: comercioSel ? comercioSel.id : null,
-            comercio_nombre: comercioSel ? comercioSel.nombre : 'Comercio',
+            comercio_id: typeof comercioSel !== 'undefined' && comercioSel ? comercioSel.id : null,
+            comercio_nombre: typeof comercioSel !== 'undefined' && comercioSel ? comercioSel.nombre : 'Comercio',
             lat_origen: cCom.lat,
             lng_origen: cCom.lng,
-            lat_destino: coordsEntrega.lat,
-            lng_destino: coordsEntrega.lng,
+            lat_destino: latDest,
+            lng_destino: lngDest,
             estado: est
         };
 
-        // 7. Insertar registro en Supabase
+        // 7. Insertar pedido en Supabase
         const { error } = await supabaseClient.from('pedidos').insert([payload]);
 
         if (btn) {
@@ -1437,11 +1438,13 @@ async function procesarPedido() {
             }
             carrito = [];
             if (typeof actCar === 'function') actCar();
-            if (typeof cerrarCheckout === 'function') cerrarCheckout();
+            if (typeof actualizarCarrito === 'function') actualizarCarrito();
+            if (typeof cerrarModalCheckout === 'function') cerrarModalCheckout();
         }
+
     } catch (err) {
         console.error("Excepción en procesarPedido:", err);
-        alert("Ocurrió un error inesperado al procesar el pedido. Revisa la consola.");
+        alert("Ocurrió un error al procesar el pedido: " + err.message);
         const btn = document.getElementById('btnConfirmar');
         if (btn) {
             btn.disabled = false;
