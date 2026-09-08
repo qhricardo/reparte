@@ -1347,7 +1347,14 @@ async function recalcularTotales() {
 // FUNCIÓN DE ENVÍO CON VALIDACIÓN DE SEGURIDAD Y LÍMITE DE 7 KM
 async function procesarPedido() {
     try {
-        // 1. Obtención y validación de la distancia
+        // 1. Obtener el usuario de la sesión actual de forma segura
+        let currentUser = typeof user !== 'undefined' ? user : null;
+        if (!currentUser && typeof supabaseClient !== 'undefined') {
+            const { data } = await supabaseClient.auth.getUser();
+            currentUser = data?.user || null;
+        }
+
+        // 2. Obtención y validación de la distancia
         const distElem = document.getElementById('txtDist');
         const distTexto = distElem ? distElem.innerText.trim() : "0";
         const dist = parseFloat(distTexto) || 0;
@@ -1357,7 +1364,7 @@ async function procesarPedido() {
             return;
         }
 
-        // 2. Búsqueda exhaustiva de los campos de dirección y teléfono
+        // 3. Búsqueda de campos de dirección y teléfono
         const dirInput = document.getElementById('chkDir') || 
                          document.getElementById('direccionEscrita') || 
                          document.querySelector('#modalCheck input[type="text"]');
@@ -1374,27 +1381,27 @@ async function procesarPedido() {
             return;
         }
 
-        // 3. Bloqueo temporal del botón para evitar clics dobles
+        // 4. Deshabilitar botón para prevenir múltiples envíos
         const btn = document.getElementById('btnConfirmar');
         if (btn) {
             btn.disabled = true;
             btn.innerText = "Procesando...";
         }
 
-        // 4. Cálculo de Totales
+        // 5. Cálculo de Subtotal y Total
         const sub = carrito.reduce((a, i) => a + (i.precio * (i.cant || i.cantidad || 1)), 0);
         const envElem = document.getElementById('txtEnv');
         const env = envElem ? parseFloat(envElem.innerText) || 0 : 0;
         const tot = sub + env;
-        const cCom = getCoordsCom();
+        const cCom = typeof getCoordsCom === 'function' ? getCoordsCom() : { lat: 19.5694, lng: -99.7669 };
 
-        // Asignación de estado según el monto total
+        // Definir estado según monto
         const est = tot > 500 ? 'revision_admin' : 'pendiente';
 
-        // 5. Preparación de la carga útil
+        // 6. Construir objeto de datos del pedido
         const payload = {
-            cliente_nombre: user && user.email ? user.email.split('@')[0] : 'Cliente',
-            cliente_email: user ? user.email : '',
+            cliente_nombre: currentUser && currentUser.email ? currentUser.email.split('@')[0] : 'Cliente',
+            cliente_email: currentUser ? currentUser.email : '',
             telefono_cliente: tel,
             direccion_entrega: `${dir} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
             producto_nombre: carrito.map(i => `${i.cant || i.cantidad || 1}x ${i.nombre}`).join(', '),
@@ -1410,7 +1417,7 @@ async function procesarPedido() {
             estado: est
         };
 
-        // 6. Registro en Supabase
+        // 7. Insertar registro en Supabase
         const { error } = await supabaseClient.from('pedidos').insert([payload]);
 
         if (btn) {
@@ -1428,12 +1435,12 @@ async function procesarPedido() {
                 alert("¡Pedido registrado exitosamente!");
             }
             carrito = [];
-            actCar();
-            cerrarCheckout();
+            if (typeof actCar === 'function') actCar();
+            if (typeof cerrarCheckout === 'function') cerrarCheckout();
         }
     } catch (err) {
         console.error("Excepción en procesarPedido:", err);
-        alert("Ocurrió un error inesperado al procesar el pedido. Revisa la consola (F12).");
+        alert("Ocurrió un error inesperado al procesar el pedido. Revisa la consola.");
         const btn = document.getElementById('btnConfirmar');
         if (btn) {
             btn.disabled = false;
