@@ -605,7 +605,7 @@
         <!-- PIE FIJO CON BOTONES SIEMPRE VISIBLES -->
         <div class="modal-footer">
             <button type="button" class="btn btn-secundario" onclick="cerrarModalCheckout()">Cancelar</button>
-            <button type="button" class="btn btn-primary" id="btnConfirmar" onclick="procesarPedido()">Confirmar Pedido</button>
+            <button type="button" class="btn btn-primary" id="btnConfirmarPedido" onclick="enviarPedidoWhatsApp()">Confirmar Pedido</button>
         </div>
 
     </div>
@@ -649,656 +649,1241 @@
 </body>
 
 <script>
-
-    const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
+   const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
-// ==========================================
-// ESTADO GLOBAL Y VARIABLES
-// ==========================================
-let supabaseClient = null;
-let usuarioActual = null;
-let miComercio = null;
-let carrito = [];
+    
+    let supabaseClient = null;
+    let usuarioActual = null;
+    let miComercio = null;
+    let comercioSeleccionadoObjeto = null;
+    let modoActual = 'duenio';
 
-// Variables de Mapas (Leaflet)
-let mapEntrega = null;
-let markerEntrega = null;
-let mapRegistro = null;
-let markerRegistro = null;
+    // Carrito y Realtime
+    let carrito = [];
+    let canalPedidosRealtime = null;
+    
+    // Resguardos SVG (Imágenes por defecto)
+    const DEFAULT_LOGO_SVG = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='1.5'><rect width='100%' height='100%' fill='%23f0f0f0'/><path d='M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/><polyline points='9 22 9 12 15 12 15 22'/></svg>";
+    const DEFAULT_PROD_SVG = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 24 24' fill='none' stroke='%23aaa' stroke-width='1.5'><rect width='100%' height='100%' fill='%23e9ecef'/><path d='M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z'/></svg>";
 
-let coordsEntrega = null;
-let coordsRegistroComercio = { lat: 19.5694, lng: -99.7669 };
-let comercioSeleccionadoObjeto = null;
+    // Mapas
+    let mapaEntrega = null;
+    let marcadorCliente = null;
+    let marcadorComercioEnMapa = null;
+    let lineaRuta = null;
+    let coordsEntrega = { lat: 19.4326, lng: -99.1332 };
 
-// ==========================================
-// INICIALIZACIÓN
-// ==========================================
-document.addEventListener('DOMContentLoaded', async () => {
-    if (typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON_KEY !== 'undefined') {
-        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        console.log("Supabase inicializado correctamente.");
-    } else {
-        console.error("Faltan las credenciales de SUPABASE_URL y SUPABASE_ANON_KEY.");
-        return;
-    }
+    let mapaRegComercio = null;
+    let marcadorComercioReg = null;
+    let coordsComercioRegistro = { lat: 19.4326, lng: -99.1332 };
 
-    vincularEventosUI();
+    const PRECIO_BASE_ENVIO = 20;
+    const PRECIO_KM = 8;
 
-    supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    window.loginConGoogle = async function() {
+        if (window.location.protocol === 'file:') {
+            alert("Aviso: Google OAuth requiere ejecutarse desde un servidor web o Live Server.");
+            return;
+        }
+
+        const redirectTarget = window.location.origin + window.location.pathname;
+
+        const { error } = await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: redirectTarget }
+        });
+
+        if (error) alert("Error: " + error.message);
+    };
+
+    window.cerrarSesion = async function() {
+        if (supabaseClient) {
+            await supabaseClient.auth.signOut();
+            window.location.reload();
+        }
+    };
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        document.getElementById('btnLoginGoogle')?.addEventListener('click', window.loginConGoogle);
+        document.getElementById('btnCerrarSesion')?.addEventListener('click', window.cerrarSesion);
+        document.getElementById('btnCambiarModo')?.addEventListener('click', alternarModoVista);
+        document.getElementById('btnIrCrearComercio')?.addEventListener('click', () => {
+            if (typeof mostrarFormularioCrearComercio === 'function') mostrarFormularioCrearComercio();
+        });
+        document.getElementById('btnVolverComercios')?.addEventListener('click', () => cargarComerciosCliente());
+        document.getElementById('btnCancelarRegistro')?.addEventListener('click', () => cargarComerciosCliente());
+
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const { data: { session } } = await supabaseClient.auth.getSession();
+
         if (session) {
             usuarioActual = session.user;
-            actualizarInterfazUsuario(true);
+            mostrarBarraUsuario();
             await verificarSiEsDuenio();
         } else {
-            usuarioActual = null;
-            actualizarInterfazUsuario(false);
-        }
-    });
-
-    await verificarSesionUsuario();
-});
-
-function vincularEventosUI() {
-    const btnLoginGoogle = document.getElementById('btnLoginGoogle');
-    if (btnLoginGoogle) btnLoginGoogle.addEventListener('click', loginWithGoogle);
-
-    const btnCerrarSesion = document.getElementById('btnCerrarSesion');
-    if (btnCerrarSesion) btnCerrarSesion.addEventListener('click', logout);
-
-    const btnIrCrearComercio = document.getElementById('btnIrCrearComercio');
-    if (btnIrCrearComercio) {
-        btnIrCrearComercio.addEventListener('click', () => {
             ocultarTodasLasPantallas();
-            const pReg = document.getElementById('pantallaRegistroComercio');
-            if (pReg) pReg.classList.remove('oculto');
-            setTimeout(inicializarMapaRegistroComercio, 300);
-        });
-    }
-
-    const btnCancelarRegistro = document.getElementById('btnCancelarRegistro');
-    if (btnCancelarRegistro) btnCancelarRegistro.addEventListener('click', irAInicio);
-
-    const btnVolverComercios = document.getElementById('btnVolverComercios');
-    if (btnVolverComercios) btnVolverComercios.addEventListener('click', irAInicio);
-
-    const formRegistroComercio = document.getElementById('formRegistroComercio');
-    if (formRegistroComercio) {
-        formRegistroComercio.addEventListener('submit', registrarComercioSubmit);
-    }
-}
-
-async function verificarSesionUsuario() {
-    if (!supabaseClient) return;
-    const { data: { session }, error } = await supabaseClient.auth.getSession();
-    if (error) return console.error("Error al obtener la sesión:", error);
-
-    if (session) {
-        usuarioActual = session.user;
-        actualizarInterfazUsuario(true);
-        await verificarSiEsDuenio();
-    } else {
-        usuarioActual = null;
-        actualizarInterfazUsuario(false);
-    }
-}
-
-// ==========================================
-// AUTENTICACIÓN
-// ==========================================
-async function loginWithGoogle() {
-    if (!supabaseClient) return alert("Supabase no está configurado.");
-    const { error } = await supabaseClient.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: window.location.origin + window.location.pathname }
-    });
-    if (error) alert("Error de autenticación: " + error.message);
-}
-
-async function logout() {
-    if (!supabaseClient) return;
-    const { error } = await supabaseClient.auth.signOut();
-    if (error) {
-        alert("Error al cerrar sesión: " + error.message);
-    } else {
-        usuarioActual = null;
-        miComercio = null;
-        actualizarInterfazUsuario(false);
-        window.location.reload();
-    }
-}
-
-function actualizarInterfazUsuario(sesionIniciada) {
-    const barraUsuario = document.getElementById('barraUsuario');
-    const pantallaLogin = document.getElementById('pantallaLogin');
-    const labelUsuario = document.getElementById('labelUsuario');
-
-    if (sesionIniciada) {
-        if (barraUsuario) barraUsuario.classList.remove('oculto');
-        if (labelUsuario && usuarioActual) {
-            labelUsuario.innerText = usuarioActual.user_metadata?.full_name || usuarioActual.email;
+            document.getElementById('pantallaLogin')?.classList.remove('oculto');
         }
-        irAInicio();
-    } else {
-        ocultarTodasLasPantallas();
-        if (pantallaLogin) pantallaLogin.classList.remove('oculto');
-        if (barraUsuario) barraUsuario.classList.add('oculto');
-    }
-}
-
-async function verificarSiEsDuenio() {
-    if (!usuarioActual || !supabaseClient) return;
-
-    const { data: comercios, error } = await supabaseClient
-        .from('comercios')
-        .select('*')
-        .eq('duenio_id', usuarioActual.id);
-
-    const btnCambiarModo = document.getElementById('btnCambiarModo');
-    const badgeRol = document.getElementById('badgeRol');
-
-    if (error) return console.error("Error al consultar comercio:", error);
-
-    if (comercios && comercios.length > 0) {
-        miComercio = comercios[0];
-        if (badgeRol) badgeRol.innerText = "Dueño de Comercio";
-        if (btnCambiarModo) {
-            btnCambiarModo.classList.remove('oculto');
-            btnCambiarModo.innerText = "⚙️ Panel Dueño";
-            btnCambiarModo.onclick = () => {
-                const pantallaDuenio = document.getElementById('pantallaDuenio');
-                if (pantallaDuenio && !pantallaDuenio.classList.contains('oculto')) {
-                    btnCambiarModo.innerText = "⚙️ Panel Dueño";
-                    irAInicio();
-                } else {
-                    btnCambiarModo.innerText = "🛒 Modo Comprador";
-                    cargarPanelDuenio();
-                }
-            };
-        }
-    } else {
-        miComercio = null;
-        if (badgeRol) badgeRol.innerText = "Cliente";
-        if (btnCambiarModo) btnCambiarModo.classList.add('oculto');
-    }
-}
-
-// ==========================================
-// NAVEGACIÓN Y VISTAS
-// ==========================================
-function ocultarTodasLasPantallas() {
-    const pantallas = [
-        'pantallaLogin',
-        'pantallaClienteComercios',
-        'pantallaClienteProductos',
-        'pantallaRegistroComercio',
-        'pantallaDuenio',
-        'modalCheckout',
-        'modalEditarProducto'
-    ];
-    pantallas.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('oculto');
     });
-}
 
-async function irAInicio() {
-    if (!usuarioActual) {
-        ocultarTodasLasPantallas();
+    function mostrarBarraUsuario() {
+        const barra = document.getElementById('barraUsuario');
+        const label = document.getElementById('labelUsuario');
         const login = document.getElementById('pantallaLogin');
-        if (login) login.classList.remove('oculto');
-        return;
+
+        if (barra) barra.classList.remove('oculto');
+        if (label) label.innerText = usuarioActual.email;
+        if (login) login.classList.add('oculto');
     }
-    ocultarTodasLasPantallas();
-    const cliente = document.getElementById('pantallaClienteComercios');
-    if (cliente) cliente.classList.remove('oculto');
-    await cargarComerciosCliente();
-}
 
-// ==========================================
-// MAPAS (LEAFLET)
-// ==========================================
-function inicializarMapaRegistroComercio() {
-    const cont = document.getElementById('mapaRegistroComercio');
-    if (!cont) return;
+    async function verificarSiEsDuenio() {
+        const { data } = await supabaseClient
+            .from('comercios')
+            .select('*')
+            .eq('usuario_id', usuarioActual.id);
 
-    const latDef = 19.5694, lngDef = -99.7669;
+        const btnCambiar = document.getElementById('btnCambiarModo');
+        const badgeRol = document.getElementById('badgeRol');
 
-    if (!mapRegistro) {
-        mapRegistro = L.map('mapaRegistroComercio').setView([latDef, lngDef], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
-        }).addTo(mapRegistro);
+        if (data && data.length > 0) {
+            miComercio = data[0];
+            if (badgeRol) badgeRol.innerText = "Dueño de Comercio";
+            
+            if (btnCambiar) {
+                btnCambiar.classList.remove('oculto');
+                btnCambiar.innerText = "🛒 Modo Comprador";
+            }
 
-        markerRegistro = L.marker([latDef, lngDef], { draggable: true }).addTo(mapRegistro);
-        coordsRegistroComercio = { lat: latDef, lng: lngDef };
-
-        markerRegistro.on('dragend', function (e) {
-            const pos = e.target.getLatLng();
-            coordsRegistroComercio = { lat: pos.lat, lng: pos.lng };
-        });
-
-        mapRegistro.on('click', function (e) {
-            markerRegistro.setLatLng(e.latlng);
-            coordsRegistroComercio = { lat: e.latlng.lat, lng: e.latlng.lng };
-        });
-    } else {
-        mapRegistro.invalidateSize();
+            modoActual = 'duenio';
+            if (typeof cargarPanelDuenio === 'function') cargarPanelDuenio();
+            if (typeof activarEscuchaPedidosEnTiempoReal === 'function') activarEscuchaPedidosEnTiempoReal();
+        } else {
+            miComercio = null;
+            if (badgeRol) badgeRol.innerText = "Cliente";
+            if (btnCambiar) btnCambiar.classList.add('oculto');
+            cargarComerciosCliente();
+        }
     }
-}
 
-function inicializarMapaEntrega() {
-    const cont = document.getElementById('mapaEntrega');
-    if (!cont) return;
+    function alternarModoVista() {
+        const btnCambiar = document.getElementById('btnCambiarModo');
 
-    const latDef = 19.5694, lngDef = -99.7669;
+        if (modoActual === 'duenio') {
+            modoActual = 'cliente';
+            if (btnCambiar) btnCambiar.innerText = "🏬 Mi Panel de Comercio";
+            cargarComerciosCliente();
+        } else {
+            modoActual = 'duenio';
+            if (btnCambiar) btnCambiar.innerText = "🛒 Modo Comprador";
+            if (typeof cargarPanelDuenio === 'function') cargarPanelDuenio();
+        }
+    }
 
-    if (!mapEntrega) {
-        mapEntrega = L.map('mapaEntrega').setView([latDef, lngDef], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
-        }).addTo(mapEntrega);
+    function ocultarTodasLasPantallas() {
+        ['pantallaLogin', 'pantallaClienteComercios', 'pantallaClienteProductos', 'pantallaRegistroComercio', 'pantallaDuenio']
+            .forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('oculto');
+            });
+    }
 
-        markerEntrega = L.marker([latDef, lngDef], { draggable: true }).addTo(mapEntrega);
-        coordsEntrega = { lat: latDef, lng: lngDef };
+    async function cargarComerciosCliente() {
+        try {
+            ocultarTodasLasPantallas();
+            const pantalla = document.getElementById('pantallaClienteComercios');
+            if (pantalla) pantalla.classList.remove('oculto');
 
-        const actualizarCoordenadas = (latlng) => {
-            coordsEntrega = { lat: latlng.lat, lng: latlng.lng };
-            calcularDistanciaYEnvio();
+            const btnIrCrear = document.getElementById('btnIrCrearComercio');
+            if (btnIrCrear) {
+                if (typeof miComercio !== 'undefined' && miComercio) btnIrCrear.classList.add('oculto');
+                else btnIrCrear.classList.remove('oculto');
+            }
+
+            // 1. CARGAR PEDIDOS ACTIVOS DEL CLIENTE
+            await renderizarPedidosCliente();
+
+            // 2. SUSCRIPCIÓN EN TIEMPO REAL (Exclusiva de este cliente)
+            if (usuarioActual && !canalPedidosRealtime) {
+                canalPedidosRealtime = supabaseClient
+                    .channel('seguimiento-pedidos-cliente')
+                    .on(
+                        'postgres_changes',
+                        {
+                            event: '*',
+                            schema: 'public',
+                            table: 'pedidos',
+                            filter: `cliente_id=eq.${usuarioActual.id}`
+                        },
+                        async (payload) => {
+                            console.log('¡Cambio detectado en pedido propio!', payload);
+                            await renderizarPedidosCliente();
+                        }
+                    )
+                    .subscribe();
+            }
+
+            // 3. LISTAR COMERCIOS
+            const { data: comercios, error } = await supabaseClient.from('comercios').select('*');
+            if (error) console.error("Error al obtener comercios:", error);
+
+            const lista = document.getElementById('listaComercios');
+            if (!lista) return;
+            
+            lista.innerHTML = "";
+
+            if (!comercios || comercios.length === 0) {
+                lista.innerHTML = "<p>Aún no hay comercios registrados.</p>";
+                return;
+            }
+
+            comercios.forEach(c => {
+                const card = document.createElement('div');
+                card.className = 'tarjeta-comercio';
+                card.style.cursor = 'pointer';
+                
+                card.onclick = () => verProductosComercio(c);
+
+                const logo = c.logo_url || c.logo || DEFAULT_LOGO_SVG;
+                const nombreComercio = c.nombre || c.nombre_comercio || 'Comercio';
+                const direccionComercio = c.direccion || c.direccion_escrita || '';
+
+                card.innerHTML = `
+                    <img src="${logo}" alt="${nombreComercio}" style="width:80px; height:80px; object-fit:cover; border-radius:8px;">
+                    <h3>${nombreComercio}</h3>
+                    <p style="color:#7f8c8d; font-size:13px;">${direccionComercio}</p>
+                `;
+                lista.appendChild(card);
+            });
+        } catch (err) {
+            console.error("Error en cargarComerciosCliente:", err);
+        }
+    }
+
+    async function verProductosComercio(comercioObj) {
+        try {
+            if (!comercioSeleccionadoObjeto || comercioSeleccionadoObjeto.id !== comercioObj.id) {
+                carrito = [];
+                if (typeof actualizarBarraCarrito === 'function') actualizarBarraCarrito();
+            }
+            comercioSeleccionadoObjeto = comercioObj;
+
+            ocultarTodasLasPantallas();
+            const pantallaProds = document.getElementById('pantallaClienteProductos');
+            if (pantallaProds) pantallaProds.classList.remove('oculto');
+
+            const titulo = document.getElementById('tituloComercioSeleccionado');
+            if (titulo) titulo.innerText = `Productos de ${comercioObj.nombre || 'Comercio'}`;
+
+            const { data: productos, error } = await supabaseClient
+                .from('productos')
+                .select('*')
+                .eq('comercio_id', comercioObj.id);
+
+            if (error) console.error("Error al obtener productos:", error);
+
+            const lista = document.getElementById('listaProductosCliente');
+            if (!lista) return;
+
+            lista.innerHTML = "";
+
+            if (!productos || productos.length === 0) {
+                lista.innerHTML = "<p>Este comercio no tiene productos disponibles por el momento.</p>";
+                return;
+            }
+
+            productos.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'tarjeta-producto';
+
+                const precioNum = Number(p.precio || p.costo || 0);
+                const imagenProd = p.imagen || p.imagen_url || DEFAULT_PROD_SVG;
+                const nombreProd = p.nombre || 'Producto';
+                const descProd = p.descripcion || '';
+
+                card.innerHTML = `
+                    <img src="${imagenProd}" alt="${nombreProd}" style="width:100%; height:140px; object-fit:cover; border-radius:6px;">
+                    <div class="info-producto" style="padding:8px 0;">
+                        <h4 style="margin:5px 0;">${nombreProd}</h4>
+                        <p style="font-size: 13px; color: #666; margin:4px 0;">${descProd}</p>
+                        <div class="precio" style="font-weight:bold; font-size:16px; color:#2c3e50; margin:6px 0;">$${precioNum.toFixed(2)}</div>
+                        <button class="btn btn-primary" style="width:100%; padding:8px; cursor:pointer;" onclick="agregarAlCarrito('${p.id}', '${nombreProd.replace(/'/g, "\\'")}', ${precioNum})">+ Agregar a Carrito</button>
+                    </div>
+                `;
+                lista.appendChild(card);
+            });
+        } catch (err) {
+            console.error("Error en verProductosComercio:", err);
+        }
+    }
+
+  async function renderizarPedidosCliente() {
+        if (!usuarioActual) return;
+
+        try {
+            // 1. Crear o preparar el contenedor en el DOM
+            let contenedorPedidos = document.getElementById('seccionMisPedidos');
+            if (!contenedorPedidos) {
+                contenedorPedidos = document.createElement('div');
+                contenedorPedidos.id = 'seccionMisPedidos';
+                contenedorPedidos.style.cssText = 'margin-bottom: 20px; padding: 10px;';
+                const pantalla = document.getElementById('pantallaClienteComercios');
+                if (pantalla) pantalla.insertBefore(contenedorPedidos, pantalla.firstChild);
+            }
+
+            // Identificadores posibles del usuario en Supabase Auth
+            const idUsuario = usuarioActual.id;
+            const correoUsuario = usuarioActual.email;
+            const nombreUsuario = usuarioActual.user_metadata?.full_name || usuarioActual.user_metadata?.name || '';
+
+            // 2. Consulta flexible en 'cliente_nombre' usando filtros OR
+            let queryOR = `cliente_nombre.eq.${idUsuario},cliente_nombre.eq.${correoUsuario}`;
+            if (nombreUsuario) {
+                queryOR += `,cliente_nombre.eq.${nombreUsuario}`;
+            }
+
+            let { data: pedidosActivos, error } = await supabaseClient
+                .from('pedidos')
+                .select('*')
+                .or(queryOR)
+                .order('created_at', { ascending: false });
+
+            // Fallback por si la columna se llama 'cliente_id' o 'usuario_id'
+            if (error || !pedidosActivos || pedidosActivos.length === 0) {
+                const resAlt = await supabaseClient
+                    .from('pedidos')
+                    .select('*')
+                    .or(`cliente_id.eq.${idUsuario},usuario_id.eq.${idUsuario}`)
+                    .order('created_at', { ascending: false });
+                
+                if (resAlt.data && resAlt.data.length > 0) {
+                    pedidosActivos = resAlt.data;
+                }
+            }
+
+            // Si no hay pedidos
+            if (!pedidosActivos || pedidosActivos.length === 0) {
+                contenedorPedidos.innerHTML = `
+                    <div style="background:#f8f9fa; padding:12px; border-radius:8px; text-align:center; color:#7f8c8d; border: 1px dashed #ccc;">
+                        <p style="margin:0;">No tienes pedidos realizados como comprador.</p>
+                    </div>`;
+                return;
+            }
+
+            // 3. Renderizar los pedidos encontrados
+            let htmlPedidos = '<h3 style="margin-bottom:12px; color:#2c3e50;">🛍️ Tus Pedidos Realizados</h3>';
+            
+            pedidosActivos.forEach(ped => {
+                let badgeColor = '#f39c12'; // Pendiente (Naranja)
+                let estadoTexto = ped.estado || 'Pendiente';
+                const estLower = estadoTexto.toLowerCase();
+                let esRutaActiva = false;
+
+                if (estLower.includes('preparando') || estLower.includes('aceptado')) {
+                    badgeColor = '#3498db'; // Azul
+                } else if (estLower.includes('camino') || estLower.includes('enviado') || estLower.includes('despachado')) {
+                    badgeColor = '#9b59b6'; // Morado
+                    esRutaActiva = true;
+                } else if (estLower.includes('entregado')) {
+                    badgeColor = '#2ecc71'; // Verde
+                } else if (estLower.includes('cancelado')) {
+                    badgeColor = '#e74c3c'; // Rojo
+                }
+
+                // Obtener datos con las columnas actualizadas
+                const nombreComercio = ped.comercio_nombre || ped.nombre_comercio || 'Comercio';
+                const nombreProducto = ped.producto_nombre || ped.producto || 'Producto';
+                const precioPagar = Number(ped.precio || ped.total || ped.total_pagar || ped.monto_total || 0);
+
+                htmlPedidos += `
+                    <div style="background: #ffffff; border-left: 6px solid ${badgeColor}; padding: 14px; margin-bottom: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong style="font-size: 15px; color:#333;">${nombreComercio}</strong>
+                            <span style="background: ${badgeColor}; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">
+                                ${estadoTexto.toUpperCase()}
+                            </span>
+                        </div>
+
+                        <div style="margin-top: 8px; font-size: 14px; color: #2c3e50;">
+                            <b>Producto:</b> ${nombreProducto}
+                        </div>
+                        
+                        <p style="margin: 6px 0 0 0; font-size: 13px; color: #555;">
+                            Precio: <b>$${precioPagar.toFixed(2)}</b>
+                        </p>
+
+                        ${esRutaActiva ? `
+                            <div style="margin-top: 10px; padding: 8px; background: #f3e5f5; border-radius: 6px; color: #6a1b9a; font-size: 12px; font-weight: bold; display: flex; align-items: center; gap: 6px;">
+                                <span>🚀 ¡Tu repartidor va en camino con el pedido!</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+
+            contenedorPedidos.innerHTML = htmlPedidos;
+
+        } catch (err) {
+            console.error("Error al renderizar pedidos del cliente:", err);
+        }
+    }
+    
+    // REGISTRAR COMERCIO CON MAPA
+    function mostrarFormularioCrearComercio() {
+        ocultarTodasLasPantallas();
+        document.getElementById('pantallaRegistroComercio').classList.remove('oculto');
+
+        setTimeout(() => {
+            if (!mapaRegComercio) {
+                mapaRegComercio = L.map('mapaComercioReg').setView([coordsComercioRegistro.lat, coordsComercioRegistro.lng], 14);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaRegComercio);
+
+                marcadorComercioReg = L.marker([coordsComercioRegistro.lat, coordsComercioRegistro.lng], { draggable: true }).addTo(mapaRegComercio);
+
+                marcadorComercioReg.on('dragend', function (e) {
+                    const pos = e.target.getLatLng();
+                    coordsComercioRegistro = { lat: pos.lat, lng: pos.lng };
+                    obtenerNombreDireccion(pos.lat, pos.lng, 'direccionComercioReg');
+                });
+
+                mapaRegComercio.on('click', function(e) {
+                    marcadorComercioReg.setLatLng(e.latlng);
+                    coordsComercioRegistro = { lat: e.latlng.lat, lng: e.latlng.lng };
+                    obtenerNombreDireccion(e.latlng.lat, e.latlng.lng, 'direccionComercioReg');
+                });
+            } else {
+                mapaRegComercio.invalidateSize();
+            }
+        }, 300);
+    }
+
+    async function buscarUbicacionComercio() {
+        const dir = document.getElementById('direccionComercioReg').value;
+        if (!dir.trim()) return;
+
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(dir)}`);
+            const results = await res.json();
+            if (results && results.length > 0) {
+                const lat = parseFloat(results[0].lat);
+                const lon = parseFloat(results[0].lon);
+                coordsComercioRegistro = { lat, lng: lon };
+                
+                if (mapaRegComercio && marcadorComercioReg) {
+                    mapaRegComercio.setView([lat, lon], 15);
+                    marcadorComercioReg.setLatLng([lat, lon]);
+                }
+            } else {
+                alert("Ubicación no encontrada.");
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+   // ✅ CÓDIGO ACTUALIZADO (Sube la imagen a Supabase Storage primero)
+document.getElementById('formComercio').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btnGuardar = e.target.querySelector('button[type="submit"]');
+    const archivoInput = document.getElementById('logoComercioArchivo');
+    const archivo = archivoInput ? archivoInput.files[0] : null;
+
+    if (!archivo) {
+        return alert("Por favor selecciona una imagen o logo para tu comercio.");
+    }
+
+    try {
+        if (btnGuardar) {
+            btnGuardar.disabled = true;
+            btnGuardar.innerText = "Subiendo imagen...";
+        }
+
+        // 1. Generar nombre único para la imagen
+        const extension = archivo.name.split('.').pop();
+        const nombreArchivo = `logos/${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${extension}`;
+
+        // 2. Subir imagen al bucket 'comercios'
+        const { error: uploadError } = await supabaseClient.storage
+            .from('comercios')
+            .upload(nombreArchivo, archivo);
+
+        if (uploadError) throw uploadError;
+
+        // 3. Obtener la URL pública de la imagen
+        const { data: publicUrlData } = supabaseClient.storage
+            .from('comercios')
+            .getPublicUrl(nombreArchivo);
+
+        if (btnGuardar) btnGuardar.innerText = "Guardando comercio...";
+
+        // 4. Armar el objeto para la base de datos con la URL pública generada
+        const textoDir = document.getElementById('direccionComercioReg').value;
+        const nuevoComercio = {
+            usuario_id: usuarioActual.id,
+            nombre: document.getElementById('nombreComercioReg').value,
+            telefono: document.getElementById('telefonoComercioReg').value,
+            direccion: `${textoDir} (GPS: ${coordsComercioRegistro.lat.toFixed(6)}, ${coordsComercioRegistro.lng.toFixed(6)})`,
+            horario: document.getElementById('horarioComercioReg').value,
+            logo_url: publicUrlData.publicUrl
         };
 
-        markerEntrega.on('dragend', (e) => actualizarCoordenadas(e.target.getLatLng()));
-        mapEntrega.on('click', (e) => {
-            markerEntrega.setLatLng(e.latlng);
-            actualizarCoordenadas(e.latlng);
-        });
-    } else {
-        mapEntrega.invalidateSize();
+        // 5. Insertar el registro en la tabla 'comercios'
+        const { error: insertError } = await supabaseClient.from('comercios').insert([nuevoComercio]);
+        if (insertError) throw insertError;
+
+        alert("¡Comercio registrado con éxito!");
+        document.getElementById('formComercio').reset();
+        verificarSiEsDuenio();
+
+    } catch (err) {
+        alert("Error al registrar el comercio: " + err.message);
+    } finally {
+        if (btnGuardar) {
+            btnGuardar.disabled = false;
+            btnGuardar.innerText = "Guardar Comercio";
+        }
     }
+});
+
+ // CARRITO Y CHECKOUT
+function agregarAlCarrito(id, nombre, precio) {
+    const existente = carrito.find(item => item.id === id);
+    if (existente) existente.cantidad++;
+    else carrito.push({ id, nombre, precio, cantidad: 1 });
+    actualizarBarraCarrito();
 }
 
-function calcularDistanciaYEnvio() {
-    if (!coordsEntrega) return;
-    const origen = obtenerCoordsComercioActivo();
-    
-    // Fórmula de Haversine para calcular la distancia en KM
-    const R = 6371;
-    const dLat = (coordsEntrega.lat - origen.lat) * Math.PI / 180;
-    const dLng = (coordsEntrega.lng - origen.lng) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(origen.lat * Math.PI / 180) * Math.cos(coordsEntrega.lat * Math.PI / 180) *
-              Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const dist = R * c;
+function actualizarBarraCarrito() {
+    const barra = document.getElementById('barraCarrito');
+    const cant = carrito.reduce((acc, item) => acc + item.cantidad, 0);
+    const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
 
-    const costoEnvio = dist <= 2 ? 25 : 25 + Math.ceil(dist - 2) * 10;
-
-    const txtDist = document.getElementById('txtDistancia');
-    const txtEnvio = document.getElementById('txtCostoEnvio');
-
-    if (txtDist) txtDist.innerText = `${dist.toFixed(2)} km`;
-    if (txtEnvio) txtEnvio.innerText = `$${costoEnvio.toFixed(2)}`;
-
-    recalcularTotalesCheckout();
+    if (cant > 0) {
+        barra.classList.remove('oculto');
+        document.getElementById('cantCarrito').innerText = cant;
+        document.getElementById('subtotalCarrito').innerText = subtotal.toFixed(2);
+    } else {
+        barra.classList.add('oculto');
+    }
 }
 
 function obtenerCoordsComercioActivo() {
-    if (comercioSeleccionadoObjeto && comercioSeleccionadoObjeto.lat && comercioSeleccionadoObjeto.lng) {
-        return { lat: parseFloat(comercioSeleccionadoObjeto.lat), lng: parseFloat(comercioSeleccionadoObjeto.lng) };
+    if (!comercioSeleccionadoObjeto || !comercioSeleccionadoObjeto.direccion) {
+        return { lat: 19.5694, lng: -99.7669 };
+    }
+    const match = comercioSeleccionadoObjeto.direccion.match(/GPS:\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+    if (match) {
+        return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
     }
     return { lat: 19.5694, lng: -99.7669 };
 }
 
-// ==========================================
-// REGISTRO DE COMERCIO
-// ==========================================
-async function registrarComercioSubmit(e) {
-    e.preventDefault();
-    if (!usuarioActual) return alert("Debes iniciar sesión.");
+function abrirModalCheckout() {
+    document.getElementById('modalCheckout').classList.remove('oculto');
+    
+    const contenedorResumen = document.getElementById('resumenItemsCarrito');
+    contenedorResumen.innerHTML = carrito.map(i => `<p style="margin: 4px 0;"><b>${i.cantidad}x</b> ${i.nombre} - $${(i.precio * i.cantidad).toFixed(2)}</p>`).join('');
 
-    const nombre = document.getElementById('regNombreComercio').value.trim();
-    const telefono = document.getElementById('regTelefonoComercio').value.trim();
-    const direccion = document.getElementById('regDireccionComercio').value.trim();
-    const horario = document.getElementById('regHorarioComercio').value.trim();
-    const archivoLogo = document.getElementById('regLogoComercioArchivo').files[0];
+    const coordsComercio = obtenerCoordsComercioActivo();
 
-    if (!archivoLogo) return alert("Selecciona una imagen o logo para tu comercio.");
+    setTimeout(() => {
+        if (!mapaEntrega) {
+            mapaEntrega = L.map('mapaEntrega').setView([coordsComercio.lat, coordsComercio.lng], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaEntrega);
+
+            marcadorComercioEnMapa = L.marker([coordsComercio.lat, coordsComercio.lng])
+                .addTo(mapaEntrega)
+                .bindPopup(`<b>${comercioSeleccionadoObjeto ? comercioSeleccionadoObjeto.nombre : 'Comercio'}</b><br>Origen`)
+                .openPopup();
+
+            marcadorCliente = L.marker([coordsEntrega.lat, coordsEntrega.lng], { draggable: true }).addTo(mapaEntrega);
+
+            marcadorCliente.on('dragend', function (e) {
+                const pos = e.target.getLatLng();
+                coordsEntrega = { lat: pos.lat, lng: pos.lng };
+                obtenerNombreDireccion(pos.lat, pos.lng, 'direccionEscrita');
+                recalcularTotales();
+            });
+
+            mapaEntrega.on('click', function(e) {
+                marcadorCliente.setLatLng(e.latlng);
+                coordsEntrega = { lat: e.latlng.lat, lng: e.latlng.lng };
+                obtenerNombreDireccion(e.latlng.lat, e.latlng.lng, 'direccionEscrita');
+                recalcularTotales();
+            });
+        } else {
+            mapaEntrega.invalidateSize();
+            if (marcadorComercioEnMapa) {
+                marcadorComercioEnMapa.setLatLng([coordsComercio.lat, coordsComercio.lng]);
+            }
+        }
+        recalcularTotales();
+    }, 300);
+}
+
+function cerrarModalCheckout() {
+    document.getElementById('modalCheckout').classList.add('oculto');
+}
+
+async function buscarDireccionEnMapa() {
+    const direccion = document.getElementById('direccionEscrita').value;
+    if (!direccion.trim()) return;
 
     try {
-        const ext = archivoLogo.name.split('.').pop();
-        const rutaLogo = `logos/${usuarioActual.id}_${Date.now()}.${ext}`;
-
-        const { error: upErr } = await supabaseClient.storage.from('comercios').upload(rutaLogo, archivoLogo);
-        if (upErr) throw upErr;
-
-        const { data: urlData } = supabaseClient.storage.from('comercios').getPublicUrl(rutaLogo);
-
-        const payload = {
-            duenio_id: usuarioActual.id,
-            nombre: nombre,
-            telefono: telefono,
-            direccion: direccion,
-            horario: horario,
-            imagen: urlData.publicUrl,
-            logo: urlData.publicUrl,
-            lat: coordsRegistroComercio.lat,
-            lng: coordsRegistroComercio.lng
-        };
-
-        const { error: insErr } = await supabaseClient.from('comercios').insert([payload]);
-        if (insErr) throw insErr;
-
-        alert("¡Comercio registrado con éxito!");
-        await verificarSiEsDuenio();
-        cargarPanelDuenio();
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion)}`);
+        const results = await response.json();
+        if (results && results.length > 0) {
+            const lat = parseFloat(results[0].lat);
+            const lon = parseFloat(results[0].lon);
+            coordsEntrega = { lat, lng: lon };
+            
+            if (mapaEntrega && marcadorCliente) {
+                marcadorCliente.setLatLng([lat, lon]);
+            }
+            recalcularTotales();
+        } else {
+            alert("No se encontró la dirección especificada.");
+        }
     } catch (err) {
-        alert("Error al registrar comercio: " + err.message);
+        console.error(err);
     }
 }
 
-// ==========================================
-// CLIENTE Y COMERCIOS
-// ==========================================
-async function cargarComerciosCliente() {
-    const contenedor = document.getElementById('listaComercios');
-    if (!contenedor) return;
+async function obtenerNombreDireccion(lat, lng, elementIdInput) {
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+        const data = await response.json();
+        if (data && data.display_name) {
+            document.getElementById(elementIdInput).value = data.display_name;
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
 
-    contenedor.innerHTML = "<p>Cargando comercios...</p>";
+async function recalcularTotales() {
+    const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+    const coordsComercio = obtenerCoordsComercioActivo();
 
-    const { data: comercios, error } = await supabaseClient.from('comercios').select('*');
+    let distanciaKm = 0;
+
+    try {
+        const urlRuta = `https://router.project-osrm.org/route/v1/driving/${coordsComercio.lng},${coordsComercio.lat};${coordsEntrega.lng},${coordsEntrega.lat}?overview=full&geometries=geojson`;
+        const resp = await fetch(urlRuta);
+        const data = await resp.json();
+
+        if (data.routes && data.routes.length > 0) {
+            const ruta = data.routes[0];
+            distanciaKm = ruta.distance / 1000;
+
+            const coordenadasPolyline = ruta.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+
+            if (mapaEntrega) {
+                if (lineaRuta) mapaEntrega.removeLayer(lineaRuta);
+                const colorLinea = distanciaKm > 10 ? '#e74c3c' : '#27ae60';
+                lineaRuta = L.polyline(coordenadasPolyline, { color: colorLinea, weight: 5, opacity: 0.8 }).addTo(mapaEntrega);
+
+                const bounds = L.latLngBounds([
+                    [coordsComercio.lat, coordsComercio.lng],
+                    [coordsEntrega.lat, coordsEntrega.lng]
+                ]);
+                mapaEntrega.fitBounds(bounds, { padding: [40, 40] });
+            }
+        } else {
+            throw new Error("No se pudo obtener la ruta por calles.");
+        }
+    } catch (err) {
+        console.warn("Fallo el cálculo por calles, recurriendo a distancia directa:", err);
+        const R = 6371;
+        const dLat = (coordsEntrega.lat - coordsComercio.lat) * Math.PI / 180;
+        const dLon = (coordsEntrega.lng - coordsComercio.lng) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(coordsComercio.lat * Math.PI / 180) * Math.cos(coordsEntrega.lat * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        distanciaKm = R * c;
+
+        if (mapaEntrega) {
+            if (lineaRuta) mapaEntrega.removeLayer(lineaRuta);
+            lineaRuta = L.polyline([
+                [coordsComercio.lat, coordsComercio.lng],
+                [coordsEntrega.lat, coordsEntrega.lng]
+            ], { color: '#e74c3c', weight: 4, opacity: 0.7, dashArray: '8, 8' }).addTo(mapaEntrega);
+
+            const bounds = L.latLngBounds([
+                [coordsComercio.lat, coordsComercio.lng],
+                [coordsEntrega.lat, coordsEntrega.lng]
+            ]);
+            mapaEntrega.fitBounds(bounds, { padding: [40, 40] });
+        }
+    }
+
+    const costoEnvio = PRECIO_BASE_ENVIO + (distanciaKm * PRECIO_KM);
+    const total = subtotal + costoEnvio;
+
+    document.getElementById('txtDistancia').innerText = distanciaKm.toFixed(2);
+    document.getElementById('txtSubtotal').innerText = subtotal.toFixed(2);
+    document.getElementById('txtCostoEnvio').innerText = costoEnvio.toFixed(2);
+    document.getElementById('txtTotalPagar').innerText = total.toFixed(2);
+
+    // --- BLOQUEO AUTOMÁTICO EN TIEMPO REAL SI PASA DE 10 KM ---
+    const btnSubmit = document.querySelector('#modalCheckout button[onclick*="enviar"], #modalCheckout button[type="submit"], #btnConfirmarPedido');
+    
+    if (distanciaKm > 10) {
+        if (btnSubmit) {
+            btnSubmit.disabled = true;
+            btnSubmit.innerText = "Fuera de Cobertura (>7km)";
+            btnSubmit.style.backgroundColor = "#95a5a6";
+        }
+    } else {
+        if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.innerText = "Confirmar Pedido";
+            btnSubmit.style.backgroundColor = "";
+        }
+    }
+}
+
+// FUNCIÓN DE ENVÍO CON VALIDACIÓN DE SEGURIDAD Y LÍMITE DE 7 KM
+async function procesarPedido() {
+    try {
+        // 1. Obtención segura de distancia
+        const elemDist = document.getElementById('txtDistancia') || document.getElementById('txtDist');
+        const distanciaKm = elemDist ? parseFloat(elemDist.innerText) || 0 : 0;
+
+        // Validar límite de 7 km
+        if (distanciaKm > 7) {
+            alert(`ERROR: La distancia de entrega (${distanciaKm.toFixed(2)} km) supera el límite de 7 km.`);
+            return;
+        }
+
+        // 2. Obtención de importes
+        const subtotal = carrito.reduce((acc, item) => acc + ((item.precio || 0) * (item.cantidad || item.cant || 1)), 0);
+        
+        const elemEnv = document.getElementById('txtCostoEnvio') || document.getElementById('txtEnv');
+        const costoEnvio = elemEnv ? parseFloat(elemEnv.innerText) || 0 : 0;
+
+        const elemTot = document.getElementById('txtTotalPagar') || document.getElementById('txtTot');
+        const totalPagar = elemTot ? parseFloat(elemTot.innerText) || (subtotal + costoEnvio) : (subtotal + costoEnvio);
+
+        // 3. Dirección y Teléfono
+        const inputDir = document.getElementById('direccionEscrita') || document.getElementById('chkDir');
+        const inputTel = document.getElementById('telefonoCliente') || document.getElementById('chkTel');
+
+        const direccion = inputDir ? inputDir.value : "";
+        const telefonoCliente = inputTel ? inputTel.value : "";
+
+        if (!direccion.trim()) {
+            alert("Por favor ingresa la dirección de entrega.");
+            return;
+        }
+
+        // Deshabilitar botón durante el envío
+        const btnSubmit = document.querySelector('#modalCheckout button[onclick*="enviar"], #modalCheckout button[type="submit"], #btnConfirmarPedido, #btnConfirmar');
+        if (btnSubmit) btnSubmit.disabled = true;
+
+        // Determinar estado según el monto (> $500)
+        const estadoInicial = totalPagar > 500 ? 'revision_admin' : 'pendiente';
+
+        // Obtener comercio activo
+        const objComercio = (typeof comercioSeleccionadoObjeto !== 'undefined' && comercioSeleccionadoObjeto) 
+            ? comercioSeleccionadoObjeto 
+            : ((typeof comercioSel !== 'undefined' && comercioSel) ? comercioSel : null);
+
+        const coordsCom = (typeof obtenerCoordsComercioActivo === 'function') 
+            ? obtenerCoordsComercioActivo() 
+            : (typeof getCoordsCom === 'function' ? getCoordsCom() : { lat: 19.5694, lng: -99.7669 });
+
+        const payloadPedido = {
+            cliente_nombre: user ? (user.email ? user.email.split('@')[0] : 'Cliente') : 'Cliente',
+            cliente_email: user ? user.email : 'anonimo@correo.com',
+            telefono_cliente: telefonoCliente,
+            direccion_entrega: `${direccion} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
+            producto_nombre: carrito.map(i => `${i.cantidad || i.cant || 1}x ${i.nombre}`).join(', '),
+            subtotal: subtotal,
+            costo_envio: costoEnvio,
+            precio: totalPagar,
+            comercio_id: objComercio ? objComercio.id : null,
+            comercio_nombre: objComercio ? objComercio.nombre : 'Comercio',
+            lat_origen: coordsCom.lat,
+            lng_origen: coordsCom.lng,
+            lat_destino: coordsEntrega.lat,
+            lng_destino: coordsEntrega.lng,
+            estado: estadoInicial
+        };
+
+        // Enviar a Supabase
+        const { data, error } = await supabaseClient.from('pedidos').insert([payloadPedido]);
+
+        if (btnSubmit) btnSubmit.disabled = false;
+
+        if (error) {
+            console.error("Error al insertar pedido:", error);
+            alert("Error al registrar el pedido: " + error.message);
+        } else {
+            if (totalPagar > 500) {
+                alert("⚠️ Su pedido supera los $500 pesos y ha sido enviado al Administrador para su revisión y aprobación.");
+            } else {
+                alert("¡Pedido registrado exitosamente!");
+            }
+
+            // Resetear carrito y cerrar modal
+            carrito = [];
+            if (typeof actualizarBarraCarrito === 'function') actualizarBarraCarrito();
+            if (typeof actCar === 'function') actCar();
+            if (typeof cerrarModalCheckout === 'function') cerrarModalCheckout();
+            if (typeof cerrarCheckout === 'function') cerrarCheckout();
+        }
+    } catch (err) {
+        console.error("Excepción en procesarPedido:", err);
+        alert("Ocurrió un error inesperado al procesar el pedido. Revisa la consola del navegador.");
+        const btnSubmit = document.querySelector('#modalCheckout button[onclick*="enviar"], #modalCheckout button[type="submit"], #btnConfirmarPedido, #btnConfirmar');
+        if (btnSubmit) btnSubmit.disabled = false;
+    }
+}
+    
+   // PROCESAR PEDIDO Y VINCULAR CON EL RADAR DE REPARTIDORES
+async function procesarPedidoFinal() {
+    const direccionText = document.getElementById('direccionEscrita').value;
+    const telefonoText = document.getElementById('telefonoCliente').value;
+
+    // Validaciones de entrada
+    if (!direccionText.trim()) return alert("Ingresa tu dirección de entrega.");
+    if (!telefonoText.trim()) return alert("Ingresa tu teléfono de contacto para el repartidor.");
+
+    const btn = document.getElementById('btnEnviarPedidoFinal');
+    btn.disabled = true;
+
+    // 1. Desglose explícito de costos
+    const subtotalProductos = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+    const costoEnvio = parseFloat(document.getElementById('txtCostoEnvio').innerText) || 0;
+    const totalFinal = subtotalProductos + costoEnvio;
+    const resumenProductos = carrito.map(i => `${i.cantidad}x ${i.nombre}`).join(', ');
+    
+    const coordsComercio = obtenerCoordsComercioActivo();
+
+    // Obtener el nombre del usuario
+    const nombreCliente = usuarioActual?.user_metadata?.full_name 
+      || usuarioActual?.user_metadata?.name 
+      || usuarioActual?.email?.split('@')[0] 
+      || usuarioActual?.email;
+
+    // 2. Estructura completa enviada a Supabase con desglose
+    const payloadPedido = {
+        cliente_nombre: nombreCliente,
+        cliente_email: usuarioActual?.email,
+        telefono_cliente: telefonoText.trim(),
+        direccion_entrega: `${direccionText} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
+        producto_nombre: resumenProductos,
+        
+        // --- DESGLOSE DE COSTOS ---
+        subtotal: subtotalProductos,    // <--- Solo Productos ($90.00 para el COMERCIO)
+        costo_envio: costoEnvio,        // <--- Envío ($54.19)
+        precio: totalFinal,             // <--- Gran Total ($144.19 para el REPARTIDOR)
+        
+        comercio_id: comercioSeleccionadoObjeto.id,
+        comercio_nombre: comercioSeleccionadoObjeto.nombre,
+        lat_origen: coordsComercio.lat,
+        lng_origen: coordsComercio.lng,
+        lat_destino: coordsEntrega.lat,
+        lng_destino: coordsEntrega.lng,
+        estado: 'pendiente'
+    };
+
+    const { error } = await supabaseClient.from('pedidos').insert([payloadPedido]);
 
     if (error) {
-        contenedor.innerHTML = "<p style='color:red;'>Error al cargar comercios.</p>";
+        alert("Error al enviar el pedido: " + error.message);
+    } else {
+        alert("¡Pedido enviado con éxito! Aparecerá en el radar del comercio en breve.");
+        carrito = [];
+        actualizarBarraCarrito();
+        cerrarModalCheckout();
+    }
+    
+    btn.disabled = false;
+}
+    // PANEL DE DUEÑO, HORA DE PEDIDO Y REFRESH DE ESTADOS
+    async function cargarPanelDuenio() {
+        ocultarTodasLasPantallas();
+        document.getElementById('pantallaDuenio').classList.remove('oculto');
+        document.getElementById('nombreComercioDuenio').innerText = `🏬 ${miComercio.nombre}`;
+        document.getElementById('infoComercioDuenio').innerText = `Dirección: ${miComercio.direccion || 'N/A'} | Horario: ${miComercio.horario || 'N/A'}`;
+        cargarProductosDuenio();
+    }
+
+    window.eliminarMiComercio = async function() {
+        if (!miComercio) return;
+        if (confirm("⚠️ ¿Deseas ELIMINAR tu comercio por completo y todos sus productos?")) {
+            try {
+                await supabaseClient.from('productos').delete().eq('comercio_id', miComercio.id);
+                const { error } = await supabaseClient.from('comercios').delete().eq('id', miComercio.id);
+                if (error) throw error;
+                alert("Tu comercio ha sido eliminado.");
+                miComercio = null;
+                await verificarSiEsDuenio();
+            } catch (err) {
+                alert("Error: " + err.message);
+            }
+        }
+    };
+
+    function formatearFechaHora(fechaIso) {
+        if (!fechaIso) return 'Reciente';
+        const fecha = new Date(fechaIso);
+        return fecha.toLocaleString('es-MX', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+            day: '2-digit',
+            month: 'short'
+        });
+    }
+
+   function obtenerClaseEstado(estado) {
+    switch(estado) {
+        case 'pendiente': return 'estado-pendiente';
+        case 'preparado': return 'estado-preparado';
+        case 'despachado': return 'estado-despachado';
+        case 'en_camino': return 'estado-en_camino';
+        case 'entregado': return 'estado-entregado';
+        default: return 'estado-pendiente';
+    }
+}
+
+    function activarEscuchaPedidosEnTiempoReal() {
+        if (!miComercio) return;
+        cargarPedidosInicialesDuenio();
+
+        // Suscripción en Tiempo Real para nuevos pedidos o actualizaciones de estado por parte de repartidores
+        supabaseClient
+            .channel('pedidos_en_vivo')
+            .on('postgres_changes', {
+                event: '*', // Escucha INSERTs y UPDATEs (cuando el repartidor toma el pedido)
+                schema: 'public',
+                table: 'pedidos',
+                filter: `comercio_id=eq.${miComercio.id}`
+            }, payload => {
+                if (payload.eventType === 'INSERT') {
+                    lanzarNotificacionDuenio(payload.new);
+                }
+                cargarPedidosInicialesDuenio();
+            })
+            .subscribe();
+    }
+
+    async function cargarPedidosInicialesDuenio() {
+    const { data: pedidos } = await supabaseClient
+        .from('pedidos')
+        .select('*')
+        .eq('comercio_id', miComercio.id)
+        .order('created_at', { ascending: false });
+
+    const cont = document.getElementById('listaPedidosRecibidos');
+    if (!pedidos || pedidos.length === 0) {
+        cont.innerHTML = "<p style='color:#7f8c8d;'>Aún no hay pedidos recibidos.</p>";
         return;
     }
 
-    if (!comercios || comercios.length === 0) {
-        contenedor.innerHTML = "<p>No hay comercios disponibles.</p>";
-        return;
-    }
+    cont.innerHTML = pedidos.map(p => {
+        const horaFormateada = formatearFechaHora(p.created_at);
+        const estadoTexto = (p.estado || 'pendiente').replace('_', ' ');
+        const claseEstado = obtenerClaseEstado(p.estado);
 
-    contenedor.innerHTML = comercios.map(c => {
-        const urlImg = c.imagen || c.logo || c.logo_url || c.imagen_url || 'https://via.placeholder.com/100?text=Comercio';
+        // Si tu columna 'precio' incluye envío, se resta p.costo_envio (o p.envio)
+        const subtotalProductos = p.subtotal 
+        ? Number(p.subtotal) 
+        : (Number(p.precio || 0) - Number(p.costo_envio || p.envio || 0));
+        // --- LÓGICA DE BOTONES PARA EL COMERCIO ---
+        let botonAccion = '';
+        if (p.estado === 'pendiente') {
+            botonAccion = `<button type="button" class="btn btn-primary" onclick="cambiarEstadoPedido('${p.id}', 'preparado')">👨‍🍳 Marcar Preparado</button>`;
+        } else if (p.estado === 'preparado') {
+            botonAccion = `<button type="button" class="btn btn-success" onclick="cambiarEstadoPedido('${p.id}', 'despachado')">📦 Marcar Despachado (Enviar a Radar)</button>`;
+        } else if (p.estado === 'despachado') {
+            botonAccion = `<span style="font-size:12px; color:#e67e22; font-weight:bold;">⏳ Esperando que un repartidor lo tome...</span>`;
+        }
+
         return `
-            <div class="card card-comercio" style="cursor:pointer; border:1px solid #ddd; padding:12px; margin-bottom:12px; border-radius:8px; display:flex; gap:12px; align-items:center;" onclick="verProductosComercio('${c.id}', '${c.nombre.replace(/'/g, "\\'")}', ${c.lat || 19.5694}, ${c.lng || -99.7669})">
-                <img src="${urlImg}" alt="${c.nombre}" style="width:80px; height:80px; object-fit:cover; border-radius:6px; background:#f0f0f0;" onerror="this.src='https://via.placeholder.com/80?text=Sin+Imagen';">
-                <div>
-                    <h3 style="margin:0 0 4px 0;">${c.nombre}</h3>
-                    <p style="margin:0; font-size:13px; color:#555;">📍 ${c.direccion || 'Sin dirección'}</p>
-                    <p style="margin:0; font-size:12px; color:#777;">🕒 Horario: ${c.horario || 'No especificado'}</p>
+            <div style="background: #f8f9fa; padding: 12px; border-left: 4px solid #27ae60; margin-bottom: 10px; border-radius: 4px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span class="badge-estado ${claseEstado}">${estadoTexto}</span>
+                    <span style="font-size: 12px; color: #7f8c8d; font-weight: bold;">🕒 ${horaFormateada}</span>
+                </div>
+                <p style="margin:2px 0;"><b>Cliente:</b> ${p.cliente_nombre}</p>
+                <p style="margin:2px 0;"><b>Productos:</b> ${p.producto_nombre}</p>
+                <p style="margin:2px 0;"><b>Ubicación:</b> ${p.direccion_entrega}</p>
+                <p style="margin:2px 0; color:#27ae60;"><b>Total:</b> $${Number(subtotalProductos).toFixed(2)}</p>
+                <div style="margin-top: 8px;">
+                    ${botonAccion}
                 </div>
             </div>
         `;
     }).join('');
 }
 
-async function verProductosComercio(idComercio, nombreComercio, lat, lng) {
-    comercioSeleccionadoObjeto = { id: idComercio, nombre: nombreComercio, lat: lat, lng: lng };
+    function lanzarNotificacionDuenio(nuevoPedido) {
+        const toast = document.createElement('div');
+        toast.className = 'notificacion-toast';
+        toast.innerHTML = `🔔 ¡Nuevo Pedido de $${Number(nuevoPedido.precio).toFixed(2)}!`;
+        document.body.appendChild(toast);
 
-    ocultarTodasLasPantallas();
-    const pantallaProds = document.getElementById('pantallaClienteProductos');
-    if (pantallaProds) pantallaProds.classList.remove('oculto');
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.play().catch(() => {});
 
-    const titulo = document.getElementById('tituloComercioSeleccionado');
-    if (titulo) titulo.innerText = nombreComercio;
+        setTimeout(() => toast.remove(), 5000);
+    }
+    
 
-    const contenedor = document.getElementById('listaProductosCliente');
-    if (!contenedor) return;
-
-    contenedor.innerHTML = "<p>Cargando productos...</p>";
-
-    const { data: productos, error } = await supabaseClient.from('productos').select('*').eq('comercio_id', idComercio);
+    window.cambiarEstadoPedido = async function(idPedido, nuevoEstado) {
+    const { error } = await supabaseClient
+        .from('pedidos')
+        .update({ estado: nuevoEstado })
+        .eq('id', idPedido);
 
     if (error) {
-        contenedor.innerHTML = "<p style='color:red;'>Error al cargar productos.</p>";
+        alert("Error al actualizar el estado: " + error.message);
+    } else {
+        cargarPedidosInicialesDuenio();
+    }
+};
+
+    
+// ==========================================
+// FUNCIONES GLOBALES DE PRODUCTO
+// ==========================================
+
+async function cargarProductosDuenio() {
+    if (!miComercio || !miComercio.id) return;
+
+    const { data: productos, error } = await supabaseClient
+        .from('productos')
+        .select('*')
+        .eq('comercio_id', miComercio.id);
+
+    const lista = document.getElementById('listaProductosDuenio');
+    if (!lista) return;
+    lista.innerHTML = "";
+
+    if (error) {
+        console.error("Error al obtener productos:", error);
+        lista.innerHTML = "<p>Error al cargar productos.</p>";
         return;
     }
 
     if (!productos || productos.length === 0) {
-        contenedor.innerHTML = "<p>Este comercio aún no tiene productos.</p>";
+        lista.innerHTML = "<p>Aún no has publicado productos.</p>";
         return;
     }
 
-    contenedor.innerHTML = productos.map(p => `
-        <div class="card tarjeta-producto" style="border:1px solid #ddd; padding:10px; border-radius:6px; margin-bottom:10px;">
-            <img src="${p.imagen || 'https://via.placeholder.com/120?text=Producto'}" alt="${p.nombre}" style="width:100%; height:120px; object-fit:cover; border-radius:4px;" onerror="this.src='https://via.placeholder.com/120?text=Sin+Imagen';">
-            <h4>${p.nombre}</h4>
-            <p style="font-size:12px; color:#666;">${p.descripcion || ''}</p>
-            <p style="font-weight:bold; color:#27ae60;">$${Number(p.precio).toFixed(2)}</p>
-            <button type="button" class="btn btn-primary" onclick="agregarAlCarrito('${p.id}', '${p.nombre.replace(/'/g, "\\'")}', ${p.precio})">
-                🛒 Agregar al Carrito
-            </button>
-        </div>
-    `).join('');
-}
+    // Guardar en Cache global
+    window.productosDuenioCache = productos;
 
-// ==========================================
-// CARRITO Y CHECKOUT
-// ==========================================
-function agregarAlCarrito(idProd, nombre, precio) {
-    const item = carrito.find(p => p.id === idProd);
-    if (item) {
-        item.cantidad++;
-    } else {
-        carrito.push({ id: idProd, nombre: nombre, precio: parseFloat(precio), cantidad: 1 });
-    }
-    actualizarBarraCarrito();
-}
-
-function actualizarBarraCarrito() {
-    const totalProductos = carrito.reduce((acc, p) => acc + p.cantidad, 0);
-    const subtotal = carrito.reduce((acc, p) => acc + (p.precio * p.cantidad), 0);
-
-    const cant = document.getElementById('cantCarrito');
-    const sub = document.getElementById('subtotalCarrito');
-    const barra = document.getElementById('barraCarrito');
-
-    if (cant) cant.innerText = totalProductos;
-    if (sub) sub.innerText = subtotal.toFixed(2);
-
-    if (barra) {
-        if (totalProductos > 0) barra.classList.remove('oculto');
-        else barra.classList.add('oculto');
-    }
-}
-
-function abrirModalCheckout() {
-    if (carrito.length === 0) return alert("El carrito está vacío.");
-    const modal = document.getElementById('modalCheckout');
-    if (modal) modal.classList.remove('oculto');
-    renderizarDetalleCarritoCheckout();
-    setTimeout(inicializarMapaEntrega, 300);
-}
-
-function cerrarModalCheckout() {
-    const modal = document.getElementById('modalCheckout');
-    if (modal) modal.classList.add('oculto');
-}
-
-function renderizarDetalleCarritoCheckout() {
-    const cont = document.getElementById('resumenItemsCarrito');
-    if (!cont) return;
-
-    let subtotal = 0;
-    let html = '<ul style="list-style:none; padding:0; margin:0 0 15px 0;">';
-
-    carrito.forEach(p => {
-        const total = p.precio * p.cantidad;
-        subtotal += total;
-        html += `
-            <li style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:4px;">
-                <div><b>${p.nombre}</b><br><small>$${p.precio.toFixed(2)} x ${p.cantidad} = $${total.toFixed(2)}</small></div>
-                <div>
-                    <button type="button" class="btn btn-sm btn-secundario" onclick="cambiarCantidadCart('${p.id}', -1)">-</button>
-                    <button type="button" class="btn btn-sm btn-secundario" onclick="cambiarCantidadCart('${p.id}', 1)">+</button>
-                    <button type="button" class="btn btn-sm btn-danger" onclick="eliminarDelCarrito('${p.id}')">🗑️</button>
+    productos.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'tarjeta-producto';
+        card.innerHTML = `
+            <img src="${p.imagen}" alt="${p.nombre}">
+            <div class="info-producto">
+                <h4>${p.nombre}</h4>
+                <p style="font-size: 12px; color: #666; margin: 4px 0;">${p.descripcion || ''}</p>
+                <div class="precio">$${Number(p.precio).toFixed(2)}</div>
+                <div style="display: flex; gap: 6px; margin-top: 8px;">
+                    <button type="button" class="btn btn-secundario" style="flex:1;" onclick="prepararEdicionProducto('${p.id}')">✏️ Editar</button>
+                    <button type="button" class="btn btn-danger" style="flex:1;" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar</button>
                 </div>
-            </li>`;
+            </div>
+        `;
+        lista.appendChild(card);
     });
-    html += '</ul>';
-    cont.innerHTML = html;
-
-    const sub = document.getElementById('txtSubtotal');
-    if (sub) sub.innerText = subtotal.toFixed(2);
-    recalcularTotalesCheckout();
 }
 
-function cambiarCantidadCart(idProd, cambio) {
-    const item = carrito.find(p => p.id === idProd);
-    if (item) {
-        item.cantidad += cambio;
-        if (item.cantidad <= 0) eliminarDelCarrito(idProd);
-        else {
-            renderizarDetalleCarritoCheckout();
-            actualizarBarraCarrito();
+// Asignación explícita global
+window.prepararEdicionProducto = function(idProducto) {
+    console.log("Intentando editar producto ID:", idProducto);
+
+    const modal = document.getElementById('modalEditarProducto');
+    if (!modal) {
+        console.error("No se encontró el elemento #modalEditarProducto");
+        return alert("Error interno: No se encuentra el modal en el HTML.");
+    }
+
+    const productos = window.productosDuenioCache || [];
+    // Convertimos ambos lados a String para evitar fallos si id es número o UUID
+    const prod = productos.find(item => String(item.id) === String(idProducto));
+
+    if (!prod) {
+        console.error("Productos en cache:", productos);
+        return alert("No se encontraron los datos del producto seleccionado.");
+    }
+
+    // Asignación segura de campos
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+        else console.warn(`Elemento con ID #${id} no encontrado en el modal.`);
+    };
+
+    setVal('editProdId', prod.id);
+    setVal('editProdNombre', prod.nombre || '');
+    setVal('editProdPrecio', prod.precio || 0);
+    setVal('editProdDescripcion', prod.descripcion || '');
+    setVal('editProdImagenActual', prod.imagen || '');
+
+    // Preview de la imagen
+    const preview = document.getElementById('previewImagenActual');
+    if (preview) {
+        preview.src = prod.imagen || '';
+        preview.style.display = prod.imagen ? 'block' : 'none';
+    }
+
+    // Limpiar selector de archivo
+    const fileInput = document.getElementById('editProdImagenArchivo');
+    if (fileInput) fileInput.value = '';
+
+    // Mostrar modal
+    modal.classList.remove('oculto');
+};
+
+window.cerrarModalEditarProducto = function() {
+    const modal = document.getElementById('modalEditarProducto');
+    if (modal) modal.classList.add('oculto');
+};
+
+window.eliminarProducto = async function(id) {
+    if (confirm("¿Eliminar este producto?")) {
+        const { error } = await supabaseClient.from('productos').delete().eq('id', id);
+        if (error) {
+            alert("Error al eliminar: " + error.message);
+        } else {
+            cargarProductosDuenio();
         }
     }
-}
-
-function eliminarDelCarrito(idProd) {
-    carrito = carrito.filter(p => p.id !== idProd);
-    renderizarDetalleCarritoCheckout();
-    actualizarBarraCarrito();
-    if (carrito.length === 0) cerrarModalCheckout();
-}
-
-function recalcularTotalesCheckout() {
-    const subtotal = carrito.reduce((acc, p) => acc + (p.precio * p.cantidad), 0);
-    const envElem = document.getElementById('txtCostoEnvio');
-    const costoEnvio = envElem ? parseFloat(envElem.innerText.replace('$', '').trim()) || 0 : 0;
-    const total = subtotal + costoEnvio;
-
-    const txtTotal = document.getElementById('txtTotalPagar');
-    if (txtTotal) txtTotal.innerText = total.toFixed(2);
-}
+};
 
 // ==========================================
-// PROCESAR PEDIDO
+// VINCULACIÓN DE EVENTOS DE FORMULARIO
 // ==========================================
-async function procesarPedido() {
-    try {
-        const dirInput = document.getElementById('direccionEscrita');
-        const telInput = document.getElementById('telefonoCliente');
 
-        const dir = dirInput ? dirInput.value.trim() : '';
-        const tel = telInput ? telInput.value.trim() : '';
+document.addEventListener('DOMContentLoaded', () => {
 
-        if (!dir || !tel) return alert("Ingresa la dirección y teléfono de entrega.");
+    // Formulario Crear Producto
+    const formProducto = document.getElementById('formProducto');
+    if (formProducto) {
+        formProducto.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btnGuardar = document.getElementById('btnGuardarProducto');
+            const archivoInput = document.getElementById('prodImagenArchivo');
+            const archivo = archivoInput ? archivoInput.files[0] : null;
 
-        const btn = document.getElementById('btnConfirmar');
-        if (btn) { btn.disabled = true; btn.innerText = "Procesando..."; }
+            if (!archivo) return alert("Selecciona una imagen.");
 
-        const subtotal = carrito.reduce((acc, p) => acc + (p.precio * p.cantidad), 0);
-        const envElem = document.getElementById('txtCostoEnvio');
-        const costoEnvio = envElem ? parseFloat(envElem.innerText.replace('$', '').trim()) || 0 : 0;
-        const totalFinal = subtotal + costoEnvio;
+            try {
+                if (btnGuardar) {
+                    btnGuardar.disabled = true;
+                    btnGuardar.innerText = "Subiendo imagen...";
+                }
 
-        const cCom = obtenerCoordsComercioActivo();
-        const latDest = coordsEntrega ? coordsEntrega.lat : cCom.lat;
-        const lngDest = coordsEntrega ? coordsEntrega.lng : cCom.lng;
+                const extension = archivo.name.split('.').pop();
+                const nombreArchivo = `${miComercio.id}/${Date.now()}.${extension}`;
 
-        const payload = {
-            cliente_nombre: usuarioActual?.user_metadata?.full_name || usuarioActual?.email || 'Cliente',
-            cliente_email: usuarioActual ? usuarioActual.email : '',
-            telefono_cliente: tel,
-            direccion_entrega: `${dir} (GPS: ${latDest.toFixed(6)}, ${lngDest.toFixed(6)})`,
-            producto_nombre: carrito.map(i => `${i.cantidad}x ${i.nombre}`).join(', '),
-            subtotal: subtotal,
-            costo_envio: costoEnvio,
-            precio: totalFinal,
-            comercio_id: comercioSeleccionadoObjeto ? comercioSeleccionadoObjeto.id : null,
-            comercio_nombre: comercioSeleccionadoObjeto ? comercioSeleccionadoObjeto.nombre : 'Comercio',
-            lat_origen: cCom.lat,
-            lng_origen: cCom.lng,
-            lat_destino: latDest,
-            lng_destino: lngDest,
-            estado: totalFinal > 500 ? 'revision_admin' : 'pendiente'
-        };
+                const { error: uploadError } = await supabaseClient.storage
+                    .from('productos')
+                    .upload(nombreArchivo, archivo);
 
-        const { error } = await supabaseClient.from('pedidos').insert([payload]);
+                if (uploadError) throw uploadError;
 
-        if (btn) { btn.disabled = false; btn.innerText = "Confirmar Pedido"; }
+                const { data: publicUrlData } = supabaseClient.storage
+                    .from('productos')
+                    .getPublicUrl(nombreArchivo);
 
-        if (error) throw error;
+                const producto = {
+                    comercio_id: miComercio.id,
+                    nombre: document.getElementById('prodNombre').value.trim(),
+                    precio: parseFloat(document.getElementById('prodPrecio').value),
+                    descripcion: document.getElementById('prodDescripcion').value.trim(),
+                    imagen: publicUrlData.publicUrl
+                };
 
-        alert(totalFinal > 500 ? "⚠️ Pedido enviado a revisión por el Administrador (>$500)." : "¡Pedido realizado con éxito!");
-        carrito = [];
-        actualizarBarraCarrito();
-        cerrarModalCheckout();
-    } catch (err) {
-        alert("Error al procesar pedido: " + err.message);
-        const btn = document.getElementById('btnConfirmar');
-        if (btn) { btn.disabled = false; btn.innerText = "Confirmar Pedido"; }
-    }
-}
+                const { error: insertError } = await supabaseClient.from('productos').insert([producto]);
+                if (insertError) throw insertError;
 
-// ==========================================
-// PANEL DE DUEÑO
-// ==========================================
-async function cargarPanelDuenio() {
-    ocultarTodasLasPantallas();
-    const pantalla = document.getElementById('pantallaDuenio');
-    if (pantalla) pantalla.classList.remove('oculto');
-
-    if (miComercio) {
-        const lblNombre = document.getElementById('nombreComercioDuenio');
-        const lblInfo = document.getElementById('infoComercioDuenio');
-        if (lblNombre) lblNombre.innerText = `🏬 ${miComercio.nombre}`;
-        if (lblInfo) lblInfo.innerText = `Dirección: ${miComercio.direccion || 'N/A'} | Horario: ${miComercio.horario || 'N/A'}`;
-
-        await cargarProductosDuenio();
-        await cargarPedidosInicialesDuenio();
-    }
-}
-
-async function cargarProductosDuenio() {
-    if (!miComercio) return;
-    const { data: productos, error } = await supabaseClient.from('productos').select('*').eq('comercio_id', miComercio.id);
-    const lista = document.getElementById('listaProductosDuenio');
-    if (!lista) return;
-
-    if (error || !productos || productos.length === 0) {
-        lista.innerHTML = "<p>No hay productos registrados.</p>";
-        return;
+                formProducto.reset();
+                cargarProductosDuenio();
+            } catch (err) {
+                alert("Error al crear producto: " + err.message);
+            } finally {
+                if (btnGuardar) {
+                    btnGuardar.disabled = false;
+                    btnGuardar.innerText = "Publicar Producto";
+                }
+            }
+        });
     }
 
-    window.productosDuenioCache = productos;
-    lista.innerHTML = productos.map(p => `
-        <div class="tarjeta-producto" style="border:1px solid #ddd; padding:10px; margin-bottom:10px; border-radius:6px;">
-            <img src="${p.imagen}" style="width:100%; height:100px; object-fit:cover; border-radius:4px;">
-            <h4>${p.nombre}</h4>
-            <p>$${Number(p.precio).toFixed(2)}</p>
-            <button type="button" class="btn btn-danger btn-sm" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar</button>
-        </div>
-    `).join('');
-}
+    // Formulario Editar Producto
+    const formEditarProducto = document.getElementById('formEditarProducto');
+    if (formEditarProducto) {
+        formEditarProducto.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btnGuardar = document.getElementById('btnGuardarEdicionProd');
+            const idProducto = document.getElementById('editProdId').value;
+            const fileInput = document.getElementById('editProdImagenArchivo');
+            const archivoNuevo = fileInput ? fileInput.files[0] : null;
+            let urlImagenFinal = document.getElementById('editProdImagenActual').value;
 
-async function eliminarProducto(id) {
-    if (confirm("¿Eliminar producto?")) {
-        await supabaseClient.from('productos').delete().eq('id', id);
-        cargarProductosDuenio();
+            try {
+                if (btnGuardar) {
+                    btnGuardar.disabled = true;
+                    btnGuardar.innerText = "Guardando cambios...";
+                }
+
+                if (archivoNuevo) {
+                    if (btnGuardar) btnGuardar.innerText = "Subiendo nueva imagen...";
+                    const extension = archivoNuevo.name.split('.').pop();
+                    const nombreArchivo = `${miComercio.id}/${Date.now()}_mod.${extension}`;
+
+                    const { error: uploadError } = await supabaseClient.storage
+                        .from('productos')
+                        .upload(nombreArchivo, archivoNuevo);
+
+                    if (uploadError) throw uploadError;
+
+                    const { data: publicUrlData } = supabaseClient.storage
+                        .from('productos')
+                        .getPublicUrl(nombreArchivo);
+
+                    urlImagenFinal = publicUrlData.publicUrl;
+                }
+
+                const datosActualizados = {
+                    nombre: document.getElementById('editProdNombre').value.trim(),
+                    precio: parseFloat(document.getElementById('editProdPrecio').value),
+                    descripcion: document.getElementById('editProdDescripcion').value.trim(),
+                    imagen: urlImagenFinal
+                };
+
+                const { error: updateError } = await supabaseClient
+                    .from('productos')
+                    .update(datosActualizados)
+                    .eq('id', idProducto);
+
+                if (updateError) throw updateError;
+
+                cerrarModalEditarProducto();
+                cargarProductosDuenio();
+
+            } catch (err) {
+                alert("Error al actualizar producto: " + err.message);
+            } finally {
+                if (btnGuardar) {
+                    btnGuardar.disabled = false;
+                    btnGuardar.innerText = "Guardar Cambios";
+                }
+            }
+        });
     }
-}
-
-async function cargarPedidosInicialesDuenio() {
-    if (!miComercio) return;
-    const { data: pedidos } = await supabaseClient.from('pedidos').select('*').eq('comercio_id', miComercio.id).order('created_at', { ascending: false });
-    const cont = document.getElementById('listaPedidosRecibidos');
-    if (!cont) return;
-
-    if (!pedidos || pedidos.length === 0) {
-        cont.innerHTML = "<p>Sin pedidos recibidos.</p>";
-        return;
-    }
-
-    cont.innerHTML = pedidos.map(p => `
-        <div style="background:#f9f9f9; padding:10px; border-left:4px solid #27ae60; margin-bottom:10px;">
-            <p><b>Cliente:</b> ${p.cliente_nombre}</p>
-            <p><b>Productos:</b> ${p.producto_nombre}</p>
-            <p><b>Total:</b> $${Number(p.precio).toFixed(2)}</p>
-            <p><b>Estado:</b> ${p.estado}</p>
-        </div>
-    `).join('');
-}
+});
 </script>
 
 </body>
