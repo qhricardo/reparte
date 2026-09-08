@@ -1223,7 +1223,8 @@ function abrirModalCheckout() {
 }
 
 function cerrarModalCheckout() {
-    document.getElementById('modalCheckout').classList.add('oculto');
+    const modal = document.getElementById('modalCheckout');
+    if (modal) modal.classList.add('oculto');
 }
 
 async function buscarDireccionEnMapa() {
