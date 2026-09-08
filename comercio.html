@@ -800,6 +800,9 @@ function actualizarInterfazUsuario(sesionIniciada) {
     }
 }
 
+// ==========================================
+// ROL Y BOTÓN MODO COMPRADOR / DUEÑO
+// ==========================================
 async function verificarSiEsDuenio() {
     if (!usuarioActual || !supabaseClient) return;
 
@@ -821,14 +824,67 @@ async function verificarSiEsDuenio() {
         if (badgeRol) badgeRol.innerText = "Dueño de Comercio";
         if (btnCambiarModo) {
             btnCambiarModo.classList.remove('oculto');
-            btnCambiarModo.innerText = "⚙️ Panel Dueño";
-            btnCambiarModo.onclick = cargarPanelDuenio;
+            // Alterna según la pantalla visible actual
+            btnCambiarModo.innerText = "🛒 Modo Comprador";
+            btnCambiarModo.onclick = () => {
+                const pantallaDuenio = document.getElementById('pantallaDuenio');
+                if (pantallaDuenio && !pantallaDuenio.classList.contains('oculto')) {
+                    btnCambiarModo.innerText = "⚙️ Panel Dueño";
+                    irAInicio();
+                } else {
+                    btnCambiarModo.innerText = "🛒 Modo Comprador";
+                    cargarPanelDuenio();
+                }
+            };
         }
     } else {
         miComercio = null;
         if (badgeRol) badgeRol.innerText = "Cliente";
         if (btnCambiarModo) btnCambiarModo.classList.add('oculto');
     }
+}
+
+// ==========================================
+// CARGAR COMERCIOS CON IMAGEN CORREGIDA
+// ==========================================
+async function cargarComerciosCliente() {
+    const contenedor = document.getElementById('listaComercios');
+    if (!contenedor) return;
+
+    contenedor.innerHTML = "<p>Cargando comercios...</p>";
+
+    const { data: comercios, error } = await supabaseClient
+        .from('comercios')
+        .select('*');
+
+    if (error) {
+        console.error("Error al cargar comercios:", error);
+        contenedor.innerHTML = "<p style='color:red;'>Error al cargar la lista de comercios.</p>";
+        return;
+    }
+
+    if (!comercios || comercios.length === 0) {
+        contenedor.innerHTML = "<p style='color:#666;'>No hay comercios registrados por el momento.</p>";
+        return;
+    }
+
+    contenedor.innerHTML = comercios.map(c => {
+        // Valida la URL de la imagen en diferentes campos posibles de la BD
+        const urlImagen = c.logo || c.logo_url || c.imagen || c.imagen_url || 'https://via.placeholder.com/80?text=Comercio';
+
+        return `
+            <div class="card card-comercio" style="cursor:pointer; border:1px solid #e0e0e0; padding:15px; margin-bottom:10px; border-radius:8px;" onclick="verProductosComercio('${c.id}', '${c.nombre.replace(/'/g, "\\'")}')">
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <img src="${urlImagen}" alt="${c.nombre}" style="width:80px; height:80px; object-fit:cover; border-radius:6px; background-color:#eee;" onerror="this.src='https://via.placeholder.com/80?text=Sin+Imagen';">
+                    <div>
+                        <h3 style="margin:0 0 5px 0;">${c.nombre}</h3>
+                        <p style="margin:0; font-size:14px; color:#666;">📍 ${c.direccion || 'Sin dirección'}</p>
+                        <p style="margin:0; font-size:12px; color:#888;">🕒 Horario: ${c.horario || 'No especificado'}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 // ==========================================
