@@ -660,18 +660,21 @@ let coordsEntrega = null;
 let comercioSeleccionadoObjeto = null;
 
 // ==========================================
-// INICIALIZACIÓN DE SUPABASE Y SESIÓN
+// INICIALIZACIÓN DE SUPABASE Y EVENTOS HTML
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON_KEY !== 'undefined') {
         supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         console.log("Supabase inicializado correctamente.");
     } else {
-        console.error("Faltan las credenciales de Supabase en el HTML.");
+        console.error("Faltan las credenciales de SUPABASE_URL y SUPABASE_ANON_KEY.");
         return;
     }
 
-    // Escuchar cambios de estado de autenticación (Necesario para Google OAuth)
+    // Vincular Eventos de Botones HTML
+    vincularEventosUI();
+
+    // Escuchar Cambios de Sesión (OAuth Google)
     supabaseClient.auth.onAuthStateChange(async (event, session) => {
         if (session) {
             usuarioActual = session.user;
@@ -690,13 +693,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
+function vincularEventosUI() {
+    const btnLoginGoogle = document.getElementById('btnLoginGoogle');
+    if (btnLoginGoogle) {
+        btnLoginGoogle.addEventListener('click', loginWithGoogle);
+    }
+
+    const btnCerrarSesion = document.getElementById('btnCerrarSesion');
+    if (btnCerrarSesion) {
+        btnCerrarSesion.addEventListener('click', logout);
+    }
+
+    const btnIrCrearComercio = document.getElementById('btnIrCrearComercio');
+    if (btnIrCrearComercio) {
+        btnIrCrearComercio.addEventListener('click', () => {
+            ocultarTodasLasPantallas();
+            const pReg = document.getElementById('pantallaRegistroComercio');
+            if (pReg) pReg.classList.remove('oculto');
+        });
+    }
+
+    const btnCancelarRegistro = document.getElementById('btnCancelarRegistro');
+    if (btnCancelarRegistro) {
+        btnCancelarRegistro.addEventListener('click', irAInicio);
+    }
+
+    const btnVolverComercios = document.getElementById('btnVolverComercios');
+    if (btnVolverComercios) {
+        btnVolverComercios.addEventListener('click', irAInicio);
+    }
+}
+
 async function verificarSesionUsuario() {
     if (!supabaseClient) return;
 
     const { data: { session }, error } = await supabaseClient.auth.getSession();
     
     if (error) {
-        console.error("Error al obtener sesión:", error);
+        console.error("Error al obtener la sesión:", error);
         return;
     }
 
@@ -711,7 +745,7 @@ async function verificarSesionUsuario() {
 }
 
 // ==========================================
-// AUTENTICACIÓN CON GOOGLE Y CERRAR SESIÓN
+// AUTENTICACIÓN
 // ==========================================
 async function loginWithGoogle() {
     if (!supabaseClient) return alert("Supabase no está configurado.");
@@ -744,17 +778,21 @@ async function logout() {
 }
 
 function actualizarInterfazUsuario(sesionIniciada) {
-    const btnLogin = document.getElementById('btnLogin');
-    const btnLogout = document.getElementById('btnLogout');
-    const btnPanelDuenio = document.getElementById('btnPanelDuenio');
+    const barraUsuario = document.getElementById('barraUsuario');
+    const pantallaLogin = document.getElementById('pantallaLogin');
+    const labelUsuario = document.getElementById('labelUsuario');
 
     if (sesionIniciada) {
-        if (btnLogin) btnLogin.classList.add('oculto');
-        if (btnLogout) btnLogout.classList.remove('oculto');
+        if (pantallaLogin) pantallaLogin.classList.add('oculto');
+        if (barraUsuario) barraUsuario.classList.remove('oculto');
+        if (labelUsuario && usuarioActual) {
+            labelUsuario.innerText = usuarioActual.user_metadata?.full_name || usuarioActual.email;
+        }
+        irAInicio();
     } else {
-        if (btnLogin) btnLogin.classList.remove('oculto');
-        if (btnLogout) btnLogout.classList.add('oculto');
-        if (btnPanelDuenio) btnPanelDuenio.classList.add('oculto');
+        if (pantallaLogin) pantallaLogin.classList.remove('oculto');
+        if (barraUsuario) barraUsuario.classList.add('oculto');
+        ocultarTodasLasPantallas();
     }
 }
 
@@ -766,27 +804,42 @@ async function verificarSiEsDuenio() {
         .select('*')
         .eq('duenio_id', usuarioActual.id);
 
-    const btnPanelDuenio = document.getElementById('btnPanelDuenio');
+    const btnCambiarModo = document.getElementById('btnCambiarModo');
+    const badgeRol = document.getElementById('badgeRol');
 
     if (error) {
-        console.error("Error consultando comercio del usuario:", error);
+        console.error("Error al consultar comercio:", error);
         return;
     }
 
     if (comercios && comercios.length > 0) {
         miComercio = comercios[0];
-        if (btnPanelDuenio) btnPanelDuenio.classList.remove('oculto');
+        if (badgeRol) badgeRol.innerText = "Dueño de Comercio";
+        if (btnCambiarModo) {
+            btnCambiarModo.classList.remove('oculto');
+            btnCambiarModo.innerText = "⚙️ Panel Dueño";
+            btnCambiarModo.onclick = cargarPanelDuenio;
+        }
     } else {
         miComercio = null;
-        if (btnPanelDuenio) btnPanelDuenio.classList.add('oculto');
+        if (badgeRol) badgeRol.innerText = "Cliente";
+        if (btnCambiarModo) btnCambiarModo.classList.add('oculto');
     }
 }
 
 // ==========================================
-// NAVEGACIÓN Y PANTALLAS
+// NAVEGACIÓN
 // ==========================================
 function ocultarTodasLasPantallas() {
-    const pantallas = ['pantallaCliente', 'pantallaDuenio', 'modalCheckout', 'modalEditarProducto'];
+    const pantallas = [
+        'pantallaLogin',
+        'pantallaClienteComercios',
+        'pantallaClienteProductos',
+        'pantallaRegistroComercio',
+        'pantallaDuenio',
+        'modalCheckout',
+        'modalEditarProducto'
+    ];
     pantallas.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('oculto');
@@ -794,8 +847,14 @@ function ocultarTodasLasPantallas() {
 }
 
 function irAInicio() {
+    if (!usuarioActual) {
+        ocultarTodasLasPantallas();
+        const login = document.getElementById('pantallaLogin');
+        if (login) login.classList.remove('oculto');
+        return;
+    }
     ocultarTodasLasPantallas();
-    const cliente = document.getElementById('pantallaCliente');
+    const cliente = document.getElementById('pantallaClienteComercios');
     if (cliente) cliente.classList.remove('oculto');
 }
 
@@ -816,18 +875,18 @@ function actualizarBarraCarrito() {
     const totalProductos = carrito.reduce((acc, p) => acc + p.cantidad, 0);
     const subtotal = carrito.reduce((acc, p) => acc + (p.precio * p.cantidad), 0);
 
-    const badgeCount = document.getElementById('cartBadgeCount');
-    const badgeSubtotal = document.getElementById('cartBadgeSubtotal');
-    const btnCarritoFloat = document.getElementById('btnCarritoFlotante');
+    const cantCarrito = document.getElementById('cantCarrito');
+    const subtotalCarrito = document.getElementById('subtotalCarrito');
+    const barraCarrito = document.getElementById('barraCarrito');
 
-    if (badgeCount) badgeCount.innerText = totalProductos;
-    if (badgeSubtotal) badgeSubtotal.innerText = `$${subtotal.toFixed(2)}`;
+    if (cantCarrito) cantCarrito.innerText = totalProductos;
+    if (subtotalCarrito) subtotalCarrito.innerText = subtotal.toFixed(2);
 
-    if (btnCarritoFloat) {
+    if (barraCarrito) {
         if (totalProductos > 0) {
-            btnCarritoFloat.classList.remove('oculto');
+            barraCarrito.classList.remove('oculto');
         } else {
-            btnCarritoFloat.classList.add('oculto');
+            barraCarrito.classList.add('oculto');
         }
     }
 }
@@ -847,7 +906,7 @@ function cerrarModalCheckout() {
 }
 
 function renderizarDetalleCarritoCheckout() {
-    const cont = document.getElementById('itemsCheckout');
+    const cont = document.getElementById('resumenItemsCarrito');
     if (!cont) return;
 
     if (carrito.length === 0) {
@@ -856,7 +915,7 @@ function renderizarDetalleCarritoCheckout() {
         return;
     }
 
-    let html = '<ul style="list-style:none; padding:0; margin:0;">';
+    let html = '<ul style="list-style:none; padding:0; margin:0 0 15px 0;">';
     let subtotal = 0;
 
     carrito.forEach(p => {
@@ -880,8 +939,8 @@ function renderizarDetalleCarritoCheckout() {
 
     cont.innerHTML = html;
 
-    const subtotalElem = document.getElementById('txtSubtotalCheckout');
-    if (subtotalElem) subtotalElem.innerText = `$${subtotal.toFixed(2)}`;
+    const subtotalElem = document.getElementById('txtSubtotal');
+    if (subtotalElem) subtotalElem.innerText = subtotal.toFixed(2);
 
     recalcularTotalesCheckout();
 }
@@ -911,8 +970,8 @@ function recalcularTotalesCheckout() {
     const costoEnvio = envElem ? parseFloat(envElem.innerText.replace('$', '').trim()) || 0 : 0;
     const total = subtotal + costoEnvio;
 
-    const txtTotal = document.getElementById('txtTotalCheckout');
-    if (txtTotal) txtTotal.innerText = `$${total.toFixed(2)}`;
+    const txtTotalPagar = document.getElementById('txtTotalPagar');
+    if (txtTotalPagar) txtTotalPagar.innerText = total.toFixed(2);
 }
 
 // ==========================================
@@ -920,7 +979,6 @@ function recalcularTotalesCheckout() {
 // ==========================================
 async function procesarPedido() {
     try {
-        // Validación de Distancia (Límite 7 km)
         const distElem = document.getElementById('txtDistancia');
         const distTexto = distElem ? distElem.innerText.replace('km', '').trim() : "0";
         const dist = parseFloat(distTexto) || 0;
@@ -930,7 +988,6 @@ async function procesarPedido() {
             return;
         }
 
-        // Validación de Entradas de Cliente
         const dirInput = document.getElementById('direccionEscrita');
         const telInput = document.getElementById('telefonoCliente');
 
@@ -942,7 +999,7 @@ async function procesarPedido() {
             return;
         }
 
-        const btn = document.getElementById('btnConfirmar') || document.getElementById('btnEnviarPedidoFinal');
+        const btn = document.getElementById('btnConfirmar');
         if (btn) {
             btn.disabled = true;
             btn.innerText = "Procesando...";
@@ -970,7 +1027,6 @@ async function procesarPedido() {
         const latDest = coordsEntrega ? coordsEntrega.lat : cCom.lat;
         const lngDest = coordsEntrega ? coordsEntrega.lng : cCom.lng;
 
-        // Regla: Si supera los $500 entra a revisión del admin
         const estadoInicial = totalFinal > 500 ? 'revision_admin' : 'pendiente';
 
         const payloadPedido = {
@@ -1015,7 +1071,7 @@ async function procesarPedido() {
     } catch (err) {
         console.error("Excepción en procesarPedido:", err);
         alert("Ocurrió un error al procesar el pedido: " + err.message);
-        const btn = document.getElementById('btnConfirmar') || document.getElementById('btnEnviarPedidoFinal');
+        const btn = document.getElementById('btnConfirmar');
         if (btn) {
             btn.disabled = false;
             btn.innerText = "Confirmar Pedido";
@@ -1023,11 +1079,8 @@ async function procesarPedido() {
     }
 }
 
-// Alias de compatibilidad por si se llama procesarPedidoFinal desde el HTML
-const procesarPedidoFinal = procesarPedido;
-
 // ==========================================
-// PANEL DE DUEÑO Y CONTROL EN TIEMPO REAL
+// PANEL DE DUEÑO Y REALTIME
 // ==========================================
 async function cargarPanelDuenio() {
     ocultarTodasLasPantallas();
@@ -1098,7 +1151,6 @@ async function cargarPedidosInicialesDuenio() {
     cont.innerHTML = pedidos.map(p => {
         const horaFormateada = formatearFechaHora(p.created_at);
         const estadoTexto = (p.estado || 'pendiente').replace('_', ' ');
-        const claseEstado = obtenerClaseEstado(p.estado);
         const subtotalProductos = Number(p.subtotal) || (Number(p.precio || 0) - Number(p.costo_envio || p.envio || 0)) || 0;
 
         let botonAccion = '';
@@ -1115,7 +1167,7 @@ async function cargarPedidosInicialesDuenio() {
         return `
             <div style="background: #f8f9fa; padding: 12px; border-left: 4px solid #27ae60; margin-bottom: 10px; border-radius: 4px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <span class="badge-estado ${claseEstado}">${estadoTexto}</span>
+                    <span style="font-weight:bold; text-transform:capitalize;">${estadoTexto}</span>
                     <span style="font-size: 12px; color: #7f8c8d; font-weight: bold;">🕒 ${horaFormateada}</span>
                 </div>
                 <p style="margin:2px 0;"><b>Cliente:</b> ${p.cliente_nombre || 'Cliente'}</p>
@@ -1141,6 +1193,7 @@ window.eliminarMiComercio = async function() {
             alert("Tu comercio ha sido eliminado.");
             miComercio = null;
             await verificarSiEsDuenio();
+            irAInicio();
         } catch (err) {
             alert("Error: " + err.message);
         }
@@ -1159,20 +1212,10 @@ function formatearFechaHora(fechaIso) {
     });
 }
 
-function obtenerClaseEstado(estado) {
-    switch(estado) {
-        case 'pendiente': return 'estado-pendiente';
-        case 'preparado': return 'estado-preparado';
-        case 'despachado': return 'estado-despachado';
-        case 'en_camino': return 'estado-en_camino';
-        case 'entregado': return 'estado-entregado';
-        default: return 'estado-pendiente';
-    }
-}
-
 function lanzarNotificacionDuenio(nuevoPedido) {
     const toast = document.createElement('div');
     toast.className = 'notificacion-toast';
+    toast.style.cssText = "position:fixed; bottom:20px; right:20px; background:#27ae60; color:white; padding:15px; border-radius:8px; z-index:9999;";
     toast.innerHTML = `🔔 ¡Nuevo Pedido de $${Number(nuevoPedido.precio || 0).toFixed(2)}!`;
     document.body.appendChild(toast);
 
@@ -1227,11 +1270,11 @@ async function cargarProductosDuenio() {
         const card = document.createElement('div');
         card.className = 'tarjeta-producto';
         card.innerHTML = `
-            <img src="${p.imagen}" alt="${p.nombre}">
-            <div class="info-producto">
+            <img src="${p.imagen}" alt="${p.nombre}" style="width:100%; height:120px; object-fit:cover; border-radius:4px;">
+            <div class="info-producto" style="padding:8px 0;">
                 <h4>${p.nombre}</h4>
                 <p style="font-size: 12px; color: #666; margin: 4px 0;">${p.descripcion || ''}</p>
-                <div class="precio">$${Number(p.precio).toFixed(2)}</div>
+                <div class="precio" style="font-weight:bold; color:#27ae60;">$${Number(p.precio).toFixed(2)}</div>
                 <div style="display: flex; gap: 6px; margin-top: 8px;">
                     <button type="button" class="btn btn-secundario" style="flex:1;" onclick="prepararEdicionProducto('${p.id}')">✏️ Editar</button>
                     <button type="button" class="btn btn-danger" style="flex:1;" onclick="eliminarProducto('${p.id}')">🗑️ Eliminar</button>
@@ -1291,7 +1334,7 @@ window.eliminarProducto = async function(id) {
 };
 
 // ==========================================
-// FORMULARIOS DE PRODUCTOS (CREAR Y EDITAR)
+// FORMULARIOS (CREAR Y EDITAR PRODUCTO / REGISTRAR COMERCIO)
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
 
