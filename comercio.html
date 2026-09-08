@@ -649,7 +649,7 @@
 </body>
 
 <script>
-   // ==========================================
+// ==========================================
 // ESTADO GLOBAL Y VARIABLES
 // ==========================================
 let supabaseClient = null;
@@ -660,7 +660,7 @@ let coordsEntrega = null;
 let comercioSeleccionadoObjeto = null;
 
 // ==========================================
-// INICIALIZACIÓN DE SUPABASE Y PANTALLAS
+// INICIALIZACIÓN DE SUPABASE Y SESIÓN
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON_KEY !== 'undefined') {
@@ -668,9 +668,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log("Supabase inicializado correctamente.");
     } else {
         console.error("Faltan las credenciales de Supabase en el HTML.");
+        return;
     }
 
+    // Escuchar cambios de estado de autenticación (Necesario para Google OAuth)
+    supabaseClient.auth.onAuthStateChange(async (event, session) => {
+        if (session) {
+            usuarioActual = session.user;
+            actualizarInterfazUsuario(true);
+            await verificarSiEsDuenio();
+        } else {
+            usuarioActual = null;
+            actualizarInterfazUsuario(false);
+        }
+    });
+
     await verificarSesionUsuario();
+
     if (typeof inicializarMapaEntrega === 'function') {
         inicializarMapaEntrega();
     }
@@ -693,6 +707,39 @@ async function verificarSesionUsuario() {
     } else {
         usuarioActual = null;
         actualizarInterfazUsuario(false);
+    }
+}
+
+// ==========================================
+// AUTENTICACIÓN CON GOOGLE Y CERRAR SESIÓN
+// ==========================================
+async function loginWithGoogle() {
+    if (!supabaseClient) return alert("Supabase no está configurado.");
+    
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            redirectTo: window.location.origin + window.location.pathname
+        }
+    });
+
+    if (error) {
+        console.error("Error al iniciar sesión con Google:", error);
+        alert("Error de autenticación: " + error.message);
+    }
+}
+
+async function logout() {
+    if (!supabaseClient) return;
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) {
+        alert("Error al cerrar sesión: " + error.message);
+    } else {
+        usuarioActual = null;
+        miComercio = null;
+        actualizarInterfazUsuario(false);
+        irAInicio();
+        window.location.reload();
     }
 }
 
@@ -735,6 +782,9 @@ async function verificarSiEsDuenio() {
     }
 }
 
+// ==========================================
+// NAVEGACIÓN Y PANTALLAS
+// ==========================================
 function ocultarTodasLasPantallas() {
     const pantallas = ['pantallaCliente', 'pantallaDuenio', 'modalCheckout', 'modalEditarProducto'];
     pantallas.forEach(id => {
@@ -813,7 +863,7 @@ function renderizarDetalleCarritoCheckout() {
         const totalProd = p.precio * p.cantidad;
         subtotal += totalProd;
         html += `
-            <li style="display:flex; justify-between; align-items:center; margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:4px;">
+            <li style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:4px;">
                 <div>
                     <b>${p.nombre}</b><br>
                     <small>$${p.precio.toFixed(2)} x ${p.cantidad} = $${totalProd.toFixed(2)}</small>
@@ -870,7 +920,7 @@ function recalcularTotalesCheckout() {
 // ==========================================
 async function procesarPedido() {
     try {
-        // 1. Validación de Distancia (Máx 7 km)
+        // Validación de Distancia (Límite 7 km)
         const distElem = document.getElementById('txtDistancia');
         const distTexto = distElem ? distElem.innerText.replace('km', '').trim() : "0";
         const dist = parseFloat(distTexto) || 0;
@@ -880,7 +930,7 @@ async function procesarPedido() {
             return;
         }
 
-        // 2. Validación de Entradas
+        // Validación de Entradas de Cliente
         const dirInput = document.getElementById('direccionEscrita');
         const telInput = document.getElementById('telefonoCliente');
 
@@ -892,18 +942,14 @@ async function procesarPedido() {
             return;
         }
 
-        // 3. Bloquear botón durante el envío
         const btn = document.getElementById('btnConfirmar') || document.getElementById('btnEnviarPedidoFinal');
         if (btn) {
             btn.disabled = true;
             btn.innerText = "Procesando...";
         }
 
-        // 4. Usuario seguro
         let currentUser = usuarioActual;
-        if (!currentUser && typeof user !== 'undefined' && user) {
-            currentUser = user;
-        } else if (!currentUser && supabaseClient && supabaseClient.auth) {
+        if (!currentUser && supabaseClient && supabaseClient.auth) {
             const { data } = await supabaseClient.auth.getUser();
             currentUser = data?.user || null;
         }
@@ -913,20 +959,18 @@ async function procesarPedido() {
             || currentUser?.email?.split('@')[0] 
             || 'Cliente';
 
-        // 5. Desglose de importes
-        const subtotalProductos = carrito.reduce((acc, item) => acc + (parseFloat(item.precio) * (item.cantidad || item.cant || 1)), 0);
+        const subtotalProductos = carrito.reduce((acc, item) => acc + (parseFloat(item.precio) * (item.cantidad || 1)), 0);
         const envElem = document.getElementById('txtCostoEnvio');
         const costoEnvio = envElem ? parseFloat(envElem.innerText.replace('$', '').trim()) || 0 : 0;
         const totalFinal = subtotalProductos + costoEnvio;
 
-        // Coordenadas
         const comercioObj = comercioSeleccionadoObjeto || (typeof comercioSel !== 'undefined' ? comercioSel : null);
-        const cCom = typeof obtenerCoordsComercioActivo === 'function' ? obtenerCoordsComercioActivo() : (typeof getCoordsCom === 'function' ? getCoordsCom() : { lat: 19.5694, lng: -99.7669 });
+        const cCom = typeof obtenerCoordsComercioActivo === 'function' ? obtenerCoordsComercioActivo() : { lat: 19.5694, lng: -99.7669 };
         
         const latDest = coordsEntrega ? coordsEntrega.lat : cCom.lat;
         const lngDest = coordsEntrega ? coordsEntrega.lng : cCom.lng;
 
-        // Lógica de aprobación por monto
+        // Regla: Si supera los $500 entra a revisión del admin
         const estadoInicial = totalFinal > 500 ? 'revision_admin' : 'pendiente';
 
         const payloadPedido = {
@@ -934,7 +978,7 @@ async function procesarPedido() {
             cliente_email: currentUser ? currentUser.email : '',
             telefono_cliente: tel,
             direccion_entrega: `${dir} (GPS: ${latDest.toFixed(6)}, ${lngDest.toFixed(6)})`,
-            producto_nombre: carrito.map(i => `${i.cantidad || i.cant || 1}x ${i.nombre}`).join(', '),
+            producto_nombre: carrito.map(i => `${i.cantidad || 1}x ${i.nombre}`).join(', '),
             subtotal: subtotalProductos,
             costo_envio: costoEnvio,
             precio: totalFinal,
@@ -979,11 +1023,11 @@ async function procesarPedido() {
     }
 }
 
-// Alias para compatibilidad con llamadas en el HTML
+// Alias de compatibilidad por si se llama procesarPedidoFinal desde el HTML
 const procesarPedidoFinal = procesarPedido;
 
 // ==========================================
-// PANEL DE DUEÑO Y REALTIME
+// PANEL DE DUEÑO Y CONTROL EN TIEMPO REAL
 // ==========================================
 async function cargarPanelDuenio() {
     ocultarTodasLasPantallas();
@@ -1247,7 +1291,7 @@ window.eliminarProducto = async function(id) {
 };
 
 // ==========================================
-// FORMULARIOS (CREAR Y EDITAR PRODUCTO)
+// FORMULARIOS DE PRODUCTOS (CREAR Y EDITAR)
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
 
