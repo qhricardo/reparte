@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reparte Ixtlahuaca - Acceso Google</title>
+    <title>Reparte Ixtlahuaca - Sistema Completo con Repartidores</title>
 
     <!-- Librerías Externas -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -11,7 +11,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <!-- CSS en una sola línea -->
-    <style>:root{--p:#27ae60;--d:#e74c3c;--w:#f39c12;--dark:#2c3e50;}body{font-family:sans-serif;margin:0;padding:10px;background:#f4f6f7;}.card{background:#fff;padding:15px;border-radius:8px;margin-bottom:15px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}.oculto{display:none!important;}.btn{padding:8px 14px;border:none;border-radius:5px;font-weight:bold;cursor:pointer;margin:2px;}.btn-p{background:var(--p);color:#fff;}.btn-d{background:var(--d);color:#fff;}.btn-w{background:var(--w);color:#fff;}.btn-s{background:#7f8c8d;color:#fff;}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}.tarjeta{border:1px solid #ddd;padding:10px;border-radius:6px;text-align:center;background:#fff;}.tarjeta img{width:100%;height:120px;object-fit:cover;border-radius:4px;}#mapaComercio,#mapaEntrega{height:250px;width:100%;border-radius:6px;margin:8px 0;}.modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;}.modal-content{background:#fff;padding:20px;border-radius:8px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;}#barraCarrito{position:fixed;bottom:15px;left:15px;right:15px;max-width:500px;margin:auto;background:var(--dark);color:#fff;padding:10px 20px;border-radius:25px;display:flex;justify-content:space-between;align-items:center;z-index:999;}.badge{padding:3px 7px;border-radius:10px;color:#fff;font-size:11px;font-weight:bold;}.st-revision_admin{background:#8e44ad;}.st-pendiente{background:var(--w);}.st-preparado{background:#3498db;}.st-despachado{background:#e67e22;}.st-cancelado{background:var(--d);}table{width:100%;border-collapse:collapse;font-size:12px;}th,td{border:1px solid #ddd;padding:6px;text-align:left;}</style>
+    <style>:root{--p:#27ae60;--d:#e74c3c;--w:#f39c12;--r:#e67e22;--dark:#2c3e50;}body{font-family:sans-serif;margin:0;padding:10px;background:#f4f6f7;}.card{background:#fff;padding:15px;border-radius:8px;margin-bottom:15px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}.oculto{display:none!important;}.btn{padding:8px 14px;border:none;border-radius:5px;font-weight:bold;cursor:pointer;margin:2px;}.btn-p{background:var(--p);color:#fff;}.btn-d{background:var(--d);color:#fff;}.btn-w{background:var(--w);color:#fff;}.btn-r{background:var(--r);color:#fff;}.btn-s{background:#7f8c8d;color:#fff;}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}.tarjeta{border:1px solid #ddd;padding:10px;border-radius:6px;text-align:center;background:#fff;}.tarjeta img{width:100%;height:120px;object-fit:cover;border-radius:4px;}#mapaComercio,#mapaEntrega,#mapaRutaRepartidor{height:250px;width:100%;border-radius:6px;margin:8px 0;}.modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;}.modal-content{background:#fff;padding:20px;border-radius:8px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;}#barraCarrito{position:fixed;bottom:15px;left:15px;right:15px;max-width:500px;margin:auto;background:var(--dark);color:#fff;padding:10px 20px;border-radius:25px;display:flex;justify-content:space-between;align-items:center;z-index:999;}.badge{padding:3px 7px;border-radius:10px;color:#fff;font-size:11px;font-weight:bold;}.st-revision_admin{background:#8e44ad;}.st-pendiente{background:var(--w);}.st-preparado{background:#3498db;}.st-despachado{background:var(--r);}.st-en_camino{background:#2980b9;}.st-entregado{background:var(--p);}.st-cancelado{background:var(--d);}table{width:100%;border-collapse:collapse;font-size:12px;}th,td{border:1px solid #ddd;padding:6px;text-align:left;}</style>
 </head>
 <body>
 
@@ -24,25 +24,28 @@
         <button class="btn btn-d" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
 
-   <!-- ACCESO ÚNICO CON CORREO Y CONTRASEÑA -->
-<div id="pLogin" class="card" style="max-width: 350px; margin: 40px auto; text-align:center; padding: 25px;">
-    <h2>🛒 Reparte Ixtlahuaca</h2>
-    <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Ingresa con tus credenciales</p>
-    
-    <form onsubmit="loginEmail(event)">
-        <input type="email" id="txtEmail" placeholder="Correo electrónico" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
-        <input type="password" id="txtPassword" placeholder="Contraseña" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
-        <br>
-        <button type="submit" class="btn btn-p" style="width: 95%; margin-top: 15px; padding: 10px; font-size: 14px;">Entrar</button>
-        <button type="button" class="btn btn-s" onclick="registrarEmail()" style="width: 95%; margin-top: 8px; padding: 8px; font-size: 12px;">Crear Cuenta Nueva</button>
-    </form>
-</div>
+    <!-- ACCESO ÚNICO CON CORREO Y CONTRASEÑA -->
+    <div id="pLogin" class="card" style="max-width: 350px; margin: 40px auto; text-align:center; padding: 25px;">
+        <h2>🛒 Reparte Ixtlahuaca</h2>
+        <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Ingresa con tus credenciales</p>
+        
+        <form onsubmit="loginEmail(event)">
+            <input type="email" id="txtEmail" placeholder="Correo electrónico" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="password" id="txtPassword" placeholder="Contraseña" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <br>
+            <button type="submit" class="btn btn-p" style="width: 95%; margin-top: 15px; padding: 10px; font-size: 14px;">Entrar</button>
+            <button type="button" class="btn btn-s" onclick="registrarEmail()" style="width: 95%; margin-top: 8px; padding: 8px; font-size: 12px;">Crear Cuenta Nueva</button>
+        </form>
+    </div>
 
-    <!-- PANTALLAS DEL SISTEMA (SE MUESTRAN SEGÚN TU ROL TRAS AUTENTICARTE) -->
+    <!-- PANTALLAS CLIENTE -->
     <div id="pClienteComercios" class="oculto">
         <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
             <h3>Comercios Disponibles</h3>
-            <button class="btn btn-p" onclick="mostrarRegComercio()">+ Registrar Mi Comercio</button>
+            <div>
+                <button class="btn btn-r" onclick="activarModoRepartidor()">🛵 Panel Repartidor</button>
+                <button class="btn btn-p" onclick="mostrarRegComercio()">+ Registrar Mi Comercio</button>
+            </div>
         </div>
         <div id="listaComercios" class="grid"></div>
     </div>
@@ -68,6 +71,7 @@
         </form>
     </div>
 
+    <!-- PANTALLA DUEÑO DE COMERCIO -->
     <div id="pDuenio" class="oculto">
         <div class="card">
             <h2 id="duenioNom"></h2>
@@ -88,6 +92,34 @@
         </div>
     </div>
 
+    <!-- PANTALLA REPARTIDOR RADAR DE PEDIDOS -->
+    <div id="pRepartidor" class="oculto">
+        <div class="card" style="border-left:5px solid var(--r); display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <h3 style="margin:0;">🛵 Radar de Pedidos (Repartidor)</h3>
+                <small>Toma pedidos disponibles y conéctalos con la entrega</small>
+            </div>
+            <button class="btn btn-s" onclick="evalRol()">← Salir de Modo Repartidor</button>
+        </div>
+
+        <!-- Pedido Activo en Trabajo -->
+        <div id="seccionPedidoActivo" class="card oculto" style="border:2px solid var(--p);">
+            <h3 style="color:var(--p); margin-top:0;">📦 Tu Pedido Activo</h3>
+            <div id="detallePedidoActivo"></div>
+            <div id="mapaRutaRepartidor"></div>
+            <div style="margin-top:10px;">
+                <button class="btn btn-p" onclick="marcarEntregado()">✅ Marcar como Entregado</button>
+            </div>
+        </div>
+
+        <!-- Lista de Pedidos Despachados Disponibles -->
+        <div class="card">
+            <h3>Disponibles para Entrega</h3>
+            <div id="listaPedidosRepartidor"></div>
+        </div>
+    </div>
+
+    <!-- PANTALLA ADMINISTRADOR CENTRAL -->
     <div id="pAdmin" class="oculto">
         <div class="card" style="border-left:5px solid #8e44ad;">
             <h3>🛡️ Panel Administrador Central</h3>
@@ -107,6 +139,7 @@
         </div>
     </div>
 
+    <!-- CARRITO DE COMPRAS Y MODAL CHECKOUT -->
     <div id="barraCarrito" class="oculto">
         <div>
             <span id="cantCar" class="badge" style="background:var(--d);">0</span>
@@ -129,7 +162,7 @@
         </div>
     </div>
 
- <script>
+<script>
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
     const EMAIL_ADMIN = "q.h.ricardoarturo@gmail.com";
@@ -139,6 +172,7 @@
     let user = null, miComercio = null, comercioSel = null, carrito = [];
     let coordsEntrega = { lat: 19.5694, lng: -99.7669 };
     let mapaC = null, marcC = null, mapaE = null, marcCom = null, marcCli = null, rutaLine = null;
+    let mapaR = null, rutaRepartidorLine = null, pedidoActivoId = null;
 
     // Listener de sesión automático
     supabaseClient.auth.onAuthStateChange((event, session) => {
@@ -165,9 +199,7 @@
             password: password
         });
 
-        if (error) {
-            alert("Error al iniciar sesión: " + error.message);
-        }
+        if (error) alert("Error al iniciar sesión: " + error.message);
     }
 
     async function registrarEmail() {
@@ -181,26 +213,8 @@
             password: password
         });
 
-        if (error) {
-            alert("Error en el registro: " + error.message);
-        } else {
-            alert("Registro exitoso. Si tienes verificación de correo activa en Supabase, revisa tu bandeja de entrada.");
-        }
-    }
-
-    async function recuperarPassword() {
-        const email = document.getElementById('txtEmail').value;
-        if (!email) return alert("Ingresa tu correo para enviarte el enlace de recuperación.");
-
-        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-            redirectTo: window.location.href
-        });
-
-        if (error) {
-            alert("Error al enviar el correo: " + error.message);
-        } else {
-            alert("Se ha enviado un enlace a tu correo para restablecer la contraseña.");
-        }
+        if (error) alert("Error en el registro: " + error.message);
+        else alert("Registro exitoso.");
     }
 
     async function cerrarSesion() {
@@ -208,7 +222,7 @@
     }
 
     function show(id) { document.getElementById(id).classList.remove('oculto'); }
-    function ocultar() { ['pLogin','pClienteComercios','pClienteProds','pRegComercio','pDuenio','pAdmin'].forEach(i => document.getElementById(i).classList.add('oculto')); }
+    function ocultar() { ['pLogin','pClienteComercios','pClienteProds','pRegComercio','pDuenio','pRepartidor','pAdmin'].forEach(i => document.getElementById(i).classList.add('oculto')); }
 
     function actUserBar() {
         show('barraUsuario');
@@ -237,7 +251,7 @@
         }
     }
 
-    // --- MÓDULOS DE COMERCIO Y PEDIDOS ---
+    // --- CLIENTE Y COMERCIOS ---
     async function cargarComercios() {
         ocultar();
         show('pClienteComercios');
@@ -343,7 +357,6 @@
         document.getElementById('txtEnv').innerText = env.toFixed(2);
         document.getElementById('txtTot').innerText = tot.toFixed(2);
 
-        // Bloqueo visual por distancia > 7km
         const btnConfirmar = document.getElementById('btnConfirmar');
         if (btnConfirmar) {
             if (dist > 7) {
@@ -361,28 +374,21 @@
     async function procesarPedido() {
         try {
             const dist = parseFloat(document.getElementById('txtDist').innerText) || 0;
-            if (dist > 7) {
-                alert(`ERROR: La distancia de entrega (${dist.toFixed(2)} km) excede el límite de 7 km.`);
-                return;
-            }
+            if (dist > 7) return alert(`ERROR: La distancia excede el límite de 7 km.`);
 
-            const dirInput = document.getElementById('chkDir') || document.getElementById('direccionEscrita');
-            const telInput = document.getElementById('chkTel') || document.getElementById('telefonoCliente');
+            const dir = document.getElementById('chkDir').value;
+            const tel = document.getElementById('chkTel').value;
 
-            const dir = dirInput ? dirInput.value : '';
-            const tel = telInput ? telInput.value : '';
-
-            if (!dir.trim() || !tel.trim()) return alert("Por favor ingresa la dirección y teléfono de contacto.");
+            if (!dir.trim() || !tel.trim()) return alert("Ingresa dirección y teléfono.");
 
             const btn = document.getElementById('btnConfirmar');
             if (btn) btn.disabled = true;
 
-            const sub = carrito.reduce((a, i) => a + (i.precio * (i.cant || i.cantidad || 1)), 0);
+            const sub = carrito.reduce((a, i) => a + (i.precio * i.cant), 0);
             const env = parseFloat(document.getElementById('txtEnv').innerText) || 0;
             const tot = sub + env;
             const cCom = getCoordsCom();
 
-            // Si el total supera 500 entra como 'revision_admin', de lo contrario 'pendiente'
             const est = tot > 500 ? 'revision_admin' : 'pendiente';
 
             const payload = {
@@ -390,7 +396,7 @@
                 cliente_email: user ? user.email : '',
                 telefono_cliente: tel,
                 direccion_entrega: `${dir} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
-                producto_nombre: carrito.map(i => `${i.cant || i.cantidad || 1}x ${i.nombre}`).join(', '),
+                producto_nombre: carrito.map(i => `${i.cant}x ${i.nombre}`).join(', '),
                 subtotal: sub,
                 costo_envio: env,
                 precio: tot,
@@ -409,24 +415,131 @@
             if (error) {
                 alert("Error al procesar pedido: " + error.message);
             } else {
-                if (tot > 500) {
-                    alert("⚠️ Su pedido supera los $500 y ha sido enviado al Administrador para su aprobación.");
-                } else {
-                    alert("¡Pedido registrado exitosamente!");
-                }
+                alert(tot > 500 ? "⚠️ Pedido enviado al Administrador por superar los $500." : "¡Pedido registrado!");
                 carrito = [];
                 actCar();
                 cerrarCheckout();
             }
         } catch (err) {
-            console.error("Error inesperado al enviar el pedido:", err);
-            alert("Ocurrió un error inesperado al procesar el pedido.");
-            const btn = document.getElementById('btnConfirmar');
-            if (btn) btn.disabled = false;
+            alert("Error al procesar pedido.");
+            if (document.getElementById('btnConfirmar')) document.getElementById('btnConfirmar').disabled = false;
         }
     }
 
-    // --- PANELES DE ADMINISTRACIÓN Y DUEÑO ---
+    // --- MÓDULO DE REPARTIDOR ---
+    function activarModoRepartidor() {
+        ocultar();
+        show('pRepartidor');
+        document.getElementById('lblRol').innerText = 'REPARTIDOR';
+        cargarRadarRepartidor();
+
+        // Canal de tiempo real para nuevos pedidos despachados
+        supabaseClient.channel('live_repartidor')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
+                cargarRadarRepartidor();
+            })
+            .subscribe();
+    }
+
+    async function cargarRadarRepartidor() {
+        // Verificar si el repartidor ya tiene un pedido asignado en camino
+        const { data: act } = await supabaseClient.from('pedidos')
+            .select('*')
+            .eq('repartidor_id', user.id)
+            .eq('estado', 'en_camino')
+            .maybeSingle();
+
+        if (act) {
+            pedidoActivoId = act.id;
+            show('seccionPedidoActivo');
+            document.getElementById('detallePedidoActivo').innerHTML = `
+                <b>Comercio:</b> ${act.comercio_nombre}<br>
+                <b>Cliente:</b> ${act.cliente_nombre} (${act.telefono_cliente || 'Sin teléfono'})<br>
+                <b>Dirección de Entrega:</b> ${act.direccion_entrega}<br>
+                <b>Ganancia Envío:</b> <span style="color:var(--p); font-weight:bold;">$${Number(act.costo_envio || 25).toFixed(2)}</span>
+            `;
+            renderRutaRepartidor(act);
+        } else {
+            pedidoActivoId = null;
+            document.getElementById('seccionPedidoActivo').classList.add('oculto');
+        }
+
+        // Listar pedidos 'despachados' esperando repartidor
+        const { data: peds } = await supabaseClient.from('pedidos')
+            .select('*')
+            .eq('estado', 'despachado')
+            .order('created_at', { ascending: true });
+
+        document.getElementById('listaPedidosRepartidor').innerHTML = (peds && peds.length) ? peds.map(p => `
+            <div style="background:#fff; border:1px solid #ddd; padding:10px; margin-bottom:8px; border-radius:6px; border-left:4px solid var(--r);">
+                <b>Comercio:</b> ${p.comercio_nombre}<br>
+                <b>Cliente:</b> ${p.cliente_nombre}<br>
+                <b>Dirección:</b> ${p.direccion_entrega}<br>
+                <b>Pago Envío:</b> $${Number(p.costo_envio || 25).toFixed(2)} | <b>Total Pedido:</b> $${Number(p.precio).toFixed(2)}<br>
+                <button class="btn btn-r" style="margin-top:6px;" onclick="tomarPedido('${p.id}')" ${act ? 'disabled style="opacity:0.5;"' : ''}>
+                    ${act ? 'Ya tienes un pedido activo' : '🛵 Tomar este Pedido'}
+                </button>
+            </div>
+        `).join('') : '<p>No hay pedidos pendientes por entregar en este momento.</p>';
+    }
+
+    async function tomarPedido(pedidoId) {
+        if (pedidoActivoId) return alert("Ya tienes un pedido activo en ruta.");
+
+        const { error } = await supabaseClient.from('pedidos').update({
+            repartidor_id: user.id,
+            repartidor_email: user.email,
+            estado: 'en_camino'
+        }).eq('id', pedidoId);
+
+        if (error) alert("No se pudo tomar el pedido: " + error.message);
+        else cargarRadarRepartidor();
+    }
+
+    async function marcarEntregado() {
+        if (!pedidoActivoId) return;
+
+        const { error } = await supabaseClient.from('pedidos').update({
+            estado: 'entregado'
+        }).eq('id', pedidoActivoId);
+
+        if (error) {
+            alert("Error al finalizar entrega: " + error.message);
+        } else {
+            alert("¡Entrega completada con éxito!");
+            cargarRadarRepartidor();
+        }
+    }
+
+    function renderRutaRepartidor(ped) {
+        setTimeout(() => {
+            const latO = ped.lat_origen || 19.5694, lngO = ped.lng_origen || -99.7669;
+            const latD = ped.lat_destino || 19.5694, lngD = ped.lng_destino || -99.7669;
+
+            if (!mapaR) {
+                mapaR = L.map('mapaRutaRepartidor').setView([latO, lngO], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaR);
+            } else {
+                mapaR.invalidateSize();
+            }
+
+            L.marker([latO, lngO]).addTo(mapaR).bindPopup("Comercio").openPopup();
+            L.marker([latD, lngD]).addTo(mapaR).bindPopup("Cliente");
+
+            fetch(`https://router.project-osrm.org/route/v1/driving/${lngO},${latO};${lngD},${latD}?overview=full&geometries=geojson`)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.routes && d.routes[0]) {
+                        const pts = d.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                        if (rutaRepartidorLine) mapaR.removeLayer(rutaRepartidorLine);
+                        rutaRepartidorLine = L.polyline(pts, { color: '#e67e22', weight: 5 }).addTo(mapaR);
+                        mapaR.fitBounds(rutaRepartidorLine.getBounds());
+                    }
+                }).catch(() => {});
+        }, 300);
+    }
+
+    // --- PANELES DUEÑO Y ADMIN ---
     function cargarDuenio() {
         document.getElementById('duenioNom').innerText = miComercio.nombre;
         cargarPedidosDuenio();
@@ -439,8 +552,9 @@
             <div style="background:#f8f9fa; padding:8px; margin-bottom:6px; border-left:3px solid var(--p);">
                 <span class="badge st-${p.estado}">${p.estado}</span> <b>${p.cliente_nombre}</b> ($${Number(p.precio).toFixed(2)})<br>
                 <small>${p.producto_nombre}</small><br>
+                ${p.repartidor_email ? `<small>🛵 Repartidor: ${p.repartidor_email}</small><br>` : ''}
                 ${p.estado === 'pendiente' ? `<button class="btn btn-p" onclick="setEstado('${p.id}','preparado')">👨‍🍳 Aceptar</button>` : ''}
-                ${p.estado === 'preparado' ? `<button class="btn btn-w" onclick="setEstado('${p.id}','despachado')">📦 Despachar</button>` : ''}
+                ${p.estado === 'preparado' ? `<button class="btn btn-w" onclick="setEstado('${p.id}','despachado')">📦 Despachar a Repartidor</button>` : ''}
             </div>
         `).join('') : '<p>Sin pedidos pendientes</p>';
     }
@@ -455,17 +569,8 @@
         cargarTablaAdmin();
         cargarMetricasAdmin();
         
-        // Escucha Realtime mejorada para notificaciones en tiempo real al administrador
         supabaseClient.channel('live_admin')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
-                if (payload.new && payload.new.estado === 'revision_admin') {
-                    alert(`🚨 ¡NUEVA ALERTA! Se ha recibido un pedido de $${Number(payload.new.precio).toFixed(2)} pesos que requiere tu aprobación.`);
-                }
-                cargarRevAdmin(); 
-                cargarTablaAdmin(); 
-                cargarMetricasAdmin();
-            })
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedidos' }, () => {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
                 cargarRevAdmin(); 
                 cargarTablaAdmin(); 
                 cargarMetricasAdmin();
@@ -477,39 +582,25 @@
         const contenedor = document.getElementById('listaAdminRevision');
         if (!contenedor) return;
 
-        const { data: peds, error } = await supabaseClient.from('pedidos').select('*').eq('estado', 'revision_admin').order('created_at', { ascending: false });
-
-        if (error) {
-            contenedor.innerHTML = '<p>Error al obtener revisiones.</p>';
-            return;
-        }
+        const { data: peds } = await supabaseClient.from('pedidos').select('*').eq('estado', 'revision_admin').order('created_at', { ascending: false });
 
         contenedor.innerHTML = (peds && peds.length) ? peds.map(p => `
             <div style="border:1px solid #e74c3c; background:#fff5f5; padding:10px; margin-bottom:8px; border-radius:6px;">
                 <h4 style="margin:0 0 5px 0; color:#c0392b;">⚠️ Pedido > $500 ($${Number(p.precio).toFixed(2)})</h4>
                 <b>Comercio:</b> ${p.comercio_nombre}<br>
                 <b>Cliente:</b> ${p.cliente_nombre} (${p.cliente_email})<br>
-                <b>Teléfono:</b> ${p.telefono_cliente || 'No provisto'}<br>
                 <b>Productos:</b> ${p.producto_nombre}<br>
-                <b>Dirección:</b> ${p.direccion_entrega}<br>
                 <div style="margin-top:8px;">
-                    <button class="btn btn-p" onclick="decidirAdmin('${p.id}','pendiente')">✅ Aceptar (Liberar al Comercio)</button>
-                    <button class="btn btn-d" style="background:#e74c3c;" onclick="decidirAdmin('${p.id}','cancelado')">❌ Cancelar</button>
+                    <button class="btn btn-p" onclick="decidirAdmin('${p.id}','pendiente')">✅ Aceptar</button>
+                    <button class="btn btn-d" onclick="decidirAdmin('${p.id}','cancelado')">❌ Cancelar</button>
                 </div>
             </div>
         `).join('') : '<p>Sin pedidos retenidos para revisión.</p>';
     }
 
     async function decidirAdmin(id, est) {
-        const accion = est === 'pendiente' ? 'Aceptar y liberar al comercio' : 'Cancelar';
-        if (!confirm(`¿Deseas ${accion} este pedido?`)) return;
-
-        const { error } = await supabaseClient.from('pedidos').update({ estado: est }).eq('id', id);
-        if (error) {
-            alert("Error al actualizar el pedido: " + error.message);
-        } else {
-            cargarAdmin();
-        }
+        await supabaseClient.from('pedidos').update({ estado: est }).eq('id', id);
+        cargarAdmin();
     }
 
     async function cargarTablaAdmin() {
@@ -518,31 +609,31 @@
         if (!contenedor) return;
 
         contenedor.innerHTML = (peds && peds.length) ? `
-            <table style="width:100%; border-collapse:collapse;">
+            <table>
                 <thead>
-                    <tr style="background:#eee; text-align:left;">
-                        <th>Fecha / Hora</th>
+                    <tr style="background:#eee;">
+                        <th>Fecha</th>
                         <th>Cliente</th>
                         <th>Comercio</th>
-                        <th>Dirección de Entrega</th>
+                        <th>Repartidor</th>
                         <th>Total</th>
                         <th>Estado</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${peds.map(p => `
-                        <tr style="border-bottom:1px solid #ddd;">
+                        <tr>
                             <td>${p.created_at ? new Date(p.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</td>
                             <td>${p.cliente_nombre}</td>
                             <td>${p.comercio_nombre}</td>
-                            <td>${p.direccion_entrega || 'Sin dirección'}</td>
+                            <td>${p.repartidor_email || 'Por asignar'}</td>
                             <td>$${Number(p.precio).toFixed(2)}</td>
                             <td><span class="badge st-${p.estado}">${p.estado}</span></td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
-        ` : '<p>Sin registros globales de pedidos.</p>';
+        ` : '<p>Sin registros globales.</p>';
     }
 
     async function cargarMetricasAdmin() {
