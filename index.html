@@ -521,14 +521,21 @@
             <table style="width:100%; border-collapse:collapse;">
                 <thead>
                     <tr style="background:#eee; text-align:left;">
-                        <th>Cliente</th><th>Comercio</th><th>Total</th><th>Estado</th>
+                        <th>Fecha / Hora</th>
+                        <th>Cliente</th>
+                        <th>Comercio</th>
+                        <th>Dirección de Entrega</th>
+                        <th>Total</th>
+                        <th>Estado</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${peds.map(p => `
                         <tr style="border-bottom:1px solid #ddd;">
+                            <td>${p.created_at ? new Date(p.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</td>
                             <td>${p.cliente_nombre}</td>
                             <td>${p.comercio_nombre}</td>
+                            <td>${p.direccion_entrega || 'Sin dirección'}</td>
                             <td>$${Number(p.precio).toFixed(2)}</td>
                             <td><span class="badge st-${p.estado}">${p.estado}</span></td>
                         </tr>
