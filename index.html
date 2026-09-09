@@ -87,7 +87,7 @@
         </div>
         <div class="card">
             <h3>Pedidos Recibidos</h3>
-            <div id="listaPedidosDuenio"></div>
+            <div id="listaPedidosDuenio" style="overflow-x:auto;"></div>
         </div>
     </div>
 
@@ -417,7 +417,7 @@
             const est = tot > 500 ? 'revision_admin' : 'pendiente';
 
             const payload = {
-                cliente_nombre: user ? user.email.split('@')[0] : 'Cliente',
+                cliente_nombre: user ? (user.user_metadata?.full_name || user.email.split('@')[0]) : 'Cliente',
                 cliente_email: user ? user.email : '',
                 telefono_cliente: tel,
                 direccion_entrega: `${dir} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
@@ -428,6 +428,7 @@
                 comercio_id: comercioSel ? comercioSel.id : null,
                 comercio_nombre: comercioSel ? comercioSel.nombre : 'Comercio',
                 repartidor_id: null,
+                repartidor_nombre: null,
                 lat_origen: cCom.lat,
                 lng_origen: cCom.lng,
                 lat_destino: coordsEntrega.lat,
@@ -486,6 +487,7 @@
             document.getElementById('detallePedidoActivo').innerHTML = `
                 <b>Comercio:</b> ${act.comercio_nombre}<br>
                 <b>Cliente:</b> ${act.cliente_nombre} (${act.telefono_cliente || 'Sin teléfono'})<br>
+                <b>Productos:</b> ${act.producto_nombre || 'N/A'}<br>
                 <b>Dirección de Entrega:</b> ${act.direccion_entrega}<br>
                 <b>Ganancia Envío:</b> <span style="color:var(--p); font-weight:bold;">$${Number(act.costo_envio || 25).toFixed(2)}</span>
             `;
@@ -505,6 +507,7 @@
             <div style="background:#fff; border:1px solid #ddd; padding:10px; margin-bottom:8px; border-radius:6px; border-left:4px solid var(--r);">
                 <b>Comercio:</b> ${p.comercio_nombre}<br>
                 <b>Cliente:</b> ${p.cliente_nombre}<br>
+                <b>Productos:</b> ${p.producto_nombre || 'N/A'}<br>
                 <b>Dirección de Entrega:</b> ${p.direccion_entrega}<br>
                 <b>Pago Envío:</b> $${Number(p.costo_envio || 25).toFixed(2)} | <b>Total Pedido:</b> $${Number(p.precio).toFixed(2)}<br>
                 <button class="btn btn-r" style="margin-top:6px;" onclick="tomarPedido('${p.id}')" ${act ? 'disabled style="opacity:0.5;"' : ''}>
@@ -517,8 +520,11 @@
     async function tomarPedido(pedidoId) {
         if (pedidoActivoId) return alert("Ya tienes un pedido activo en ruta.");
 
+        const nombreRepartidor = user.user_metadata?.full_name || user.user_metadata?.name || user.email;
+
         const { error } = await supabaseClient.from('pedidos').update({
             repartidor_id: user.id,
+            repartidor_nombre: nombreRepartidor,
             estado: 'en_camino'
         }).eq('id', pedidoId);
 
@@ -581,15 +587,39 @@
 
     async function cargarPedidosDuenio() {
         const { data: peds } = await supabaseClient.from('pedidos').select('*').eq('comercio_id', miComercio.id).neq('estado', 'revision_admin').order('created_at', { ascending: false });
-        document.getElementById('listaPedidosDuenio').innerHTML = (peds && peds.length) ? peds.map(p => `
-            <div style="background:#f8f9fa; padding:8px; margin-bottom:6px; border-left:3px solid var(--p);">
-                <span class="badge st-${p.estado}">${p.estado}</span> <b>${p.cliente_nombre}</b> ($${Number(p.precio).toFixed(2)})<br>
-                <small>${p.producto_nombre}</small><br>
-                ${p.repartidor_id ? `<small>🛵 Repartidor ID: ${p.repartidor_id}</small><br>` : ''}
-                ${p.estado === 'pendiente' ? `<button class="btn btn-p" onclick="setEstado('${p.id}','preparado')">👨‍🍳 Aceptar</button>` : ''}
-                ${p.estado === 'preparado' ? `<button class="btn btn-w" onclick="setEstado('${p.id}','despachado')">📦 Despachar</button>` : ''}
-            </div>
-        `).join('') : '<p>Sin pedidos pendientes</p>';
+        const contenedor = document.getElementById('listaPedidosDuenio');
+        if (!contenedor) return;
+
+        contenedor.innerHTML = (peds && peds.length) ? `
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:#eee; text-align:left;">
+                        <th>Fecha</th>
+                        <th>Cliente</th>
+                        <th>Productos</th>
+                        <th>Repartidor</th>
+                        <th>Total</th>
+                        <th>Estado / Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${peds.map(p => `
+                        <tr style="border-bottom:1px solid #ddd;">
+                            <td>${p.created_at ? new Date(p.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</td>
+                            <td><b>${p.cliente_nombre}</b></td>
+                            <td>${p.producto_nombre || 'Sin detalle'}</td>
+                            <td>${p.repartidor_nombre || p.repartidor_id || 'Sin asignar'}</td>
+                            <td>$${Number(p.precio).toFixed(2)}</td>
+                            <td>
+                                <span class="badge st-${p.estado}">${p.estado}</span><br>
+                                ${p.estado === 'pendiente' ? `<button class="btn btn-p" onclick="setEstado('${p.id}','preparado')">👨‍🍳 Aceptar</button>` : ''}
+                                ${p.estado === 'preparado' ? `<button class="btn btn-w" onclick="setEstado('${p.id}','despachado')">📦 Despachar</button>` : ''}
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        ` : '<p>Sin pedidos pendientes</p>';
     }
 
     async function setEstado(id, est) {
@@ -602,7 +632,6 @@
         cargarTablaAdmin();
         cargarMetricasAdmin();
         
-        // Escucha Realtime mejorada para notificaciones en tiempo real al administrador
         supabaseClient.channel('live_admin')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
                 if (payload.new && payload.new.estado === 'revision_admin') {
@@ -671,8 +700,9 @@
                         <th>Fecha / Hora</th>
                         <th>Cliente</th>
                         <th>Comercio</th>
+                        <th>Productos</th>
                         <th>Dirección de Entrega</th>
-                        <th>Repartidor ID</th>
+                        <th>Repartidor</th>
                         <th>Total</th>
                         <th>Estado</th>
                     </tr>
@@ -683,8 +713,9 @@
                             <td>${p.created_at ? new Date(p.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</td>
                             <td>${p.cliente_nombre}</td>
                             <td>${p.comercio_nombre}</td>
+                            <td>${p.producto_nombre || 'Sin detalle'}</td>
                             <td>${p.direccion_entrega || 'Sin dirección'}</td>
-                            <td>${p.repartidor_id || 'Sin asignar'}</td>
+                            <td>${p.repartidor_nombre || p.repartidor_id || 'Sin asignar'}</td>
                             <td>$${Number(p.precio).toFixed(2)}</td>
                             <td><span class="badge st-${p.estado}">${p.estado}</span></td>
                         </tr>
