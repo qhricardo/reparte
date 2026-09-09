@@ -24,13 +24,14 @@
         <button class="btn btn-d" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
 
-    <!-- ACCESO CON REGISTRO DE NOMBRE -->
+    <!-- ACCESO CON REGISTRO DE NOMBRE Y TELÉFONO -->
     <div id="pLogin" class="card" style="max-width: 380px; margin: 40px auto; text-align:center; padding: 25px;">
         <h2>🛒 Reparte Ixtlahuaca</h2>
         <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Ingresa tus datos de acceso</p>
         
         <form onsubmit="loginEmail(event)">
             <input type="text" id="txtNombreReg" placeholder="Nombre completo (Solo para registro)" style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="tel" id="txtTelefonoReg" placeholder="Teléfono de contacto (Solo para registro)" style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
             <input type="email" id="txtEmail" placeholder="Correo electrónico" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
             <input type="password" id="txtPassword" placeholder="Contraseña" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
             <br>
@@ -186,7 +187,7 @@
         }
     });
 
-    // --- AUTENTICACIÓN MEJORADA CON REGISTRO DE NOMBRE ---
+    // --- AUTENTICACIÓN MEJORADA CON REGISTRO DE NOMBRE Y TELÉFONO ---
     async function loginEmail(e) {
         e.preventDefault();
         const email = document.getElementById('txtEmail').value;
@@ -204,17 +205,22 @@
 
     async function registrarEmail() {
         const nombre = document.getElementById('txtNombreReg').value;
+        const telefono = document.getElementById('txtTelefonoReg').value;
         const email = document.getElementById('txtEmail').value;
         const password = document.getElementById('txtPassword').value;
 
         if (!nombre.trim()) return alert("Por favor ingresa tu Nombre Completo en el primer campo para poder registrarte.");
+        if (!telefono.trim()) return alert("Por favor ingresa tu Teléfono de contacto para registrarte.");
         if (!email || !password) return alert("Ingresa un correo y contraseña válidos.");
 
         const { data, error } = await supabaseClient.auth.signUp({
             email: email,
             password: password,
             options: {
-                data: { full_name: nombre } // Guardar nombre explícito en Supabase Metadata
+                data: { 
+                    full_name: nombre,
+                    phone_number: telefono // Guardar teléfono explícito en Supabase Metadata
+                } 
             }
         });
 
@@ -320,6 +326,14 @@
     function abrirCheckout() {
         show('modalCheck');
         document.getElementById('resumenCar').innerHTML = carrito.map(i => `<p>${i.cant}x ${i.nombre} - $${(i.precio * i.cant).toFixed(2)}</p>`).join('');
+        
+        // Autocompletar el teléfono del cliente registrado
+        const telCliente = user?.user_metadata?.phone_number || '';
+        const chkTelInput = document.getElementById('chkTel');
+        if (chkTelInput && telCliente) {
+            chkTelInput.value = telCliente;
+        }
+
         const cCom = getCoordsCom();
         setTimeout(() => {
             if (!mapaE) {
@@ -496,6 +510,7 @@
             <div style="background:#fff; border:1px solid #ddd; padding:10px; margin-bottom:8px; border-radius:6px; border-left:4px solid var(--r);">
                 <b>Comercio:</b> ${p.comercio_nombre}<br>
                 <b>Cliente:</b> ${p.cliente_nombre}<br>
+                <b>Teléfono Cliente:</b> ${p.telefono_cliente || 'N/A'}<br>
                 <b>Productos:</b> ${p.producto_nombre || 'N/A'}<br>
                 <b>Dirección de Entrega:</b> ${p.direccion_entrega}<br>
                 <b>Pago Envío:</b> $${Number(p.costo_envio || 25).toFixed(2)} | <b>Total Pedido:</b> $${Number(p.precio).toFixed(2)}<br>
@@ -512,7 +527,6 @@
 
         let nombreRepartidor = user.user_metadata?.full_name || user.user_metadata?.name;
 
-        // Si el usuario no tiene nombre registrado en metadata ni correo claro, se lo pedimos directamente
         if (!nombreRepartidor || nombreRepartidor.trim() === '') {
             const defaultNom = user.email ? user.email.split('@')[0] : 'Repartidor';
             nombreRepartidor = prompt("Por favor ingresa tu Nombre Completo para tomar la entrega:", defaultNom);
@@ -599,6 +613,7 @@
                     <tr style="background:#eee; text-align:left;">
                         <th>Fecha</th>
                         <th>Cliente</th>
+                        <th>Teléfono</th>
                         <th>Productos</th>
                         <th>Repartidor</th>
                         <th>Total</th>
@@ -612,6 +627,7 @@
                         <tr style="border-bottom:1px solid #ddd;">
                             <td>${p.created_at ? new Date(p.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</td>
                             <td><b>${p.cliente_nombre}</b></td>
+                            <td>${p.telefono_cliente || 'N/A'}</td>
                             <td>${p.producto_nombre || 'Sin detalle'}</td>
                             <td><b style="color:var(--r);">${repMostrar}</b></td>
                             <td>$${Number(p.precio).toFixed(2)}</td>
@@ -704,6 +720,7 @@
                     <tr style="background:#eee; text-align:left;">
                         <th>Fecha / Hora</th>
                         <th>Cliente</th>
+                        <th>Teléfono</th>
                         <th>Comercio</th>
                         <th>Productos</th>
                         <th>Dirección de Entrega</th>
@@ -719,6 +736,7 @@
                         <tr style="border-bottom:1px solid #ddd;">
                             <td>${p.created_at ? new Date(p.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</td>
                             <td>${p.cliente_nombre}</td>
+                            <td>${p.telefono_cliente || 'N/A'}</td>
                             <td>${p.comercio_nombre}</td>
                             <td>${p.producto_nombre || 'Sin detalle'}</td>
                             <td>${p.direccion_entrega || 'Sin dirección'}</td>
