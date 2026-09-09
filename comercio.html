@@ -1214,7 +1214,7 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
     }
 });
 
- // CARRITO Y CHECKOUT
+// CARRITO Y CHECKOUT
 function agregarAlCarrito(id, nombre, precio) {
     const existente = carrito.find(item => item.id === id);
     if (existente) existente.cantidad++;
@@ -1250,10 +1250,8 @@ function obtenerCoordsComercioActivo() {
 function abrirModalCheckout() {
     document.getElementById('modalCheckout').classList.remove('oculto');
     
-    const contenedorResumen = document.getElementById('resumenItemsCarrito');
-    if (contenedorResumen) {
-        contenedorResumen.innerHTML = carrito.map(i => `<p style="margin: 4px 0;"><b>${i.cantidad}x</b> ${i.nombre} - $${(i.precio * i.cantidad).toFixed(2)}</p>`).join('');
-    }
+    // AQUÍ ESTÁ EL CAMBIO: Se llama a la función para renderizar con botones + y -
+    actualizarResumenCarrito();
 
     const coordsComercio = obtenerCoordsComercioActivo();
 
@@ -1290,6 +1288,53 @@ function abrirModalCheckout() {
         }
         recalcularTotales();
     }, 300);
+}
+
+// NUEVAS FUNCIONES PARA CONTROLAR CANTIDADES
+function actualizarResumenCarrito() {
+    const contenedorResumen = document.getElementById('resumenItemsCarrito');
+    if (!contenedorResumen) return;
+
+    if (!carrito || carrito.length === 0) {
+        contenedorResumen.innerHTML = '<p style="text-align:center; color:#6B7280; padding:10px;">El carrito está vacío</p>';
+        actualizarBarraCarrito();
+        if (typeof recalcularTotales === 'function') recalcularTotales();
+        return;
+    }
+
+    contenedorResumen.innerHTML = carrito.map((item, index) => `
+        <div class="item-carrito-row">
+            <div class="item-info">
+                <span class="item-nombre">${item.nombre}</span>
+                <span class="item-precio">$${(item.precio * item.cantidad).toFixed(2)}</span>
+            </div>
+            <div class="item-controles">
+                <button type="button" class="btn-cant" onclick="cambiarCantidadProducto(${index}, -1)">-</button>
+                <span class="item-cantidad">${item.cantidad}</span>
+                <button type="button" class="btn-cant" onclick="cambiarCantidadProducto(${index}, 1)">+</button>
+                <button type="button" class="btn-eliminar" onclick="eliminarProductoCarrito(${index})">🗑️</button>
+            </div>
+        </div>
+    `).join('');
+
+    actualizarBarraCarrito();
+    if (typeof recalcularTotales === 'function') recalcularTotales();
+}
+
+function cambiarCantidadProducto(index, cambio) {
+    if (!carrito[index]) return;
+    carrito[index].cantidad += cambio;
+
+    if (carrito[index].cantidad <= 0) {
+        carrito.splice(index, 1);
+    }
+
+    actualizarResumenCarrito();
+}
+
+function eliminarProductoCarrito(index) {
+    carrito.splice(index, 1);
+    actualizarResumenCarrito();
 }
 
 function cerrarModalCheckout() {
