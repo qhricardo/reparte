@@ -1440,12 +1440,17 @@ async function recalcularTotales() {
 
     const precioBase = typeof PRECIO_BASE_ENVIO !== 'undefined' ? PRECIO_BASE_ENVIO : 20;
     const precioKm = typeof PRECIO_KM !== 'undefined' ? PRECIO_KM : 8;
-    const costoEnvio = precioBase + (distanciaKm * precioKm);
+
+    // --- CAMBIO AQUÍ: Math.round() redondea al entero más cercano ---
+    // Si prefieres que $24.10 suba siempre a $25.00, usa Math.ceil() en su lugar.
+    const costoEnvio = Math.round(precioBase + (distanciaKm * precioKm)); 
     const total = subtotal + costoEnvio;
 
     if (document.getElementById('txtDistancia')) document.getElementById('txtDistancia').innerText = distanciaKm.toFixed(2);
     if (document.getElementById('txtSubtotal')) document.getElementById('txtSubtotal').innerText = subtotal.toFixed(2);
-    if (document.getElementById('txtCostoEnvio')) document.getElementById('txtCostoEnvio').innerText = costoEnvio.toFixed(2);
+    
+    // --- CAMBIO AQUÍ: toFixed(0) quita los centavos (.00) ---
+    if (document.getElementById('txtCostoEnvio')) document.getElementById('txtCostoEnvio').innerText = costoEnvio.toFixed(0);
     if (document.getElementById('txtTotalPagar')) document.getElementById('txtTotalPagar').innerText = total.toFixed(2);
 
     // --- CORRECCIÓN DE REGLA DE 7 KM EN EL BOTÓN ---
