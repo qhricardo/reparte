@@ -781,7 +781,12 @@ input:focus, textarea:focus {
 
     function mostrarBarraUsuario() {
         const barra = document.getElementById('barraUsuario');
-        const label = document.getElementById('labelUsuario');
+        const nombreUsuario = user.user_metadata?.full_name 
+                      || user.user_metadata?.name 
+                      || user.displayName 
+                      || user.email; // Si por alguna razón no tiene nombre, muestra el correo como respaldo
+        document.getElementById('labelUsuario').textContent = nombreUsuario;
+        
         const login = document.getElementById('pantallaLogin');
 
         if (barra) barra.classList.remove('oculto');
