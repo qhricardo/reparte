@@ -604,8 +604,11 @@
                 <tbody>
                     ${peds.map(p => {
                         let repMostrar = 'Sin asignar';
-                        if (p.repartidor_nombre) repMostrar = p.repartidor_nombre;
-                        else if (p.repartidor_id) repMostrar = p.repartidor_id === user?.id ? user.email : 'Asignado';
+                        if (p.repartidor_nombre) {
+                            repMostrar = p.repartidor_nombre;
+                        } else if (p.repartidor_id) {
+                            repMostrar = p.repartidor_id === user?.id ? user.email.split('@')[0] : 'Repartidor Asignado';
+                        }
 
                         return `
                         <tr style="border-bottom:1px solid #ddd;">
@@ -717,8 +720,7 @@
                         if (p.repartidor_nombre) {
                             repMostrar = p.repartidor_nombre;
                         } else if (p.repartidor_id) {
-                            // Si solo tiene el UUID (pedido viejo) limpia la vista o muestra que está asignado
-                            repMostrar = p.repartidor_id === user?.id ? user.email : 'Asignado (ID Antiguo)';
+                            repMostrar = p.repartidor_id === user?.id ? user.email.split('@')[0] : 'Repartidor Asignado';
                         }
 
                         return `
