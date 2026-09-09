@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reparte Ixtlahuaca - Acceso Google con Repartidores</title>
+    <title>Reparte Ixtlahuaca - Sistema Repartidores</title>
 
     <!-- Librerías Externas -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <!-- CSS en una sola línea -->
+    <!-- CSS -->
     <style>:root{--p:#27ae60;--d:#e74c3c;--w:#f39c12;--r:#e67e22;--dark:#2c3e50;}body{font-family:sans-serif;margin:0;padding:10px;background:#f4f6f7;}.card{background:#fff;padding:15px;border-radius:8px;margin-bottom:15px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}.oculto{display:none!important;}.btn{padding:8px 14px;border:none;border-radius:5px;font-weight:bold;cursor:pointer;margin:2px;}.btn-p{background:var(--p);color:#fff;}.btn-d{background:var(--d);color:#fff;}.btn-w{background:var(--w);color:#fff;}.btn-r{background:var(--r);color:#fff;}.btn-s{background:#7f8c8d;color:#fff;}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}.tarjeta{border:1px solid #ddd;padding:10px;border-radius:6px;text-align:center;background:#fff;}.tarjeta img{width:100%;height:120px;object-fit:cover;border-radius:4px;}#mapaComercio,#mapaEntrega,#mapaRutaRepartidor{height:250px;width:100%;border-radius:6px;margin:8px 0;}.modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;}.modal-content{background:#fff;padding:20px;border-radius:8px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;}#barraCarrito{position:fixed;bottom:15px;left:15px;right:15px;max-width:500px;margin:auto;background:var(--dark);color:#fff;padding:10px 20px;border-radius:25px;display:flex;justify-content:space-between;align-items:center;z-index:999;}.badge{padding:3px 7px;border-radius:10px;color:#fff;font-size:11px;font-weight:bold;}.st-revision_admin{background:#8e44ad;}.st-pendiente{background:var(--w);}.st-preparado{background:#3498db;}.st-despachado{background:var(--r);}.st-en_camino{background:#2980b9;}.st-entregado{background:var(--p);}.st-cancelado{background:var(--d);}table{width:100%;border-collapse:collapse;font-size:12px;}th,td{border:1px solid #ddd;padding:6px;text-align:left;}</style>
 </head>
 <body>
@@ -24,16 +24,17 @@
         <button class="btn btn-d" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
 
-    <!-- ACCESO ÚNICO CON CORREO Y CONTRASEÑA -->
-    <div id="pLogin" class="card" style="max-width: 350px; margin: 40px auto; text-align:center; padding: 25px;">
+    <!-- ACCESO CON REGISTRO DE NOMBRE -->
+    <div id="pLogin" class="card" style="max-width: 380px; margin: 40px auto; text-align:center; padding: 25px;">
         <h2>🛒 Reparte Ixtlahuaca</h2>
-        <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Ingresa con tus credenciales</p>
+        <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Ingresa tus datos de acceso</p>
         
         <form onsubmit="loginEmail(event)">
+            <input type="text" id="txtNombreReg" placeholder="Nombre completo (Solo para registro)" style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
             <input type="email" id="txtEmail" placeholder="Correo electrónico" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
             <input type="password" id="txtPassword" placeholder="Contraseña" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
             <br>
-            <button type="submit" class="btn btn-p" style="width: 95%; margin-top: 15px; padding: 10px; font-size: 14px;">Entrar</button>
+            <button type="submit" class="btn btn-p" style="width: 95%; margin-top: 15px; padding: 10px; font-size: 14px;">Iniciar Sesión</button>
             <button type="button" class="btn btn-s" onclick="registrarEmail()" style="width: 95%; margin-top: 8px; padding: 8px; font-size: 12px;">Crear Cuenta Nueva</button>
         </form>
     </div>
@@ -91,7 +92,7 @@
         </div>
     </div>
 
-    <!-- PANTALLA REPARTIDOR RADAR DE PEDIDOS -->
+    <!-- PANTALLA REPARTIDOR -->
     <div id="pRepartidor" class="oculto">
         <div class="card" style="border-left:5px solid var(--r); display:flex; justify-content:space-between; align-items:center;">
             <div>
@@ -185,7 +186,7 @@
         }
     });
 
-    // --- AUTENTICACIÓN EMAIL / CONTRASEÑA ---
+    // --- AUTENTICACIÓN MEJORADA CON REGISTRO DE NOMBRE ---
     async function loginEmail(e) {
         e.preventDefault();
         const email = document.getElementById('txtEmail').value;
@@ -202,20 +203,25 @@
     }
 
     async function registrarEmail() {
+        const nombre = document.getElementById('txtNombreReg').value;
         const email = document.getElementById('txtEmail').value;
         const password = document.getElementById('txtPassword').value;
 
-        if (!email || !password) return alert("Por favor ingresa un correo y contraseña para registrarte.");
+        if (!nombre.trim()) return alert("Por favor ingresa tu Nombre Completo en el primer campo para poder registrarte.");
+        if (!email || !password) return alert("Ingresa un correo y contraseña válidos.");
 
         const { data, error } = await supabaseClient.auth.signUp({
             email: email,
-            password: password
+            password: password,
+            options: {
+                data: { full_name: nombre } // Guardar nombre explícito en Supabase Metadata
+            }
         });
 
         if (error) {
             alert("Error en el registro: " + error.message);
         } else {
-            alert("Registro exitoso. Si tienes verificación de correo activa en Supabase, revisa tu bandeja de entrada.");
+            alert("¡Registro exitoso! Ya puedes iniciar sesión.");
         }
     }
 
@@ -228,7 +234,8 @@
 
     function actUserBar() {
         show('barraUsuario');
-        document.getElementById('lblUser').innerText = user.email;
+        const nombre = user.user_metadata?.full_name || user.email;
+        document.getElementById('lblUser').innerText = nombre;
     }
 
     async function evalRol() {
@@ -381,8 +388,8 @@
                 return;
             }
 
-            const dirInput = document.getElementById('chkDir') || document.getElementById('direccionEscrita');
-            const telInput = document.getElementById('chkTel') || document.getElementById('telefonoCliente');
+            const dirInput = document.getElementById('chkDir');
+            const telInput = document.getElementById('chkTel');
 
             const dir = dirInput ? dirInput.value : '';
             const tel = telInput ? telInput.value : '';
@@ -392,19 +399,20 @@
             const btn = document.getElementById('btnConfirmar');
             if (btn) btn.disabled = true;
 
-            const sub = carrito.reduce((a, i) => a + (i.precio * (i.cant || i.cantidad || 1)), 0);
+            const sub = carrito.reduce((a, i) => a + (i.precio * (i.cant || 1)), 0);
             const env = parseFloat(document.getElementById('txtEnv').innerText) || 0;
             const tot = sub + env;
             const cCom = getCoordsCom();
 
             const est = tot > 500 ? 'revision_admin' : 'pendiente';
+            const nomCliente = user?.user_metadata?.full_name || (user?.email ? user.email.split('@')[0] : 'Cliente');
 
             const payload = {
-                cliente_nombre: user ? (user.user_metadata?.full_name || user.email.split('@')[0]) : 'Cliente',
+                cliente_nombre: nomCliente,
                 cliente_email: user ? user.email : '',
                 telefono_cliente: tel,
                 direccion_entrega: `${dir} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
-                producto_nombre: carrito.map(i => `${i.cant || i.cantidad || 1}x ${i.nombre}`).join(', '),
+                producto_nombre: carrito.map(i => `${i.cant || 1}x ${i.nombre}`).join(', '),
                 subtotal: sub,
                 costo_envio: env,
                 precio: tot,
@@ -436,13 +444,13 @@
             }
         } catch (err) {
             console.error("Error inesperado al enviar el pedido:", err);
-            alert("Ocurrió un error inesperado al procesar el pedido.");
+            alert("Ocurrió un error inesperado.");
             const btn = document.getElementById('btnConfirmar');
             if (btn) btn.disabled = false;
         }
     }
 
-    // --- MÓDULO DE REPARTIDOR ---
+    // --- MÓDULO REPARTIDOR CON CAPTURA OBLIGATORIA DE NOMBRE ---
     function activarModoRepartidor() {
         ocultar();
         show('pRepartidor');
@@ -498,24 +506,34 @@
         `).join('') : '<p>No hay pedidos pendientes por entregar en este momento.</p>';
     }
 
-    // FUNCIÓN DE TOMAR PEDIDO MEJORADA
+    // TOMAR PEDIDO REFORZADO CON PROMPT DE RESPALDO
     async function tomarPedido(pedidoId) {
         if (pedidoActivoId) return alert("Ya tienes un pedido activo en ruta.");
 
-        // Garantiza que siempre exista un nombre usable incluso si inició con correo simple
-        const nombreRepartidor = user.user_metadata?.full_name || 
-                                 user.user_metadata?.name || 
-                                 (user.email ? user.email.split('@')[0] : 'Repartidor');
+        let nombreRepartidor = user.user_metadata?.full_name || user.user_metadata?.name;
 
-        const { error } = await supabaseClient.from('pedidos').update({
+        // Si el usuario no tiene nombre registrado en metadata ni correo claro, se lo pedimos directamente
+        if (!nombreRepartidor || nombreRepartidor.trim() === '') {
+            const defaultNom = user.email ? user.email.split('@')[0] : 'Repartidor';
+            nombreRepartidor = prompt("Por favor ingresa tu Nombre Completo para tomar la entrega:", defaultNom);
+            
+            if (!nombreRepartidor || !nombreRepartidor.trim()) {
+                return alert("Es obligatorio ingresar tu nombre para poder tomar el pedido.");
+            }
+        }
+
+        const { data, error } = await supabaseClient.from('pedidos').update({
             repartidor_id: user.id,
             repartidor_nombre: nombreRepartidor,
             estado: 'en_camino'
-        }).eq('id', pedidoId);
+        }).eq('id', pedidoId).select();
 
         if (error) {
-            alert("No se pudo tomar el pedido: " + error.message);
+            alert("Error de Supabase al tomar pedido: " + error.message);
+        } else if (!data || data.length === 0) {
+            alert("⚠️ Atención: Tu política de seguridad RLS en Supabase impidió actualizar el pedido. Revisa que las políticas UPDATE en la tabla 'pedidos' admitan repartidores.");
         } else {
+            alert("¡Pedido tomado con éxito!");
             cargarRadarRepartidor();
         }
     }
@@ -576,7 +594,7 @@
         if (!contenedor) return;
 
         contenedor.innerHTML = (peds && peds.length) ? `
-            <table style="width:100%; border-collapse:collapse;">
+            <table>
                 <thead>
                     <tr style="background:#eee; text-align:left;">
                         <th>Fecha</th>
@@ -589,19 +607,13 @@
                 </thead>
                 <tbody>
                     ${peds.map(p => {
-                        let repMostrar = 'Sin asignar';
-                        if (p.repartidor_nombre && p.repartidor_nombre.trim() !== '') {
-                            repMostrar = p.repartidor_nombre;
-                        } else if (p.repartidor_id) {
-                            repMostrar = (p.repartidor_id === user?.id) ? user.email.split('@')[0] : 'Repartidor Asignado';
-                        }
-
+                        const repMostrar = p.repartidor_nombre || (p.repartidor_id ? 'Asignado (Sin nombre registrado)' : 'Sin asignar');
                         return `
                         <tr style="border-bottom:1px solid #ddd;">
                             <td>${p.created_at ? new Date(p.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</td>
                             <td><b>${p.cliente_nombre}</b></td>
                             <td>${p.producto_nombre || 'Sin detalle'}</td>
-                            <td><b>${repMostrar}</b></td>
+                            <td><b style="color:var(--r);">${repMostrar}</b></td>
                             <td>$${Number(p.precio).toFixed(2)}</td>
                             <td>
                                 <span class="badge st-${p.estado}">${p.estado}</span><br>
@@ -687,7 +699,7 @@
         if (!contenedor) return;
 
         contenedor.innerHTML = (peds && peds.length) ? `
-            <table style="width:100%; border-collapse:collapse;">
+            <table>
                 <thead>
                     <tr style="background:#eee; text-align:left;">
                         <th>Fecha / Hora</th>
@@ -702,13 +714,7 @@
                 </thead>
                 <tbody>
                     ${peds.map(p => {
-                        let repMostrar = 'Sin asignar';
-                        if (p.repartidor_nombre && p.repartidor_nombre.trim() !== '') {
-                            repMostrar = p.repartidor_nombre;
-                        } else if (p.repartidor_id) {
-                            repMostrar = (p.repartidor_id === user?.id) ? user.email.split('@')[0] : 'Repartidor Asignado';
-                        }
-
+                        const repMostrar = p.repartidor_nombre || (p.repartidor_id ? 'Asignado (Sin nombre)' : 'Sin asignar');
                         return `
                         <tr style="border-bottom:1px solid #ddd;">
                             <td>${p.created_at ? new Date(p.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</td>
@@ -716,7 +722,7 @@
                             <td>${p.comercio_nombre}</td>
                             <td>${p.producto_nombre || 'Sin detalle'}</td>
                             <td>${p.direccion_entrega || 'Sin dirección'}</td>
-                            <td><b>${repMostrar}</b></td>
+                            <td><b style="color:var(--r);">${repMostrar}</b></td>
                             <td>$${Number(p.precio).toFixed(2)}</td>
                             <td><span class="badge st-${p.estado}">${p.estado}</span></td>
                         </tr>
