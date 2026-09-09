@@ -262,26 +262,34 @@
         
         const telefonoCliente = pedido.telefono_cliente || pedido.telefono || pedido.cliente_telefono || 'Sin teléfono';
 
-        card.innerHTML = `
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-            <span style="font-size:12px; color:#64748b; font-weight:bold;">🕒 ${horaPedido}</span>
-            <span class="badge badge-${estadoBadge}">${estadoBadge.replace('_', ' ')}</span>
-          </div>
+       // Obtiene el subtotal a pagar al comercio (respalda si viene como subtotal o si no existe)
+const subtotalComercio = pedido.subtotal !== undefined 
+  ? parseFloat(pedido.subtotal).toFixed(2) 
+  : (pedido.precio !== undefined ? parseFloat(pedido.precio).toFixed(2) : '0.00');
 
-          <div class="comercio-box">
-            <h4 style="margin:0 0 4px 0;">🏪 ${comercioInfo.nombre || pedido.comercio_nombre || 'Comercio'}</h4>
-            <p style="margin:2px 0; font-size:13px;"><strong>📍 Recoger en:</strong> ${comercioInfo.direccion || 'Dirección no especificada'}</p>
-            <p style="margin:2px 0; font-size:13px;"><strong>📞 Tel. Comercio:</strong> ${comercioInfo.telefono || 'Sin teléfono'}</p>
-          </div>
+card.innerHTML = `
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+    <span style="font-size:12px; color:#64748b; font-weight:bold;">🕒 ${horaPedido}</span>
+    <span class="badge badge-${estadoBadge}">${estadoBadge.replace('_', ' ')}</span>
+  </div>
 
-          <p style="margin: 6px 0;"><strong>📦 Producto:</strong> ${pedido.producto_nombre || 'Producto sin nombre'}</p>
-          <p style="margin: 4px 0;"><strong>👤 Cliente:</strong> ${nombreCliente}</p>
-          <p style="margin: 4px 0;"><strong>🏠 Dirección de entrega:</strong> ${pedido.direccion_entrega || 'Sin dirección'}</p>
-          <p style="margin: 4px 0;"><strong>📱 Tel. Cliente:</strong> <a href="tel:${telefonoCliente}" style="color:var(--primary); font-weight:bold;">${telefonoCliente}</a></p>
-          <p style="margin: 6px 0; font-size: 15px; color: var(--success);"><strong>💵 Precio:</strong> $${pedido.precio || '0.00'}</p>
+  <div class="comercio-box">
+    <h4 style="margin:0 0 4px 0;">🏪 ${comercioInfo.nombre || pedido.comercio_nombre || 'Comercio'}</h4>
+    <p style="margin:2px 0; font-size:13px;"><strong>📍 Recoger en:</strong> ${comercioInfo.direccion || 'Dirección no especificada'}</p>
+    <p style="margin:2px 0; font-size:13px;"><strong>📞 Tel. Comercio:</strong> ${comercioInfo.telefono || 'Sin teléfono'}</p>
+    <p style="margin:6px 0 0 0; font-size:14px; color:#d97706; font-weight:bold;">
+      💰 Pagar en Comercio: $${subtotalComercio} <small style="font-weight:normal; font-size:11px; color:#64748b;">(Subtotal sin envío)</small>
+    </p>
+  </div>
 
-          ${botonAccion}
-        `;
+  <p style="margin: 6px 0;"><strong>📦 Producto:</strong> ${pedido.producto_nombre || 'Producto sin nombre'}</p>
+  <p style="margin: 4px 0;"><strong>👤 Cliente:</strong> ${nombreCliente}</p>
+  <p style="margin: 4px 0;"><strong>🏠 Dirección de entrega:</strong> ${pedido.direccion_entrega || 'Sin dirección'}</p>
+  <p style="margin: 4px 0;"><strong>📱 Tel. Cliente:</strong> <a href="tel:${telefonoCliente}" style="color:var(--primary); font-weight:bold;">${telefonoCliente}</a></p>
+  <p style="margin: 6px 0; font-size: 15px; color: var(--success);"><strong>💵 Total a cobrar al cliente:</strong> $${pedido.precio || '0.00'}</p>
+
+  ${botonAccion}
+`;
         contenedor.appendChild(card);
       });
     }
