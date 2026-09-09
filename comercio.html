@@ -779,20 +779,32 @@ input:focus, textarea:focus {
         }
     });
 
-    function mostrarBarraUsuario() {
-        const barra = document.getElementById('barraUsuario');
-        const nombreUsuario = user.user_metadata?.full_name 
-                      || user.user_metadata?.name 
-                      || user.displayName 
-                      || user.email; // Si por alguna razón no tiene nombre, muestra el correo como respaldo
-        document.getElementById('labelUsuario').textContent = nombreUsuario;
-        
-        const login = document.getElementById('pantallaLogin');
+  function mostrarBarraUsuario() {
+    const barra = document.getElementById('barraUsuario');
+    const label = document.getElementById('labelUsuario');
+    const login = document.getElementById('pantallaLogin');
 
-        if (barra) barra.classList.remove('oculto');
-        if (label) label.innerText = usuarioActual.email;
-        if (login) login.classList.add('oculto');
+    // Usa el objeto de usuario activo (se adapta si usas 'usuarioActual' o 'user')
+    const usr = typeof usuarioActual !== 'undefined' ? usuarioActual : user;
+
+    if (usr) {
+        // 1. Obtiene el nombre completo o email de respaldo
+        const nombreCompleto = usr.user_metadata?.full_name 
+                            || usr.user_metadata?.name 
+                            || usr.displayName 
+                            || usr.email 
+                            || '';
+
+        // 2. Extrae solo el primer nombre (o la primera parte antes del espacio)
+        const primerNombre = nombreCompleto.split(' ')[0];
+
+        // 3. Asigna únicamente el primer nombre a la etiqueta HTML
+        if (label) label.textContent = primerNombre;
     }
+
+    if (barra) barra.classList.remove('oculto');
+    if (login) login.classList.add('oculto');
+}
 
     async function verificarSiEsDuenio() {
         const { data } = await supabaseClient
