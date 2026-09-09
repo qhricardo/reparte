@@ -474,7 +474,6 @@
     }
 
     async function cargarRadarRepartidor() {
-        // Verificar si este repartidor ya tiene un pedido asignado en camino
         const { data: act } = await supabaseClient.from('pedidos')
             .select('*')
             .eq('repartidor_id', user.id)
@@ -497,7 +496,6 @@
             document.getElementById('seccionPedidoActivo').classList.add('oculto');
         }
 
-        // Obtener pedidos despachados por comercios disponibles para ser tomados
         const { data: peds } = await supabaseClient.from('pedidos')
             .select('*')
             .eq('estado', 'despachado')
@@ -520,6 +518,7 @@
     async function tomarPedido(pedidoId) {
         if (pedidoActivoId) return alert("Ya tienes un pedido activo en ruta.");
 
+        // Obtener nombre o correo público desde user_metadata o email
         const nombreRepartidor = user.user_metadata?.full_name || user.user_metadata?.name || user.email;
 
         const { error } = await supabaseClient.from('pedidos').update({
@@ -603,12 +602,17 @@
                     </tr>
                 </thead>
                 <tbody>
-                    ${peds.map(p => `
+                    ${peds.map(p => {
+                        let repMostrar = 'Sin asignar';
+                        if (p.repartidor_nombre) repMostrar = p.repartidor_nombre;
+                        else if (p.repartidor_id) repMostrar = p.repartidor_id === user?.id ? user.email : 'Asignado';
+
+                        return `
                         <tr style="border-bottom:1px solid #ddd;">
                             <td>${p.created_at ? new Date(p.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</td>
                             <td><b>${p.cliente_nombre}</b></td>
                             <td>${p.producto_nombre || 'Sin detalle'}</td>
-                            <td>${p.repartidor_nombre || p.repartidor_id || 'Sin asignar'}</td>
+                            <td>${repMostrar}</td>
                             <td>$${Number(p.precio).toFixed(2)}</td>
                             <td>
                                 <span class="badge st-${p.estado}">${p.estado}</span><br>
@@ -616,7 +620,7 @@
                                 ${p.estado === 'preparado' ? `<button class="btn btn-w" onclick="setEstado('${p.id}','despachado')">📦 Despachar</button>` : ''}
                             </td>
                         </tr>
-                    `).join('')}
+                    `}).join('')}
                 </tbody>
             </table>
         ` : '<p>Sin pedidos pendientes</p>';
@@ -708,18 +712,27 @@
                     </tr>
                 </thead>
                 <tbody>
-                    ${peds.map(p => `
+                    ${peds.map(p => {
+                        let repMostrar = 'Sin asignar';
+                        if (p.repartidor_nombre) {
+                            repMostrar = p.repartidor_nombre;
+                        } else if (p.repartidor_id) {
+                            // Si solo tiene el UUID (pedido viejo) limpia la vista o muestra que está asignado
+                            repMostrar = p.repartidor_id === user?.id ? user.email : 'Asignado (ID Antiguo)';
+                        }
+
+                        return `
                         <tr style="border-bottom:1px solid #ddd;">
                             <td>${p.created_at ? new Date(p.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</td>
                             <td>${p.cliente_nombre}</td>
                             <td>${p.comercio_nombre}</td>
                             <td>${p.producto_nombre || 'Sin detalle'}</td>
                             <td>${p.direccion_entrega || 'Sin dirección'}</td>
-                            <td>${p.repartidor_nombre || p.repartidor_id || 'Sin asignar'}</td>
+                            <td><b>${repMostrar}</b></td>
                             <td>$${Number(p.precio).toFixed(2)}</td>
                             <td><span class="badge st-${p.estado}">${p.estado}</span></td>
                         </tr>
-                    `).join('')}
+                    `}).join('')}
                 </tbody>
             </table>
         ` : '<p>Sin registros globales de pedidos.</p>';
