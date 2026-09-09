@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reparte Ixtlahuaca - Sistema Completo con Repartidores</title>
+    <title>Reparte Ixtlahuaca - Acceso Google con Repartidores</title>
 
     <!-- Librerías Externas -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -24,26 +24,26 @@
         <button class="btn btn-d" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
 
-    <!-- ACCESO ÚNICO CON CORREO Y CONTRASEÑA -->
-    <div id="pLogin" class="card" style="max-width: 350px; margin: 40px auto; text-align:center; padding: 25px;">
-        <h2>🛒 Reparte Ixtlahuaca</h2>
-        <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Ingresa con tus credenciales</p>
-        
-        <form onsubmit="loginEmail(event)">
-            <input type="email" id="txtEmail" placeholder="Correo electrónico" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="password" id="txtPassword" placeholder="Contraseña" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
-            <br>
-            <button type="submit" class="btn btn-p" style="width: 95%; margin-top: 15px; padding: 10px; font-size: 14px;">Entrar</button>
-            <button type="button" class="btn btn-s" onclick="registrarEmail()" style="width: 95%; margin-top: 8px; padding: 8px; font-size: 12px;">Crear Cuenta Nueva</button>
-        </form>
-    </div>
+   <!-- ACCESO ÚNICO CON CORREO Y CONTRASEÑA -->
+<div id="pLogin" class="card" style="max-width: 350px; margin: 40px auto; text-align:center; padding: 25px;">
+    <h2>🛒 Reparte Ixtlahuaca</h2>
+    <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Ingresa con tus credenciales</p>
+    
+    <form onsubmit="loginEmail(event)">
+        <input type="email" id="txtEmail" placeholder="Correo electrónico" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+        <input type="password" id="txtPassword" placeholder="Contraseña" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+        <br>
+        <button type="submit" class="btn btn-p" style="width: 95%; margin-top: 15px; padding: 10px; font-size: 14px;">Entrar</button>
+        <button type="button" class="btn btn-s" onclick="registrarEmail()" style="width: 95%; margin-top: 8px; padding: 8px; font-size: 12px;">Crear Cuenta Nueva</button>
+    </form>
+</div>
 
-    <!-- PANTALLAS CLIENTE -->
+    <!-- PANTALLAS DEL SISTEMA -->
     <div id="pClienteComercios" class="oculto">
         <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
             <h3>Comercios Disponibles</h3>
             <div>
-                <button class="btn btn-r" onclick="activarModoRepartidor()">🛵 Panel Repartidor</button>
+                <button class="btn btn-r" onclick="activarModoRepartidor()">🛵 Modo Repartidor</button>
                 <button class="btn btn-p" onclick="mostrarRegComercio()">+ Registrar Mi Comercio</button>
             </div>
         </div>
@@ -71,7 +71,6 @@
         </form>
     </div>
 
-    <!-- PANTALLA DUEÑO DE COMERCIO -->
     <div id="pDuenio" class="oculto">
         <div class="card">
             <h2 id="duenioNom"></h2>
@@ -96,13 +95,13 @@
     <div id="pRepartidor" class="oculto">
         <div class="card" style="border-left:5px solid var(--r); display:flex; justify-content:space-between; align-items:center;">
             <div>
-                <h3 style="margin:0;">🛵 Radar de Pedidos (Repartidor)</h3>
-                <small>Toma pedidos disponibles y conéctalos con la entrega</small>
+                <h3 style="margin:0;">🛵 Radar de Repartidor</h3>
+                <small>Toma pedidos despachados por los comercios</small>
             </div>
-            <button class="btn btn-s" onclick="evalRol()">← Salir de Modo Repartidor</button>
+            <button class="btn btn-s" onclick="evalRol()">← Volver</button>
         </div>
 
-        <!-- Pedido Activo en Trabajo -->
+        <!-- Pedido Activo Asignado -->
         <div id="seccionPedidoActivo" class="card oculto" style="border:2px solid var(--p);">
             <h3 style="color:var(--p); margin-top:0;">📦 Tu Pedido Activo</h3>
             <div id="detallePedidoActivo"></div>
@@ -114,12 +113,11 @@
 
         <!-- Lista de Pedidos Despachados Disponibles -->
         <div class="card">
-            <h3>Disponibles para Entrega</h3>
+            <h3>Pedidos Disponibles para Entrega</h3>
             <div id="listaPedidosRepartidor"></div>
         </div>
     </div>
 
-    <!-- PANTALLA ADMINISTRADOR CENTRAL -->
     <div id="pAdmin" class="oculto">
         <div class="card" style="border-left:5px solid #8e44ad;">
             <h3>🛡️ Panel Administrador Central</h3>
@@ -139,7 +137,6 @@
         </div>
     </div>
 
-    <!-- CARRITO DE COMPRAS Y MODAL CHECKOUT -->
     <div id="barraCarrito" class="oculto">
         <div>
             <span id="cantCar" class="badge" style="background:var(--d);">0</span>
@@ -162,7 +159,7 @@
         </div>
     </div>
 
-<script>
+ <script>
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
     const EMAIL_ADMIN = "q.h.ricardoarturo@gmail.com";
@@ -199,7 +196,9 @@
             password: password
         });
 
-        if (error) alert("Error al iniciar sesión: " + error.message);
+        if (error) {
+            alert("Error al iniciar sesión: " + error.message);
+        }
     }
 
     async function registrarEmail() {
@@ -213,8 +212,26 @@
             password: password
         });
 
-        if (error) alert("Error en el registro: " + error.message);
-        else alert("Registro exitoso.");
+        if (error) {
+            alert("Error en el registro: " + error.message);
+        } else {
+            alert("Registro exitoso. Si tienes verificación de correo activa en Supabase, revisa tu bandeja de entrada.");
+        }
+    }
+
+    async function recuperarPassword() {
+        const email = document.getElementById('txtEmail').value;
+        if (!email) return alert("Ingresa tu correo para enviarte el enlace de recuperación.");
+
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.href
+        });
+
+        if (error) {
+            alert("Error al enviar el correo: " + error.message);
+        } else {
+            alert("Se ha enviado un enlace a tu correo para restablecer la contraseña.");
+        }
     }
 
     async function cerrarSesion() {
@@ -251,7 +268,7 @@
         }
     }
 
-    // --- CLIENTE Y COMERCIOS ---
+    // --- MÓDULOS DE COMERCIO Y PEDIDOS ---
     async function cargarComercios() {
         ocultar();
         show('pClienteComercios');
@@ -357,6 +374,7 @@
         document.getElementById('txtEnv').innerText = env.toFixed(2);
         document.getElementById('txtTot').innerText = tot.toFixed(2);
 
+        // Bloqueo visual por distancia > 7km
         const btnConfirmar = document.getElementById('btnConfirmar');
         if (btnConfirmar) {
             if (dist > 7) {
@@ -374,21 +392,28 @@
     async function procesarPedido() {
         try {
             const dist = parseFloat(document.getElementById('txtDist').innerText) || 0;
-            if (dist > 7) return alert(`ERROR: La distancia excede el límite de 7 km.`);
+            if (dist > 7) {
+                alert(`ERROR: La distancia de entrega (${dist.toFixed(2)} km) excede el límite de 7 km.`);
+                return;
+            }
 
-            const dir = document.getElementById('chkDir').value;
-            const tel = document.getElementById('chkTel').value;
+            const dirInput = document.getElementById('chkDir') || document.getElementById('direccionEscrita');
+            const telInput = document.getElementById('chkTel') || document.getElementById('telefonoCliente');
 
-            if (!dir.trim() || !tel.trim()) return alert("Ingresa dirección y teléfono.");
+            const dir = dirInput ? dirInput.value : '';
+            const tel = telInput ? telInput.value : '';
+
+            if (!dir.trim() || !tel.trim()) return alert("Por favor ingresa la dirección y teléfono de contacto.");
 
             const btn = document.getElementById('btnConfirmar');
             if (btn) btn.disabled = true;
 
-            const sub = carrito.reduce((a, i) => a + (i.precio * i.cant), 0);
+            const sub = carrito.reduce((a, i) => a + (i.precio * (i.cant || i.cantidad || 1)), 0);
             const env = parseFloat(document.getElementById('txtEnv').innerText) || 0;
             const tot = sub + env;
             const cCom = getCoordsCom();
 
+            // Si el total supera 500 entra como 'revision_admin', de lo contrario 'pendiente'
             const est = tot > 500 ? 'revision_admin' : 'pendiente';
 
             const payload = {
@@ -396,12 +421,13 @@
                 cliente_email: user ? user.email : '',
                 telefono_cliente: tel,
                 direccion_entrega: `${dir} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
-                producto_nombre: carrito.map(i => `${i.cant}x ${i.nombre}`).join(', '),
+                producto_nombre: carrito.map(i => `${i.cant || i.cantidad || 1}x ${i.nombre}`).join(', '),
                 subtotal: sub,
                 costo_envio: env,
                 precio: tot,
                 comercio_id: comercioSel ? comercioSel.id : null,
                 comercio_nombre: comercioSel ? comercioSel.nombre : 'Comercio',
+                repartidor_id: null,
                 lat_origen: cCom.lat,
                 lng_origen: cCom.lng,
                 lat_destino: coordsEntrega.lat,
@@ -415,14 +441,20 @@
             if (error) {
                 alert("Error al procesar pedido: " + error.message);
             } else {
-                alert(tot > 500 ? "⚠️ Pedido enviado al Administrador por superar los $500." : "¡Pedido registrado!");
+                if (tot > 500) {
+                    alert("⚠️ Su pedido supera los $500 y ha sido enviado al Administrador para su aprobación.");
+                } else {
+                    alert("¡Pedido registrado exitosamente!");
+                }
                 carrito = [];
                 actCar();
                 cerrarCheckout();
             }
         } catch (err) {
-            alert("Error al procesar pedido.");
-            if (document.getElementById('btnConfirmar')) document.getElementById('btnConfirmar').disabled = false;
+            console.error("Error inesperado al enviar el pedido:", err);
+            alert("Ocurrió un error inesperado al procesar el pedido.");
+            const btn = document.getElementById('btnConfirmar');
+            if (btn) btn.disabled = false;
         }
     }
 
@@ -433,7 +465,6 @@
         document.getElementById('lblRol').innerText = 'REPARTIDOR';
         cargarRadarRepartidor();
 
-        // Canal de tiempo real para nuevos pedidos despachados
         supabaseClient.channel('live_repartidor')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
                 cargarRadarRepartidor();
@@ -442,7 +473,7 @@
     }
 
     async function cargarRadarRepartidor() {
-        // Verificar si el repartidor ya tiene un pedido asignado en camino
+        // Verificar si este repartidor ya tiene un pedido asignado en camino
         const { data: act } = await supabaseClient.from('pedidos')
             .select('*')
             .eq('repartidor_id', user.id)
@@ -464,7 +495,7 @@
             document.getElementById('seccionPedidoActivo').classList.add('oculto');
         }
 
-        // Listar pedidos 'despachados' esperando repartidor
+        // Obtener pedidos despachados por comercios disponibles para ser tomados
         const { data: peds } = await supabaseClient.from('pedidos')
             .select('*')
             .eq('estado', 'despachado')
@@ -474,7 +505,7 @@
             <div style="background:#fff; border:1px solid #ddd; padding:10px; margin-bottom:8px; border-radius:6px; border-left:4px solid var(--r);">
                 <b>Comercio:</b> ${p.comercio_nombre}<br>
                 <b>Cliente:</b> ${p.cliente_nombre}<br>
-                <b>Dirección:</b> ${p.direccion_entrega}<br>
+                <b>Dirección de Entrega:</b> ${p.direccion_entrega}<br>
                 <b>Pago Envío:</b> $${Number(p.costo_envio || 25).toFixed(2)} | <b>Total Pedido:</b> $${Number(p.precio).toFixed(2)}<br>
                 <button class="btn btn-r" style="margin-top:6px;" onclick="tomarPedido('${p.id}')" ${act ? 'disabled style="opacity:0.5;"' : ''}>
                     ${act ? 'Ya tienes un pedido activo' : '🛵 Tomar este Pedido'}
@@ -488,12 +519,14 @@
 
         const { error } = await supabaseClient.from('pedidos').update({
             repartidor_id: user.id,
-            repartidor_email: user.email,
             estado: 'en_camino'
         }).eq('id', pedidoId);
 
-        if (error) alert("No se pudo tomar el pedido: " + error.message);
-        else cargarRadarRepartidor();
+        if (error) {
+            alert("No se pudo tomar el pedido: " + error.message);
+        } else {
+            cargarRadarRepartidor();
+        }
     }
 
     async function marcarEntregado() {
@@ -539,7 +572,7 @@
         }, 300);
     }
 
-    // --- PANELES DUEÑO Y ADMIN ---
+    // --- PANELES DE ADMINISTRACIÓN Y DUEÑO ---
     function cargarDuenio() {
         document.getElementById('duenioNom').innerText = miComercio.nombre;
         cargarPedidosDuenio();
@@ -552,9 +585,9 @@
             <div style="background:#f8f9fa; padding:8px; margin-bottom:6px; border-left:3px solid var(--p);">
                 <span class="badge st-${p.estado}">${p.estado}</span> <b>${p.cliente_nombre}</b> ($${Number(p.precio).toFixed(2)})<br>
                 <small>${p.producto_nombre}</small><br>
-                ${p.repartidor_email ? `<small>🛵 Repartidor: ${p.repartidor_email}</small><br>` : ''}
+                ${p.repartidor_id ? `<small>🛵 Repartidor ID: ${p.repartidor_id}</small><br>` : ''}
                 ${p.estado === 'pendiente' ? `<button class="btn btn-p" onclick="setEstado('${p.id}','preparado')">👨‍🍳 Aceptar</button>` : ''}
-                ${p.estado === 'preparado' ? `<button class="btn btn-w" onclick="setEstado('${p.id}','despachado')">📦 Despachar a Repartidor</button>` : ''}
+                ${p.estado === 'preparado' ? `<button class="btn btn-w" onclick="setEstado('${p.id}','despachado')">📦 Despachar</button>` : ''}
             </div>
         `).join('') : '<p>Sin pedidos pendientes</p>';
     }
@@ -569,8 +602,17 @@
         cargarTablaAdmin();
         cargarMetricasAdmin();
         
+        // Escucha Realtime mejorada para notificaciones en tiempo real al administrador
         supabaseClient.channel('live_admin')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
+                if (payload.new && payload.new.estado === 'revision_admin') {
+                    alert(`🚨 ¡NUEVA ALERTA! Se ha recibido un pedido de $${Number(payload.new.precio).toFixed(2)} pesos que requiere tu aprobación.`);
+                }
+                cargarRevAdmin(); 
+                cargarTablaAdmin(); 
+                cargarMetricasAdmin();
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedidos' }, () => {
                 cargarRevAdmin(); 
                 cargarTablaAdmin(); 
                 cargarMetricasAdmin();
@@ -582,25 +624,39 @@
         const contenedor = document.getElementById('listaAdminRevision');
         if (!contenedor) return;
 
-        const { data: peds } = await supabaseClient.from('pedidos').select('*').eq('estado', 'revision_admin').order('created_at', { ascending: false });
+        const { data: peds, error } = await supabaseClient.from('pedidos').select('*').eq('estado', 'revision_admin').order('created_at', { ascending: false });
+
+        if (error) {
+            contenedor.innerHTML = '<p>Error al obtener revisiones.</p>';
+            return;
+        }
 
         contenedor.innerHTML = (peds && peds.length) ? peds.map(p => `
             <div style="border:1px solid #e74c3c; background:#fff5f5; padding:10px; margin-bottom:8px; border-radius:6px;">
                 <h4 style="margin:0 0 5px 0; color:#c0392b;">⚠️ Pedido > $500 ($${Number(p.precio).toFixed(2)})</h4>
                 <b>Comercio:</b> ${p.comercio_nombre}<br>
                 <b>Cliente:</b> ${p.cliente_nombre} (${p.cliente_email})<br>
+                <b>Teléfono:</b> ${p.telefono_cliente || 'No provisto'}<br>
                 <b>Productos:</b> ${p.producto_nombre}<br>
+                <b>Dirección:</b> ${p.direccion_entrega}<br>
                 <div style="margin-top:8px;">
-                    <button class="btn btn-p" onclick="decidirAdmin('${p.id}','pendiente')">✅ Aceptar</button>
-                    <button class="btn btn-d" onclick="decidirAdmin('${p.id}','cancelado')">❌ Cancelar</button>
+                    <button class="btn btn-p" onclick="decidirAdmin('${p.id}','pendiente')">✅ Aceptar (Liberar al Comercio)</button>
+                    <button class="btn btn-d" style="background:#e74c3c;" onclick="decidirAdmin('${p.id}','cancelado')">❌ Cancelar</button>
                 </div>
             </div>
         `).join('') : '<p>Sin pedidos retenidos para revisión.</p>';
     }
 
     async function decidirAdmin(id, est) {
-        await supabaseClient.from('pedidos').update({ estado: est }).eq('id', id);
-        cargarAdmin();
+        const accion = est === 'pendiente' ? 'Aceptar y liberar al comercio' : 'Cancelar';
+        if (!confirm(`¿Deseas ${accion} este pedido?`)) return;
+
+        const { error } = await supabaseClient.from('pedidos').update({ estado: est }).eq('id', id);
+        if (error) {
+            alert("Error al actualizar el pedido: " + error.message);
+        } else {
+            cargarAdmin();
+        }
     }
 
     async function cargarTablaAdmin() {
@@ -609,31 +665,33 @@
         if (!contenedor) return;
 
         contenedor.innerHTML = (peds && peds.length) ? `
-            <table>
+            <table style="width:100%; border-collapse:collapse;">
                 <thead>
-                    <tr style="background:#eee;">
-                        <th>Fecha</th>
+                    <tr style="background:#eee; text-align:left;">
+                        <th>Fecha / Hora</th>
                         <th>Cliente</th>
                         <th>Comercio</th>
-                        <th>Repartidor</th>
+                        <th>Dirección de Entrega</th>
+                        <th>Repartidor ID</th>
                         <th>Total</th>
                         <th>Estado</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${peds.map(p => `
-                        <tr>
+                        <tr style="border-bottom:1px solid #ddd;">
                             <td>${p.created_at ? new Date(p.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</td>
                             <td>${p.cliente_nombre}</td>
                             <td>${p.comercio_nombre}</td>
-                            <td>${p.repartidor_email || 'Por asignar'}</td>
+                            <td>${p.direccion_entrega || 'Sin dirección'}</td>
+                            <td>${p.repartidor_id || 'Sin asignar'}</td>
                             <td>$${Number(p.precio).toFixed(2)}</td>
                             <td><span class="badge st-${p.estado}">${p.estado}</span></td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
-        ` : '<p>Sin registros globales.</p>';
+        ` : '<p>Sin registros globales de pedidos.</p>';
     }
 
     async function cargarMetricasAdmin() {
