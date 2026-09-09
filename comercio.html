@@ -515,13 +515,29 @@
         </form>
     </div>
 
-    <!-- 5. PANEL DE CONTROL DEL DUEÑO -->
-    <div id="pantallaDuenio" class="oculto">
-        <div class="card">
-            <h2 id="nombreComercioDuenio">Mi Comercio</h2>
-            <p id="infoComercioDuenio" style="color: #666;"></p>
-            <button class="btn btn-danger" style="margin-top: 10px;" onclick="eliminarMiComercio()">🗑️ Eliminar mi Comercio</button>
+   <!-- 5. PANEL DE CONTROL DEL DUEÑO -->
+<div id="pantallaDuenio" class="oculto">
+    <div class="card">
+        <!-- Foto / Logo del Comercio subida al registrar -->
+        <div style="text-align: center; margin-bottom: 16px;">
+            <img id="imgComercioDuenio" src="" alt="Logo del Comercio" 
+                 style="width: 100%; max-height: 220px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0; display: none;">
+            
+            <!-- Botón para actualizar/reemplazar la foto registrada -->
+            <div style="margin-top: 10px;">
+                <label class="btn btn-modo" style="cursor: pointer; display: inline-block; padding: 6px 12px; font-size: 13px;">
+                    📷 Cambiar Foto del Comercio
+                    <input type="file" id="inputCambiarLogoDuenio" accept="image/*" style="display: none;" onchange="actualizarFotoComercio(event)">
+                </label>
+            </div>
         </div>
+
+        <h2 id="nombreComercioDuenio" style="margin-top: 0;">Mi Comercio</h2>
+        <p id="infoComercioDuenio" style="color: #666;"></p>
+        
+        <button class="btn btn-danger" style="margin-top: 10px;" onclick="eliminarMiComercio()">🗑️ Eliminar mi Comercio</button>
+    </div>
+</div>
 
         <div class="card">
             <h3>+ Cargar Nuevo Producto</h3>
@@ -1146,6 +1162,74 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
     }
 });
 
+
+function mostrarPanelDuenio(comercio) {
+    // 1. Llenar textos informativos
+    document.getElementById('nombreComercioDuenio').innerText = comercio.nombre;
+    document.getElementById('infoComercioDuenio').innerText = `${comercio.direccion || ''} | Tel: ${comercio.telefono || ''}`;
+
+    // 2. Mostrar la foto subida en el registro
+    const imgElem = document.getElementById('imgComercioDuenio');
+    
+    // NOTA: Ajusta 'comercio.logo_url' o 'comercio.imagen_url' al nombre exacto de la columna en tu BD
+    const urlFoto = comercio.logo_url || comercio.imagen_url || comercio.logo; 
+
+    if (urlFoto) {
+        imgElem.src = urlFoto;
+        imgElem.style.display = 'block';
+    } else {
+        imgElem.style.display = 'none';
+    }
+}
+
+    async function actualizarFotoComercio(event) {
+    const file = event.target.files[0];
+    if (!file || !miComercioActual) return;
+
+    try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `logo_${miComercioActual.id}_${Date.now()}.${fileExt}`;
+        const filePath = `comercios/${fileName}`;
+
+        // 1. Subir nueva foto al bucket de Supabase
+        const { error: uploadError } = await supabaseClient
+            .storage
+            .from('comercios')
+            .upload(filePath, file, { upsert: true });
+
+        if (uploadError) throw uploadError;
+
+        // 2. Obtener URL pública
+        const { data: urlData } = supabaseClient
+            .storage
+            .from('comercios')
+            .getPublicUrl(filePath);
+
+        const nuevaUrl = urlData.publicUrl;
+
+        // 3. Actualizar la URL en la base de datos (ajusta el campo si tu columna se llama logo_url o imagen_url)
+        const { error: updateError } = await supabaseClient
+            .from('comercios')
+            .update({ logo_url: nuevaUrl }) // o 'imagen_url'
+            .eq('id', miComercioActual.id);
+
+        if (updateError) throw updateError;
+
+        // 4. Actualizar en pantalla
+        miComercioActual.logo_url = nuevaUrl;
+        const imgElem = document.getElementById('imgComercioDuenio');
+        imgElem.src = nuevaUrl;
+        imgElem.style.display = 'block';
+
+        alert("¡Foto del comercio actualizada correctamente!");
+
+    } catch (err) {
+        console.error("Error al actualizar la foto:", err);
+        alert("Error al actualizar la imagen: " + err.message);
+    }
+}
+
+    
  // CARRITO Y CHECKOUT
 function agregarAlCarrito(id, nombre, precio) {
     const existente = carrito.find(item => item.id === id);
