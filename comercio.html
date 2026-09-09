@@ -1293,13 +1293,31 @@ function abrirModalCheckout() {
 // NUEVAS FUNCIONES PARA CONTROLAR CANTIDADES
 function actualizarResumenCarrito() {
     const contenedorResumen = document.getElementById('resumenItemsCarrito');
+    const btnConfirmar = document.getElementById('btnConfirmarPedido'); // ID de tu botón de enviar pedido
+    
     if (!contenedorResumen) return;
 
+    // Si el carrito está vacío:
     if (!carrito || carrito.length === 0) {
-        contenedorResumen.innerHTML = '<p style="text-align:center; color:#6B7280; padding:10px;">El carrito está vacío</p>';
+        contenedorResumen.innerHTML = '<p style="text-align:center; color:#DC2626; padding:12px; font-weight:600;">⚠️ El carrito está vacío. Agrega productos para continuar.</p>';
+        
+        // Bloquea el botón de enviar
+        if (btnConfirmar) {
+            btnConfirmar.disabled = true;
+            btnConfirmar.style.opacity = '0.5';
+            btnConfirmar.style.cursor = 'not-allowed';
+        }
+
         actualizarBarraCarrito();
         if (typeof recalcularTotales === 'function') recalcularTotales();
         return;
+    }
+
+    // Si el carrito SÍ tiene productos: habilita el botón
+    if (btnConfirmar) {
+        btnConfirmar.disabled = false;
+        btnConfirmar.style.opacity = '1';
+        btnConfirmar.style.cursor = 'pointer';
     }
 
     contenedorResumen.innerHTML = carrito.map((item, index) => `
