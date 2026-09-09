@@ -90,7 +90,7 @@
       await supabaseClient.auth.signOut();
     };
 
-   window.tomarPedido = async function(pedidoId) {
+  window.tomarPedido = async function(pedidoId) {
   const { data: activos } = await supabaseClient
     .from('pedidos')
     .select('id')
@@ -102,19 +102,29 @@
     return;
   }
 
-  // Obtener nombre del repartidor desde los metadatos de Google / Supabase Auth
-  const nombreRepartidor = currentUser.user_metadata?.full_name || 
-                           currentUser.user_metadata?.name || 
-                           currentUser.email?.split('@')[0] || 
-                           'Repartidor';
+  // Extraer el nombre probando múltiples propiedades posibles de Supabase Auth / Google OAuth
+  let nombreRepartidor = 
+    currentUser.user_metadata?.full_name || 
+    currentUser.user_metadata?.name || 
+    currentUser.user_metadata?.custom_claims?.name;
+
+  // Si Google no entregó ningún nombre en metadata, extraemos el nombre desde el correo
+  if (!nombreRepartidor && currentUser.email) {
+    const usuarioCorreo = currentUser.email.split('@')[0];
+    nombreRepartidor = usuarioCorreo.charAt(0).toUpperCase() + usuarioCorreo.slice(1);
+  }
+
+  // Valor por defecto por si tampoco hay correo
+  if (!nombreRepartidor) {
+    nombreRepartidor = 'Repartidor';
+  }
 
   const { error } = await supabaseClient
     .from('pedidos')
     .update({
       estado: 'en_camino',
       repartidor_id: currentUser.id,
-      repartidor_nombre: nombreRepartidor, // <- Guardamos el nombre en el pedido
-      nombre_repartidor: nombreRepartidor  // <- Guardamos en ambas variantes por compatibilidad de esquema
+      repartidor_nombre: nombreRepartidor // O 'nombre_repartidor' según el nombre exacto de la columna en tu BD
     })
     .eq('id', pedidoId);
 
