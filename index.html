@@ -24,19 +24,19 @@
         <button class="btn btn-d" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
 
-   <!-- ACCESO ÚNICO CON CORREO Y CONTRASEÑA -->
-<div id="pLogin" class="card" style="max-width: 350px; margin: 40px auto; text-align:center; padding: 25px;">
-    <h2>🛒 Reparte Ixtlahuaca</h2>
-    <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Ingresa con tus credenciales</p>
-    
-    <form onsubmit="loginEmail(event)">
-        <input type="email" id="txtEmail" placeholder="Correo electrónico" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
-        <input type="password" id="txtPassword" placeholder="Contraseña" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
-        <br>
-        <button type="submit" class="btn btn-p" style="width: 95%; margin-top: 15px; padding: 10px; font-size: 14px;">Entrar</button>
-        <button type="button" class="btn btn-s" onclick="registrarEmail()" style="width: 95%; margin-top: 8px; padding: 8px; font-size: 12px;">Crear Cuenta Nueva</button>
-    </form>
-</div>
+    <!-- ACCESO ÚNICO CON CORREO Y CONTRASEÑA -->
+    <div id="pLogin" class="card" style="max-width: 350px; margin: 40px auto; text-align:center; padding: 25px;">
+        <h2>🛒 Reparte Ixtlahuaca</h2>
+        <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Ingresa con tus credenciales</p>
+        
+        <form onsubmit="loginEmail(event)">
+            <input type="email" id="txtEmail" placeholder="Correo electrónico" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="password" id="txtPassword" placeholder="Contraseña" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <br>
+            <button type="submit" class="btn btn-p" style="width: 95%; margin-top: 15px; padding: 10px; font-size: 14px;">Entrar</button>
+            <button type="button" class="btn btn-s" onclick="registrarEmail()" style="width: 95%; margin-top: 8px; padding: 8px; font-size: 12px;">Crear Cuenta Nueva</button>
+        </form>
+    </div>
 
     <!-- PANTALLAS DEL SISTEMA -->
     <div id="pClienteComercios" class="oculto">
@@ -159,7 +159,7 @@
         </div>
     </div>
 
- <script>
+<script>
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
     const EMAIL_ADMIN = "q.h.ricardoarturo@gmail.com";
@@ -216,21 +216,6 @@
             alert("Error en el registro: " + error.message);
         } else {
             alert("Registro exitoso. Si tienes verificación de correo activa en Supabase, revisa tu bandeja de entrada.");
-        }
-    }
-
-    async function recuperarPassword() {
-        const email = document.getElementById('txtEmail').value;
-        if (!email) return alert("Ingresa tu correo para enviarte el enlace de recuperación.");
-
-        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-            redirectTo: window.location.href
-        });
-
-        if (error) {
-            alert("Error al enviar el correo: " + error.message);
-        } else {
-            alert("Se ha enviado un enlace a tu correo para restablecer la contraseña.");
         }
     }
 
@@ -374,7 +359,6 @@
         document.getElementById('txtEnv').innerText = env.toFixed(2);
         document.getElementById('txtTot').innerText = tot.toFixed(2);
 
-        // Bloqueo visual por distancia > 7km
         const btnConfirmar = document.getElementById('btnConfirmar');
         if (btnConfirmar) {
             if (dist > 7) {
@@ -413,7 +397,6 @@
             const tot = sub + env;
             const cCom = getCoordsCom();
 
-            // Si el total supera 500 entra como 'revision_admin', de lo contrario 'pendiente'
             const est = tot > 500 ? 'revision_admin' : 'pendiente';
 
             const payload = {
@@ -515,11 +498,14 @@
         `).join('') : '<p>No hay pedidos pendientes por entregar en este momento.</p>';
     }
 
+    // FUNCIÓN DE TOMAR PEDIDO MEJORADA
     async function tomarPedido(pedidoId) {
         if (pedidoActivoId) return alert("Ya tienes un pedido activo en ruta.");
 
-        // Obtener nombre o correo público desde user_metadata o email
-        const nombreRepartidor = user.user_metadata?.full_name || user.user_metadata?.name || user.email;
+        // Garantiza que siempre exista un nombre usable incluso si inició con correo simple
+        const nombreRepartidor = user.user_metadata?.full_name || 
+                                 user.user_metadata?.name || 
+                                 (user.email ? user.email.split('@')[0] : 'Repartidor');
 
         const { error } = await supabaseClient.from('pedidos').update({
             repartidor_id: user.id,
@@ -604,10 +590,10 @@
                 <tbody>
                     ${peds.map(p => {
                         let repMostrar = 'Sin asignar';
-                        if (p.repartidor_nombre) {
+                        if (p.repartidor_nombre && p.repartidor_nombre.trim() !== '') {
                             repMostrar = p.repartidor_nombre;
                         } else if (p.repartidor_id) {
-                            repMostrar = p.repartidor_id === user?.id ? user.email.split('@')[0] : 'Repartidor Asignado';
+                            repMostrar = (p.repartidor_id === user?.id) ? user.email.split('@')[0] : 'Repartidor Asignado';
                         }
 
                         return `
@@ -615,7 +601,7 @@
                             <td>${p.created_at ? new Date(p.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</td>
                             <td><b>${p.cliente_nombre}</b></td>
                             <td>${p.producto_nombre || 'Sin detalle'}</td>
-                            <td>${repMostrar}</td>
+                            <td><b>${repMostrar}</b></td>
                             <td>$${Number(p.precio).toFixed(2)}</td>
                             <td>
                                 <span class="badge st-${p.estado}">${p.estado}</span><br>
@@ -717,10 +703,10 @@
                 <tbody>
                     ${peds.map(p => {
                         let repMostrar = 'Sin asignar';
-                        if (p.repartidor_nombre) {
+                        if (p.repartidor_nombre && p.repartidor_nombre.trim() !== '') {
                             repMostrar = p.repartidor_nombre;
                         } else if (p.repartidor_id) {
-                            repMostrar = p.repartidor_id === user?.id ? user.email.split('@')[0] : 'Repartidor Asignado';
+                            repMostrar = (p.repartidor_id === user?.id) ? user.email.split('@')[0] : 'Repartidor Asignado';
                         }
 
                         return `
