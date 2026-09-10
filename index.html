@@ -266,6 +266,67 @@
         }
     }
 
+
+    // Cargar solicitudes pendientes en el panel admin
+async function cargarSolicitudesComerciosAdmin() {
+    const contenedor = document.getElementById('listaSolicitudesComercios');
+    if (!contenedor) return;
+
+    const { data: solicitudes, error } = await supabaseClient
+        .from('comercios')
+        .select('*')
+        .eq('estado', 'pendiente');
+
+    if (error || !solicitudes || solicitudes.length === 0) {
+        contenedor.innerHTML = "<p>No hay solicitudes pendientes de comercios.</p>";
+        return;
+    }
+
+    contenedor.innerHTML = "";
+
+    solicitudes.forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.style.marginBottom = '12px';
+        card.innerHTML = `
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <img src="${c.logo_url || DEFAULT_LOGO_SVG}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;">
+                <div style="flex: 1;">
+                    <h4 style="margin: 0;">${c.nombre}</h4>
+                    <p style="font-size: 12px; color: #666; margin: 2px 0;"><b>Tel:</b> ${c.telefono}</p>
+                    <p style="font-size: 12px; color: #666; margin: 2px 0;"><b>Ubicación:</b> ${c.direccion}</p>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 10px;">
+                <button class="btn btn-secundario" style="flex:1;" onclick="verProductosComercio(${JSON.stringify(c).replace(/"/g, '&quot;')})">🔍 Visitar Productos</button>
+                <button class="btn btn-modo" style="flex:1; background:#2E6A38;" onclick="responderSolicitudComercio('${c.id}', 'aprobado')">✅ Aceptar</button>
+                <button class="btn btn-danger" style="flex:1;" onclick="responderSolicitudComercio('${c.id}', 'rechazado')">❌ Rechazar</button>
+            </div>
+        `;
+        contenedor.appendChild(card);
+    });
+}
+
+// Lógica de aprobación o rechazo
+window.responderSolicitudComercio = async function(idComercio, nuevoEstado) {
+    try {
+        const { error } = await supabaseClient
+            .from('comercios')
+            .update({ estado: nuevoEstado })
+            .eq('id', idComercio);
+
+        if (error) throw error;
+
+        alert(`Comercio ${nuevoEstado === 'aprobado' ? 'aprobado' : 'rechazado'} con éxito.`);
+        cargarSolicitudesComerciosAdmin(); // Recargar la lista
+    } catch (err) {
+        console.error("Error al responder solicitud:", err);
+        alert("Ocurrió un error al actualizar la solicitud.");
+    }
+};
+
+
+    
     // --- MÓDULOS DE COMERCIO Y PEDIDOS ---
     async function cargarComercios() {
         ocultar();
