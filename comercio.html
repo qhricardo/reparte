@@ -573,11 +573,13 @@ input:focus, textarea:focus {
 
     <!-- 5. PANEL DE CONTROL DEL DUEÑO -->
     <div id="pantallaDuenio" class="oculto">
-        <div class="card">
-            <h2 id="nombreComercioDuenio">Mi Comercio</h2>
-            <p id="infoComercioDuenio" style="color: #666;"></p>
-            <button class="btn btn-danger" style="margin-top: 10px;" onclick="eliminarMiComercio()">🗑️ Eliminar mi Comercio</button>
-        </div>
+     <div class="card" style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+    <!-- IMAGEN DEL COMERCIO -->
+    <img id="imgComercioDuenio" src="" alt="Logo Comercio" style="width: 100px; height: 100px; object-fit: cover; border-radius: 12px; margin-bottom: 12px; border: 1px solid #E5E7EB;">
+    <h2 id="nombreComercioDuenio">Mi Comercio</h2>
+    <p id="infoComercioDuenio" style="color: #666;"></p>
+    <button class="btn btn-danger" style="margin-top: 10px;" onclick="eliminarMiComercio()">🗑️ Eliminar mi Comercio</button>
+</div>
 
         <div class="card">
             <h3>+ Cargar Nuevo Producto</h3>
