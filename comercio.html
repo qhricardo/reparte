@@ -862,34 +862,27 @@ input:focus, textarea:focus {
             });
     }
 
-  async function cargarComerciosCliente() {
-    try {
-        ocultarTodasLasPantallas();
-        const pantalla = document.getElementById('pantallaClienteComercios');
-        if (pantalla) pantalla.classList.remove('oculto');
+ async function cargarComerciosCliente() {
+        try {
+            ocultarTodasLasPantallas();
+            const pantalla = document.getElementById('pantallaClienteComercios');
+            if (pantalla) pantalla.classList.remove('oculto');
 
-        // VERIFICACIÓN DE HORARIO CIERRE (9:00 PM)
-        const bannerAlerta = document.getElementById('alertaHorarioCierre');
-        if (bannerAlerta) {
-            if (!esHorarioPermitidoPedidos()) {
-                bannerAlerta.classList.remove('oculto');
-            } else {
-                bannerAlerta.classList.add('oculto');
+            // VERIFICACIÓN DE HORARIO CIERRE (9:00 PM)
+            const bannerAlerta = document.getElementById('alertaHorarioCierre');
+            if (bannerAlerta) {
+                if (!esHorarioPermitidoPedidos()) {
+                    bannerAlerta.classList.remove('oculto');
+                } else {
+                    bannerAlerta.classList.add('oculto');
+                }
             }
-        }
 
-        const btnIrCrear = document.getElementById('btnIrCrearComercio');
-        if (btnIrCrear) {
-            if (typeof miComercio !== 'undefined' && miComercio) btnIrCrear.classList.add('oculto');
-            else btnIrCrear.classList.remove('oculto');
-        }
-
-        // ... resto de tu lógica para consultar y renderizar los comercios desde la base de datos ...
-
-    } catch (error) {
-        console.error("Error al cargar comercios para cliente:", error);
-    }
-}
+            const btnIrCrear = document.getElementById('btnIrCrearComercio');
+            if (btnIrCrear) {
+                if (typeof miComercio !== 'undefined' && miComercio) btnIrCrear.classList.add('oculto');
+                else btnIrCrear.classList.remove('oculto');
+            }
 
             // 1. CARGAR PEDIDOS ACTIVOS DEL CLIENTE
             await renderizarPedidosCliente();
