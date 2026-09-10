@@ -609,20 +609,22 @@ input:focus, textarea:focus {
         </form>
     </div>
 
-    <!-- 5. PANEL DE CONTROL DEL DUEÑO -->
+   <!-- 5. PANEL DE CONTROL DEL DUEÑO -->
     <div id="pantallaDuenio" class="oculto">
-     <div class="card" style="display: flex; flex-direction: column; align-items: center; text-align: center;">
-    <!-- IMAGEN DEL COMERCIO -->
-    <img id="imgComercioDuenio" src="" alt="Logo Comercio" style="width: 100px; height: 100px; object-fit: cover; border-radius: 12px; margin-bottom: 12px; border: 1px solid #E5E7EB;">
-    <h2 id="nombreComercioDuenio">Mi Comercio</h2>
-    <p id="infoComercioDuenio" style="color: #666;"></p>
-    <button class="btn btn-danger" style="margin-top: 10px;" onclick="eliminarMiComercio()">🗑️ Eliminar mi Comercio</button>
-        <div style="margin-top: 15px;">
-    <button type="button" id="btnEstadoComercio" class="btn" style="width: 100%; font-weight: bold;" onclick="toggleEstadoComercio()">
-        ABRIR/CERRAR
-    </button>
-</div>
-</div>
+        <div class="card" style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+            <!-- IMAGEN DEL COMERCIO -->
+            <img id="imgComercioDuenio" src="" alt="Logo Comercio" style="width: 100px; height: 100px; object-fit: cover; border-radius: 12px; margin-bottom: 12px; border: 1px solid #E5E7EB;">
+            <h2 id="nombreComercioDuenio">Mi Comercio</h2>
+            <p id="infoComercioDuenio" style="color: #666;"></p>
+            
+            <div style="margin-top: 15px; width: 100%;">
+                <button type="button" id="btnEstadoComercio" class="btn" style="width: 100%; font-weight: bold;" onclick="toggleEstadoComercio()">
+                    ABRIR/CERRAR
+                </button>
+            </div>
+            
+            <button class="btn btn-danger" style="margin-top: 10px;" onclick="eliminarMiComercio()">🗑️ Eliminar mi Comercio</button>
+        </div>
 
         <div class="card">
             <h3>+ Cargar Nuevo Producto</h3>
@@ -643,20 +645,19 @@ input:focus, textarea:focus {
             </form>
         </div>
 
-
-      <div class="card">
+        <div class="card">
             <h3>Mis Productos Publicados</h3>
             <div id="listaProductosDuenio" class="grid-productos"></div>
         </div>
-    </div>
-        
+
+        <!-- PEDIDOS RECIBIDOS: AHORA DENTRO DE PANTALLA DUEÑO -->
         <div class="card">
             <h3>🔔 Pedidos Recibidos en Tiempo Real</h3>
             <div id="listaPedidosRecibidos">
                 <p style="color:#7f8c8d;">Esperando nuevos pedidos...</p>
             </div>
         </div>
-
+    </div> <!-- FIN DE PANTALLA DUEÑO -->
 </div> <!-- FIN DEL CONTENEDOR PRINCIPAL -->
 
 <!-- BARRA FLOTANTE CARRITO -->
