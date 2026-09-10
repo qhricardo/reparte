@@ -617,6 +617,11 @@ input:focus, textarea:focus {
     <h2 id="nombreComercioDuenio">Mi Comercio</h2>
     <p id="infoComercioDuenio" style="color: #666;"></p>
     <button class="btn btn-danger" style="margin-top: 10px;" onclick="eliminarMiComercio()">🗑️ Eliminar mi Comercio</button>
+        <div style="margin-top: 15px;">
+    <button type="button" id="btnEstadoComercio" class="btn" style="width: 100%; font-weight: bold;" onclick="toggleEstadoComercio()">
+        Cargando estado...
+    </button>
+</div>
 </div>
 
         <div class="card">
@@ -2029,6 +2034,53 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+// Actualiza la apariencia del botón según el estado del comercio
+function actualizarBotonEstadoComercio(estaAbierto) {
+    const btn = document.getElementById('btnEstadoComercio');
+    if (!btn) return;
+
+    if (estaAbierto) {
+        btn.innerText = '🟢 Comercio Abierto (Hacer clic para Cerrar)';
+        btn.style.background = '#2E6A38'; // Verde
+        btn.style.color = '#FFFFFF';
+    } else {
+        btn.innerText = '🔴 Comercio Cerrado (Hacer clic para Abrir)';
+        btn.style.background = '#DC2626'; // Rojo
+        btn.style.color = '#FFFFFF';
+    }
+}
+    
+
+// Función para cambiar el estado en Supabase y en memoria
+window.toggleEstadoComercio = async function() {
+    if (!miComercio || !miComercio.id) return;
+
+    const nuevoEstado = !(miComercio.abierto !== false);
+
+    // Actualización visual inmediata y local
+    miComercio.abierto = nuevoEstado;
+    actualizarBotonEstadoComercio(nuevoEstado);
+
+    try {
+        const { error } = await supabaseClient
+            .from('comercios')
+            .update({ abierto: nuevoEstado })
+            .eq('id', miComercio.id);
+
+        if (error) {
+            console.error("Error al cambiar estado del comercio:", error);
+            alert("No se pudo actualizar el estado en la base de datos.");
+        }
+    } catch (err) {
+        console.error("Error de red:", err);
+    }
+};
+
+// Asegúrate de llamar a esta función cuando cargues los datos del dueño
+// Ejemplo: actualizarBotonEstadoComercio(miComercio.abierto !== false);
+
+    
 
     // Formulario Editar Producto
     const formEditarProducto = document.getElementById('formEditarProducto');
