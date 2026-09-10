@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <style>
+<style>
     :root {
     /* Paleta Profesional & Gastronómica - Ixtlahuaca Premium */
     --color-principal: #8C2D19;      /* Terracota refinado y sobrio */
@@ -116,7 +116,7 @@ body {
 .btn-secundario { background: #F3F4F6; color: #374151; border: 1px solid var(--color-borde); }
 .btn-secundario:hover { background: #E5E7EB; }
 
-.btn-modo { background: var(--color-secundario); color: white; margin-right: 8px; }
+.btn-modo { background: var(--color-secundario); color: white; }
 .btn-modo:hover { background: #23522B; }
 
 /* Formularios */
@@ -218,17 +218,38 @@ input:focus, textarea:focus {
     margin: 6px 0; 
 }
 
-/* Encabezado del Usuario */
+/* Encabezado del Usuario (Adaptado para móvil) */
 .encabezado-usuario { 
     display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
+    flex-direction: column;
+    gap: 12px;
     background: var(--color-tarjeta); 
     padding: 16px 20px; 
     border-radius: var(--radio-borde); 
     margin-bottom: 20px; 
     box-shadow: var(--sombra-suave);
     border-left: 5px solid var(--color-principal);
+}
+
+.info-usuario-móvil {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.acciones-usuario {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+.acciones-usuario .btn {
+    flex: 1;
+    white-space: nowrap;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin: 0;
 }
 
 /* Barra Inferior Carrito (Estilo App Móvil) */
@@ -465,6 +486,23 @@ input:focus, textarea:focus {
     .grid-comercios { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
     .grid-productos { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
     
+    .encabezado-usuario {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .info-usuario-móvil {
+        width: auto;
+    }
+    .acciones-usuario {
+        width: auto;
+    }
+    .acciones-usuario .btn {
+        flex: initial;
+        padding: 12px 20px;
+        font-size: 14px;
+    }
+
     .modal { 
         align-items: center; 
     }
@@ -496,11 +534,11 @@ input:focus, textarea:focus {
 
     <!-- BARRA SUPERIOR DE USUARIO -->
     <div id="barraUsuario" class="encabezado-usuario oculto">
-        <div>
+        <div class="info-usuario-móvil">
             <span id="labelUsuario" style="font-weight: bold;"></span>
             <span id="badgeRol" style="font-size: 12px; background: #e0e0e0; padding: 3px 8px; border-radius: 10px; margin-left: 5px;"></span>
         </div>
-        <div>
+        <div class="acciones-usuario">
             <button id="btnCambiarModo" class="btn btn-modo oculto">🛒 Modo Comprador</button>
             <button id="btnCerrarSesion" class="btn btn-danger">Cerrar Sesión</button>
         </div>
