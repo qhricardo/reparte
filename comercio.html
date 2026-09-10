@@ -985,62 +985,73 @@ input:focus, textarea:focus {
         }
     }
 
-    async function verProductosComercio(comercioObj) {
-        try {
-            if (!comercioSeleccionadoObjeto || comercioSeleccionadoObjeto.id !== comercioObj.id) {
-                carrito = [];
-                if (typeof actualizarBarraCarrito === 'function') actualizarBarraCarrito();
-            }
-            comercioSeleccionadoObjeto = comercioObj;
-
-            ocultarTodasLasPantallas();
-            const pantallaProds = document.getElementById('pantallaClienteProductos');
-            if (pantallaProds) pantallaProds.classList.remove('oculto');
-
-            const titulo = document.getElementById('tituloComercioSeleccionado');
-            if (titulo) titulo.innerText = `Productos de ${comercioObj.nombre || 'Comercio'}`;
-
-            const { data: productos, error } = await supabaseClient
-                .from('productos')
-                .select('*')
-                .eq('comercio_id', comercioObj.id);
-
-            if (error) console.error("Error al obtener productos:", error);
-
-            const lista = document.getElementById('listaProductosCliente');
-            if (!lista) return;
-
-            lista.innerHTML = "";
-
-            if (!productos || productos.length === 0) {
-                lista.innerHTML = "<p>Este comercio no tiene productos disponibles por el momento.</p>";
-                return;
-            }
-
-            productos.forEach(p => {
-                const card = document.createElement('div');
-                card.className = 'tarjeta-producto';
-
-                const precioNum = Number(p.precio || p.costo || 0);
-                const imagenProd = p.imagen || p.imagen_url || DEFAULT_PROD_SVG;
-                const nombreProd = p.nombre || 'Producto';
-                const descProd = p.descripcion || '';
-
-                card.innerHTML = `
-                    <img src="${imagenProd}" alt="${nombreProd}" style="width:100%; height:140px; object-fit:cover; border-radius:6px;">
-                    <div class="info-producto" style="padding:8px 0;">
-                        <h4 style="margin:5px 0;">${nombreProd}</h4>
-                        <p style="font-size: 13px; color: #666; margin:4px 0;">${descProd}</p>
-                        <div class="precio" style="font-weight:bold; font-size:16px; color:#2c3e50; margin:6px 0;">$${precioNum.toFixed(2)}</div>
-                        <button class="btn btn-primary" style="width:100%; padding:8px; cursor:pointer;" onclick="agregarAlCarrito('${p.id}', '${nombreProd.replace(/'/g, "\\'")}', ${precioNum})">+ Agregar a Carrito</button>
-                    </div>
-                `;
-                lista.appendChild(card);
-            });
-        } catch (err) {
-            console.error("Error en verProductosComercio:", err);
+   async function verProductosComercio(comercioObj) {
+    try {
+        if (!comercioSeleccionadoObjeto || comercioSeleccionadoObjeto.id !== comercioObj.id) {
+            carrito = [];
+            if (typeof actualizarBarraCarrito === 'function') actualizarBarraCarrito();
         }
+        comercioSeleccionadoObjeto = comercioObj;
+
+        ocultarTodasLasPantallas();
+        const pantallaProds = document.getElementById('pantallaClienteProductos');
+        if (pantallaProds) pantallaProds.classList.remove('oculto');
+
+        const titulo = document.getElementById('tituloComercioSeleccionado');
+        if (titulo) titulo.innerText = `Productos de ${comercioObj.nombre || 'Comercio'}`;
+
+        const { data: productos, error } = await supabaseClient
+            .from('productos')
+            .select('*')
+            .eq('comercio_id', comercioObj.id);
+
+        if (error) console.error("Error al obtener productos:", error);
+
+        const lista = document.getElementById('listaProductosCliente');
+        if (!lista) return;
+
+        lista.innerHTML = "";
+
+        if (!productos || productos.length === 0) {
+            lista.innerHTML = "<p>Este comercio no tiene productos disponibles por el momento.</p>";
+            return;
+        }
+
+        productos.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'tarjeta-producto';
+
+            const precioNum = Number(p.precio || p.costo || 0);
+            const imagenProd = p.imagen || p.imagen_url || DEFAULT_PROD_SVG;
+            const nombreProd = p.nombre || 'Producto';
+            const descProd = p.descripcion || '';
+            
+            // Validar estado de disponibilidad
+            const estaDisponible = p.disponible !== false;
+
+            card.innerHTML = `
+                <img src="${imagenProd}" alt="${nombreProd}" style="width:100%; height:140px; object-fit:cover; border-radius:6px; ${!estaDisponible ? 'filter: grayscale(100%); opacity: 0.5;' : ''}">
+                <div class="info-producto" style="padding:8px 0;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                        <h4 style="margin:5px 0;">${nombreProd}</h4>
+                        ${!estaDisponible ? '<span style="font-size:10px; background:#e5e7eb; color:#6b7280; padding:2px 6px; border-radius:4px; font-weight:bold;">AGOTADO</span>' : ''}
+                    </div>
+                    <p style="font-size: 13px; color: #666; margin:4px 0;">${descProd}</p>
+                    <div class="precio" style="font-weight:bold; font-size:16px; color:#2c3e50; margin:6px 0;">$${precioNum.toFixed(2)}</div>
+                    
+                    ${estaDisponible ? `
+                        <button class="btn btn-primary" style="width:100%; padding:8px; cursor:pointer;" onclick="agregarAlCarrito('${p.id}', '${nombreProd.replace(/'/g, "\\'")}', ${precioNum})">+ Agregar a Carrito</button>
+                    ` : `
+                        <button class="btn" style="width:100%; padding:8px; background:#E5E7EB; color:#9CA3AF; cursor:not-allowed;" disabled>🚫 Agotado</button>
+                    `}
+                </div>
+            `;
+            lista.appendChild(card);
+        });
+    } catch (err) {
+        console.error("Error en verProductosComercio:", err);
     }
+}
 
   async function renderizarPedidosCliente() {
         if (!usuarioActual) return;
