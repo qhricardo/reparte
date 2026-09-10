@@ -11,7 +11,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <!-- CSS -->
-    <style>:root{--p:#27ae60;--d:#e74c3c;--w:#f39c12;--r:#e67e22;--dark:#2c3e50;}body{font-family:sans-serif;margin:0;padding:10px;background:#f4f6f7;}.card{background:#fff;padding:15px;border-radius:8px;margin-bottom:15px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}.oculto{display:none!important;}.btn{padding:8px 14px;border:none;border-radius:5px;font-weight:bold;cursor:pointer;margin:2px;}.btn-p{background:var(--p);color:#fff;}.btn-d{background:var(--d);color:#fff;}.btn-w{background:var(--w);color:#fff;}.btn-r{background:var(--r);color:#fff;}.btn-s{background:#7f8c8d;color:#fff;}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}.tarjeta{border:1px solid #ddd;padding:10px;border-radius:6px;text-align:center;background:#fff;}.tarjeta img{width:100%;height:120px;object-fit:cover;border-radius:4px;}#mapaComercio,#mapaEntrega,#mapaRutaRepartidor{height:250px;width:100%;border-radius:6px;margin:8px 0;}.modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;}.modal-content{background:#fff;padding:20px;border-radius:8px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;}#barraCarrito{position:fixed;bottom:15px;left:15px;right:15px;max-width:500px;margin:auto;background:var(--dark);color:#fff;padding:10px 20px;border-radius:25px;display:flex;justify-content:space-between;align-items:center;z-index:999;}.badge{padding:3px 7px;border-radius:10px;color:#fff;font-size:11px;font-weight:bold;}.st-revision_admin{background:#8e44ad;}.st-pendiente{background:var(--w);}.st-preparado{background:#3498db;}.st-despachado{background:var(--r);}.st-en_camino{background:#2980b9;}.st-entregado{background:var(--p);}.st-cancelado{background:var(--d);}table{width:100%;border-collapse:collapse;font-size:12px;}th,td{border:1px solid #ddd;padding:6px;text-align:left;}</style>
+    <style>:root{--p:#27ae60;--d:#e74c3c;--w:#f39c12;--r:#e67e22;--dark:#2c3e50;}body{font-family:sans-serif;margin:0;padding:10px;background:#f4f6f7;}.card{background:#fff;padding:15px;border-radius:8px;margin-bottom:15px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}.oculto{display:none!important;}.btn{padding:8px 14px;border:none;border-radius:5px;font-weight:bold;cursor:pointer;margin:2px;}.btn-p{background:var(--p);color:#fff;}.btn-d{background:var(--d);color:#fff;}.btn-w{background:var(--w);color:#fff;}.btn-r{background:var(--r);color:#fff;}.btn-s{background:#7f8c8d;color:#fff;}.btn-g{background:#4285F4;color:#fff;}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}.tarjeta{border:1px solid #ddd;padding:10px;border-radius:6px;text-align:center;background:#fff;}.tarjeta img{width:100%;height:120px;object-fit:cover;border-radius:4px;}#mapaComercio,#mapaEntrega,#mapaRutaRepartidor{height:250px;width:100%;border-radius:6px;margin:8px 0;}.modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;}.modal-content{background:#fff;padding:20px;border-radius:8px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;}#barraCarrito{position:fixed;bottom:15px;left:15px;right:15px;max-width:500px;margin:auto;background:var(--dark);color:#fff;padding:10px 20px;border-radius:25px;display:flex;justify-content:space-between;align-items:center;z-index:999;}.badge{padding:3px 7px;border-radius:10px;color:#fff;font-size:11px;font-weight:bold;}.st-revision_admin{background:#8e44ad;}.st-pendiente{background:var(--w);}.st-preparado{background:#3498db;}.st-despachado{background:var(--r);}.st-en_camino{background:#2980b9;}.st-entregado{background:var(--p);}.st-cancelado{background:var(--d);}table{width:100%;border-collapse:collapse;font-size:12px;}th,td{border:1px solid #ddd;padding:6px;text-align:left;}</style>
 </head>
 <body>
 
@@ -24,16 +24,24 @@
         <button class="btn btn-d" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
 
-    <!-- ACCESO CON REGISTRO DE NOMBRE Y TELÉFONO -->
+    <!-- ACCESO CON GOOGLE O CORREO -->
     <div id="pLogin" class="card" style="max-width: 380px; margin: 40px auto; text-align:center; padding: 25px;">
         <h2>🛒 Reparte Ixtlahuaca</h2>
         <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Ingresa tus datos de acceso</p>
         
+        <!-- Botón de Inicio de Sesión con Google -->
+        <button type="button" class="btn btn-g" onclick="loginGoogle()" style="width: 95%; padding: 10px; font-size: 14px; margin-bottom: 15px; display:flex; align-items:center; justify-content:center; gap:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#fff" d="M21.35 11.1H12v3.8h5.4c-.2 1.2-.9 2.3-2 3.1v2.5h3.2c1.9-1.7 3-4.3 3-7.4 0-.7-.1-1.4-.2-2z"/><path fill="#fff" d="M12 21c2.7 0 5-1 6.7-2.6l-3.2-2.5c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.8-4.3H3v2.6C4.7 18.6 8.1 21 12 21z"/><path fill="#fff" d="M6.2 12.6c-.2-.6-.3-1.3-.3-2.1s.1-1.5.3-2.1V5.8H3C2.4 7 2 8.4 2 10s.4 3 1 4.2l3.2-2.6z"/><path fill="#fff" d="M12 4.8c1.5 0 2.8.5 3.8 1.5l2.8-2.8C16.9 1.9 14.6 1 12 1 8.1 1 4.7 3.4 3 6.8l3.2 2.6c.8-2.5 3.1-4.6 5.8-4.6z"/></svg>
+            Iniciar sesión con Google
+        </button>
+
+        <div style="margin: 15px 0; color: #aaa; font-size: 12px;">— O INGRESA CON CORREO —</div>
+
         <form onsubmit="loginEmail(event)">
             <input type="text" id="txtNombreReg" placeholder="Nombre completo (Solo para registro)" style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
             <input type="tel" id="txtTelefonoReg" placeholder="Teléfono de contacto (Solo para registro)" style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="email" id="txtEmail" placeholder="Correo electrónico" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="password" id="txtPassword" placeholder="Contraseña" required style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="email" id="txtEmail" placeholder="Correo electrónico" style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="password" id="txtPassword" placeholder="Contraseña" style="width: 90%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px;">
             <br>
             <button type="submit" class="btn btn-p" style="width: 95%; margin-top: 15px; padding: 10px; font-size: 14px;">Iniciar Sesión</button>
             <button type="button" class="btn btn-s" onclick="registrarEmail()" style="width: 95%; margin-top: 8px; padding: 8px; font-size: 12px;">Crear Cuenta Nueva</button>
@@ -129,6 +137,10 @@
                 <div>Pedidos: <b id="mPed">0</b></div>
             </div>
         </div>
+        <div class="card" style="border: 1px solid #f39c12; background:#fffdf5;">
+            <h3 style="color:#d35400;">🏢 Solicitudes de Comercios Pendientes</h3>
+            <div id="listaSolicitudesComercios"></div>
+        </div>
         <div class="card" style="border: 2px solid var(--d);">
             <h3 style="color:var(--d);">⚠️ Pedidos Retenidos (> $500)</h3>
             <div id="listaAdminRevision"></div>
@@ -165,17 +177,103 @@
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
     const EMAIL_ADMIN = "q.h.ricardoarturo@gmail.com";
+    const DEFAULT_LOGO_SVG = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="%23999" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
 
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let user = null, miComercio = null, comercioSel = null, carrito = [];
     let coordsEntrega = { lat: 19.5694, lng: -99.7669 };
-    let mapaC = null, marcC = null, mapaE = null, marcCom = null, marcCli = null, rutaLine = null;
-    let mapaR = null, rutaRepartidorLine = null, pedidoActivoId = null;
-// --- CONTROL DE VISTAS Y NAVEGACIÓN ---
+    let mapaC = null, marcC = null, mapaE = null, marcCli = null;
+    let mapaR = null, pedidoActivoId = null;
+
+    // --- INICIALIZACIÓN Y AUTENTICACIÓN ---
+    window.addEventListener('DOMContentLoaded', async () => {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            user = session.user;
+            actualizarBarraUsuario();
+            evalRol();
+        } else {
+            ocultar();
+            show('pLogin');
+        }
+
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            if (session) {
+                user = session.user;
+                actualizarBarraUsuario();
+                evalRol();
+            } else {
+                user = null;
+                ocultar();
+                show('pLogin');
+                document.getElementById('barraUsuario').classList.add('oculto');
+            }
+        });
+    });
+
+    async function loginGoogle() {
+        const { error } = await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.href
+            }
+        });
+        if (error) alert("Error al iniciar sesión con Google: " + error.message);
+    }
+
+    async function loginEmail(e) {
+        e.preventDefault();
+        const email = document.getElementById('txtEmail').value;
+        const password = document.getElementById('txtPassword').value;
+
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) {
+            alert("Error de acceso: " + error.message);
+        }
+    }
+
+    async function registrarEmail() {
+        const email = document.getElementById('txtEmail').value;
+        const password = document.getElementById('txtPassword').value;
+        const nombre = document.getElementById('txtNombreReg').value;
+        const telefono = document.getElementById('txtTelefonoReg').value;
+
+        if (!email || !password) {
+            alert("Ingresa correo y contraseña para crear cuenta");
+            return;
+        }
+
+        const { data, error } = await supabaseClient.auth.signUp({
+            email,
+            password,
+            options: {
+                data: { full_name: nombre, phone: telefono }
+            }
+        });
+
+        if (error) {
+            alert("Error al registrar: " + error.message);
+        } else {
+            alert("Registro exitoso. Si se requiere confirmación, verifica tu correo.");
+        }
+    }
+
+    async function cerrarSesion() {
+        await supabaseClient.auth.signOut();
+    }
+
+    function actualizarBarraUsuario() {
+        if (!user) return;
+        const bar = document.getElementById('barraUsuario');
+        bar.classList.remove('oculto');
+        document.getElementById('lblUser').innerText = user.user_metadata?.full_name || user.email;
+    }
+
+    // --- CONTROL DE VISTAS Y NAVEGACIÓN ---
     function ocultar() {
         const paneles = [
-            'pClienteComercios', 'pClienteProds', 'pRegComercio', 
+            'pLogin', 'pClienteComercios', 'pClienteProds', 'pRegComercio', 
             'pDuenio', 'pAdmin', 'pRepartidor'
         ];
         paneles.forEach(id => {
@@ -189,27 +287,28 @@
         if (el) el.classList.remove('oculto');
     }
 
-    // --- EVALUACIÓN DE ROLES Y ACCESO EXCLUSIVO ---
- // --- EVALUACIÓN DE ROLES Y REDIRECCIÓN ---
-async function evalRol() {
-    ocultar();
-    
-    // Si no hay sesión iniciada o el correo NO coincide exactamente con EMAIL_ADMIN
-    if (!user || user.email !== EMAIL_ADMIN) {
-        document.getElementById('lblRol').innerText = 'CLIENTE';
-        cargarComercios(); // Redirige directamente a la lista de comercios públicos
-        return;
-    }
+    // --- EVALUACIÓN DE ROLES Y REDIRECCIÓN ---
+    async function evalRol() {
+        ocultar();
+        actualizarBarraUsuario();
 
-    // Si es el Administrador AUTORIZADO, entra a su panel exclusivo
-    document.getElementById('lblRol').innerText = 'ADMINISTRADOR';
-    show('pAdmin');
-    cargarAdmin();
-}
+        // Si no es admin, redirigir directamente a la pantalla de comercios (sin vistas ocultas)
+        if (!user || user.email !== EMAIL_ADMIN) {
+            document.getElementById('lblRol').innerText = 'CLIENTE';
+            cargarComercios();
+            return;
+        }
+
+        // Acceso exclusivo para Administrador Autorizado
+        document.getElementById('lblRol').innerText = 'ADMINISTRADOR';
+        show('pAdmin');
+        cargarAdmin();
+    }
 
     // --- VISTA PÚBLICA / CLIENTE ---
     async function cargarComercios() {
         ocultar();
+        actualizarBarraUsuario();
         show('pClienteComercios');
         const { data: cs } = await supabaseClient.from('comercios').select('*').eq('estado', 'aprobado');
         const contenedor = document.getElementById('listaComercios');
@@ -219,9 +318,113 @@ async function evalRol() {
             <div class="tarjeta">
                 <img src="${c.logo_url || DEFAULT_LOGO_SVG}">
                 <h4>${c.nombre}</h4>
-                <button class="btn btn-p" onclick="verProds('${c.id}')">Ver Menú</button>
+                <button class="btn btn-p" onclick='verProds(${JSON.stringify(c)})'>Ver Menú</button>
             </div>
         `).join('') : '<p>Sin comercios disponibles por el momento.</p>';
+    }
+
+    async function verProds(comercio) {
+        comercioSel = comercio;
+        ocultar();
+        show('pClienteProds');
+        document.getElementById('txtComercioSel').innerText = comercio.nombre;
+
+        const { data: ps } = await supabaseClient.from('productos').select('*').eq('comercio_id', comercio.id);
+        const contenedor = document.getElementById('listaProdsCliente');
+        if (!contenedor) return;
+
+        contenedor.innerHTML = (ps && ps.length) ? ps.map(p => `
+            <div class="tarjeta">
+                <img src="${p.imagen_url || 'https://via.placeholder.com/150'}">
+                <h4>${p.nombre}</h4>
+                <p>$${Number(p.precio).toFixed(2)}</p>
+                <button class="btn btn-p" onclick='agregarCarrito(${JSON.stringify(p)})'>+ Agregar</button>
+            </div>
+        `).join('') : '<p>Este comercio no tiene productos disponibles.</p>';
+    }
+
+    // --- CARRITO Y CHECKOUT ---
+    function agregarCarrito(producto) {
+        carrito.push(producto);
+        actualizarBarraCarrito();
+    }
+
+    function actualizarBarraCarrito() {
+        const barra = document.getElementById('barraCarrito');
+        if (carrito.length > 0) {
+            barra.classList.remove('oculto');
+            document.getElementById('cantCar').innerText = carrito.length;
+            const total = carrito.reduce((sum, p) => sum + Number(p.precio), 0);
+            document.getElementById('subCar').innerText = total.toFixed(2);
+        } else {
+            barra.classList.add('oculto');
+        }
+    }
+
+    function abrirCheckout() {
+        show('modalCheck');
+        const totalProds = carrito.reduce((sum, p) => sum + Number(p.precio), 0);
+        document.getElementById('resumenCar').innerHTML = carrito.map(p => `<div>• ${p.nombre} - $${Number(p.precio).toFixed(2)}</div>`).join('');
+        document.getElementById('txtTot').innerText = totalProds.toFixed(2);
+
+        setTimeout(() => {
+            if (!mapaE) {
+                mapaE = L.map('mapaEntrega').setView([coordsEntrega.lat, coordsEntrega.lng], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaE);
+                marcCli = L.marker([coordsEntrega.lat, coordsEntrega.lng], { draggable: true }).addTo(mapaE);
+                marcCli.on('dragend', () => {
+                    const pos = marcCli.getLatLng();
+                    coordsEntrega = { lat: pos.lat, lng: pos.lng };
+                });
+            }
+        }, 300);
+    }
+
+    function cerrarCheckout() {
+        document.getElementById('modalCheck').classList.add('oculto');
+    }
+
+    async function procesarPedido() {
+        if (!user) {
+            alert("Debes iniciar sesión para realizar un pedido.");
+            return;
+        }
+
+        const direccion = document.getElementById('chkDir').value;
+        const telefono = document.getElementById('chkTel').value;
+        if (!direccion || !telefono) {
+            alert("Por favor completa tu dirección y teléfono.");
+            return;
+        }
+
+        const totalProds = carrito.reduce((sum, p) => sum + Number(p.precio), 0);
+        const nombresProds = carrito.map(p => p.nombre).join(', ');
+        const estadoInicial = totalProds > 500 ? 'revision_admin' : 'pendiente';
+
+        const { error } = await supabaseClient.from('pedidos').insert([{
+            cliente_id: user.id,
+            cliente_nombre: user.user_metadata?.full_name || user.email,
+            cliente_email: user.email,
+            telefono_cliente: telefono,
+            comercio_id: comercioSel.id,
+            comercio_nombre: comercioSel.nombre,
+            producto_nombre: nombresProds,
+            precio: totalProds,
+            direccion_entrega: `${direccion} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
+            estado: estadoInicial
+        }]);
+
+        if (error) {
+            alert("Error al enviar el pedido: " + error.message);
+        } else {
+            alert(estadoInicial === 'revision_admin' 
+                ? "Tu pedido excede $500 y requiere validación del administrador." 
+                : "¡Pedido enviado con éxito al comercio!");
+            carrito = [];
+            actualizarBarraCarrito();
+            cerrarCheckout();
+            cargarComercios();
+        }
     }
 
     // --- PANEL DE DUEÑO DE COMERCIO ---
@@ -290,9 +493,54 @@ async function evalRol() {
         cargarPedidosDuenio();
     }
 
+    // --- MODO REPARTIDOR ---
+    function activarModoRepartidor() {
+        ocultar();
+        show('pRepartidor');
+        cargarPedidosRepartidor();
+    }
+
+    async function cargarPedidosRepartidor() {
+        const contenedor = document.getElementById('listaPedidosRepartidor');
+        if (!contenedor) return;
+
+        const { data: peds } = await supabaseClient
+            .from('pedidos')
+            .select('*')
+            .eq('estado', 'despachado');
+
+        contenedor.innerHTML = (peds && peds.length) ? peds.map(p => `
+            <div style="border:1px solid #ddd; padding:10px; margin-bottom:8px; border-radius:6px; background:#fff;">
+                <b>Comercio:</b> ${p.comercio_nombre}<br>
+                <b>Cliente:</b> ${p.cliente_nombre}<br>
+                <b>Entrega:</b> ${p.direccion_entrega}<br>
+                <b>Monto:</b> $${Number(p.precio).toFixed(2)}<br>
+                <button class="btn btn-r" style="margin-top:6px;" onclick="tomarPedido('${p.id}')">🛵 Aceptar Entrega</button>
+            </div>
+        `).join('') : '<p>No hay pedidos disponibles para entrega en este momento.</p>';
+    }
+
+    async function tomarPedido(id) {
+        const { error } = await supabaseClient.from('pedidos').update({
+            estado: 'en_camino',
+            repartidor_id: user.id,
+            repartidor_nombre: user.user_metadata?.full_name || user.email
+        }).eq('id', id);
+
+        if (error) alert("Error al asignar pedido: " + error.message);
+        else cargarPedidosRepartidor();
+    }
+
+    async function marcarEntregado() {
+        if (!pedidoActivoId) return;
+        await supabaseClient.from('pedidos').update({ estado: 'entregado' }).eq('id', pedidoActivoId);
+        document.getElementById('seccionPedidoActivo').classList.add('oculto');
+        pedidoActivoId = null;
+        cargarPedidosRepartidor();
+    }
+
     // --- PANEL EXCLUSIVO DE ADMINISTRADOR ---
     function cargarAdmin() {
-        // Validación estricta por si la función es llamada manualmente
         if (!user || user.email !== EMAIL_ADMIN) {
             alert("Acceso denegado. No tienes permisos de Administrador.");
             evalRol();
@@ -492,7 +740,7 @@ async function evalRol() {
             telefono: document.getElementById('regTel').value,
             direccion: `${document.getElementById('regDir').value} (GPS: ${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)})`,
             logo_url: url,
-            estado: 'pendiente' // El comercio entra como pendiente para ser aprobado por el admin
+            estado: 'pendiente'
         }]);
         alert("Solicitud de comercio enviada. Espera la autorización del administrador.");
         evalRol();
