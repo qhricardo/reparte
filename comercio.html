@@ -1873,21 +1873,37 @@ async function cargarProductosDuenio() {
 
 // Función liviana: Actualiza la BD en silencio y cambia el estilo del botón al instante
 window.cambiarDisponibilidadRapida = async function(idProducto, boton) {
+    // 1. Determinar el nuevo estado
     const esDisponibleActualmente = boton.innerText.includes('Disponible');
     const nuevoEstado = !esDisponibleActualmente;
 
-    // Cambia el aspecto visual inmediatamente
+    // 2. Cambiar la apariencia del botón e imagen en el panel del dueño al instante
     boton.innerText = nuevoEstado ? '✅ Disponible' : '🚫 Agotado';
     boton.style.background = nuevoEstado ? '#2E6A38' : '#6B7280';
     
     const img = document.getElementById(`img-prod-${idProducto}`);
     if (img) img.style = nuevoEstado ? '' : 'filter: grayscale(100%); opacity: 0.5;';
 
-    // Guarda en Supabase sin recargar la pantalla
-    await supabaseClient
-        .from('productos')
-        .update({ disponible: nuevoEstado })
-        .eq('id', idProducto);
+    // 3. ACTUALIZAR EN MEMORIA (CACHE): Garantiza que si pasas a modo comprador, tome el cambio
+    if (window.productosDuenioCache) {
+        const prod = window.productosDuenioCache.find(p => p.id === idProducto);
+        if (prod) prod.disponible = nuevoEstado;
+    }
+
+    // 4. Guardar en Supabase
+    try {
+        const { error } = await supabaseClient
+            .from('productos')
+            .update({ disponible: nuevoEstado })
+            .eq('id', idProducto);
+
+        if (error) {
+            console.error("Error al actualizar disponibilidad:", error);
+            alert("No se pudo actualizar el estado en el servidor.");
+        }
+    } catch (err) {
+        console.error("Error en base de datos:", err);
+    }
 };
 
     
