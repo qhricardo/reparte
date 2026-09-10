@@ -197,30 +197,30 @@
             ocultar();
             show('pLogin');
         }
-
+    
         supabaseClient.auth.onAuthStateChange((event, session) => {
-            if (session) {
-                user = session.user;
-                actualizarBarraUsuario();
-                evalRol();
-            } else {
-                user = null;
-                ocultar();
-                show('pLogin');
-                document.getElementById('barraUsuario').classList.add('oculto');
-            }
-        });
+        if (session) {
+            user = session.user;
+            actualizarBarraUsuario();
+            evalRol();
+        } else {
+            user = null;
+            ocultar();
+            show('pLogin');
+            document.getElementById('barraUsuario').classList.add('oculto');
+        }
     });
+});
 
-    async function loginGoogle() {
-        const { error } = await supabaseClient.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: window.location.href
-            }
-        });
-        if (error) alert("Error al iniciar sesión con Google: " + error.message);
-    }
+   async function loginGoogle() {
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            redirectTo: window.location.origin + window.location.pathname
+        }
+    });
+    if (error) alert("Error al iniciar sesión con Google: " + error.message);
+}
 
     async function loginEmail(e) {
         e.preventDefault();
