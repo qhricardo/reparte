@@ -1811,7 +1811,6 @@ window.eliminarMiComercio = async function() {
 // ==========================================
 // FUNCIONES GLOBALES DE PRODUCTO
 // ==========================================
-
 async function cargarProductosDuenio() {
     if (!miComercio || !miComercio.id) return;
 
@@ -1824,44 +1823,31 @@ async function cargarProductosDuenio() {
     if (!lista) return;
     lista.innerHTML = "";
 
-    if (error) {
-        console.error("Error al obtener productos:", error);
-        lista.innerHTML = "<p>Error al cargar productos.</p>";
+    if (error || !productos || productos.length === 0) {
+        lista.innerHTML = `<p>${error ? 'Error al cargar productos.' : 'Aún no has publicado productos.'}</p>`;
         return;
     }
 
-    if (!productos || productos.length === 0) {
-        lista.innerHTML = "<p>Aún no has publicado productos.</p>";
-        return;
-    }
-
-    // Guardar en Cache global
     window.productosDuenioCache = productos;
 
     productos.forEach(p => {
         const card = document.createElement('div');
         card.className = 'tarjeta-producto';
 
-        // Evalúa el estado del producto (si es null/undefined asume true por defecto)
         const estaDisponible = p.disponible !== false;
-        const textoBotonStock = estaDisponible ? '✅ Disponible' : '🚫 Agotado';
-        const estiloBotonStock = estaDisponible 
-            ? 'background: #2E6A38; color: white;' 
-            : 'background: #6B7280; color: white; opacity: 0.8;';
 
         card.innerHTML = `
-            <img src="${p.imagen}" alt="${p.nombre}" style="${!estaDisponible ? 'filter: grayscale(80%); opacity: 0.6;' : ''}">
+            <img src="${p.imagen}" alt="${p.nombre}" id="img-prod-${p.id}" style="${!estaDisponible ? 'filter: grayscale(100%); opacity: 0.5;' : ''}">
             <div class="info-producto">
-                <div style="display: flex; justify-content: space-between; align-items: start;">
-                    <h4>${p.nombre}</h4>
-                    ${!estaDisponible ? '<span class="badge-estado estado-pendiente" style="font-size:10px;">AGOTADO</span>' : ''}
-                </div>
+                <h4>${p.nombre}</h4>
                 <p style="font-size: 12px; color: #666; margin: 4px 0;">${p.descripcion || ''}</p>
                 <div class="precio">$${Number(p.precio).toFixed(2)}</div>
                 
-                <!-- Botón de Estado / Agotado -->
-                <button type="button" class="btn" style="width:100%; margin-top: 6px; ${estiloBotonStock}" onclick="toggleEstadoProducto('${p.id}', ${estaDisponible})">
-                    ${textoBotonStock}
+                <!-- BOTÓN DE ESTADO LOCAL SIN RECARGA -->
+                <button type="button" id="btn-dispo-${p.id}" class="btn" 
+                    style="width:100%; margin-top: 6px; background: ${estaDisponible ? '#2E6A38' : '#6B7280'}; color: white;" 
+                    onclick="cambiarDisponibilidadRapida('${p.id}', this)">
+                    ${estaDisponible ? '✅ Disponible' : '🚫 Agotado'}
                 </button>
 
                 <div style="display: flex; gap: 6px; margin-top: 8px;">
@@ -1874,6 +1860,26 @@ async function cargarProductosDuenio() {
     });
 }
 
+// Función liviana: Actualiza la BD en silencio y cambia el estilo del botón al instante
+window.cambiarDisponibilidadRapida = async function(idProducto, boton) {
+    const esDisponibleActualmente = boton.innerText.includes('Disponible');
+    const nuevoEstado = !esDisponibleActualmente;
+
+    // Cambia el aspecto visual inmediatamente
+    boton.innerText = nuevoEstado ? '✅ Disponible' : '🚫 Agotado';
+    boton.style.background = nuevoEstado ? '#2E6A38' : '#6B7280';
+    
+    const img = document.getElementById(`img-prod-${idProducto}`);
+    if (img) img.style = nuevoEstado ? '' : 'filter: grayscale(100%); opacity: 0.5;';
+
+    // Guarda en Supabase sin recargar la pantalla
+    await supabaseClient
+        .from('productos')
+        .update({ disponible: nuevoEstado })
+        .eq('id', idProducto);
+};
+
+    
 // Asignación explícita global
 window.prepararEdicionProducto = function(idProducto) {
     console.log("Intentando editar producto ID:", idProducto);
