@@ -954,15 +954,12 @@ async function cargarComerciosCliente() {
                 .subscribe();
         }
 
-        // 3. LISTAR COMERCIOS
-
+        // 3. LISTAR COMERCIOS (Solo comercios aprobados por el admin)
         const { data: comercios, error } = await supabaseClient
-        .from('comercios')
-        .select('*')
-        .eq('estado', 'aprobado'); // 👈 Solo trae los autorizados
+            .from('comercios')
+            .select('*')
+            .eq('estado', 'aprobado'); 
 
-        
-        const { data: comercios, error } = await supabaseClient.from('comercios').select('*');
         if (error) console.error("Error al obtener comercios:", error);
 
         const lista = document.getElementById('listaComercios');
@@ -971,7 +968,7 @@ async function cargarComerciosCliente() {
         lista.innerHTML = "";
 
         if (!comercios || comercios.length === 0) {
-            lista.innerHTML = "<p>Aún no hay comercios registrados.</p>";
+            lista.innerHTML = "<p>Aún no hay comercios aprobados disponibles.</p>";
             return;
         }
 
