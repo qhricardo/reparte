@@ -517,13 +517,18 @@ input:focus, textarea:focus {
     </div>
 
     <!-- 2. EXPLORAR COMERCIOS -->
-    <div id="pantallaClienteComercios" class="oculto">
-        <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
-            <h2>🏬 Comercios Disponibles</h2>
-            <button class="btn btn-primary" id="btnIrCrearComercio">+ Registrar mi Comercio</button>
-        </div>
-        <div id="listaComercios" class="grid-comercios"></div>
+<div id="pantallaClienteComercios" class="oculto">
+    <!-- Banner de aviso fuera de horario -->
+    <div id="alertaHorarioCierre" class="oculto" style="background-color: #FEE2E2; border: 1px solid #EF4444; color: #991B1B; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-weight: bold; text-align: center;">
+        ⏰ El servicio de pedidos se encuentra cerrado por hoy. Horario de atención hasta las 9:00 PM.
     </div>
+
+    <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>🏬 Comercios Disponibles</h2>
+        <button class="btn btn-primary" id="btnIrCrearComercio">+ Registrar mi Comercio</button>
+    </div>
+    <div id="listaComercios" class="grid-comercios"></div>
+</div>
 
     <!-- 3. PRODUCTOS DEL COMERCIO -->
     <div id="pantallaClienteProductos" class="oculto">
@@ -1213,6 +1218,17 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
         }
     }
 });
+
+
+// Configuración de horario límite (21 = 9:00 PM)
+const HORA_CIERRE_PEDIDOS = 21; 
+
+function esHorarioPermitidoPedidos() {
+    const horaActual = new Date().getHours();
+    // Retorna false si son las 21:00 hrs (9:00 PM) o más
+    return horaActual < HORA_CIERRE_PEDIDOS; 
+}
+
 
 // CARRITO Y CHECKOUT
 function agregarAlCarrito(id, nombre, precio) {
