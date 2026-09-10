@@ -172,499 +172,80 @@
     let coordsEntrega = { lat: 19.5694, lng: -99.7669 };
     let mapaC = null, marcC = null, mapaE = null, marcCom = null, marcCli = null, rutaLine = null;
     let mapaR = null, rutaRepartidorLine = null, pedidoActivoId = null;
-
-    // Listener de sesión automático
-    supabaseClient.auth.onAuthStateChange((event, session) => {
-        if (session) {
-            user = session.user;
-            actUserBar();
-            evalRol();
-        } else {
-            user = null;
-            document.getElementById('barraUsuario').classList.add('oculto');
-            ocultar();
-            show('pLogin');
-        }
-    });
-
-    // --- AUTENTICACIÓN MEJORADA CON REGISTRO DE NOMBRE Y TELÉFONO ---
-    async function loginEmail(e) {
-        e.preventDefault();
-        const email = document.getElementById('txtEmail').value;
-        const password = document.getElementById('txtPassword').value;
-
-        const { data, error } = await supabaseClient.auth.signInWithPassword({
-            email: email,
-            password: password
+// --- CONTROL DE VISTAS Y NAVEGACIÓN ---
+    function ocultar() {
+        const paneles = [
+            'pClienteComercios', 'pClienteProds', 'pRegComercio', 
+            'pDuenio', 'pAdmin', 'pRepartidor'
+        ];
+        paneles.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('oculto');
         });
-
-        if (error) {
-            alert("Error al iniciar sesión: " + error.message);
-        }
     }
 
-    async function registrarEmail() {
-        const nombre = document.getElementById('txtNombreReg').value;
-        const telefono = document.getElementById('txtTelefonoReg').value;
-        const email = document.getElementById('txtEmail').value;
-        const password = document.getElementById('txtPassword').value;
-
-        if (!nombre.trim()) return alert("Por favor ingresa tu Nombre Completo en el primer campo para poder registrarte.");
-        if (!telefono.trim()) return alert("Por favor ingresa tu Teléfono de contacto para registrarte.");
-        if (!email || !password) return alert("Ingresa un correo y contraseña válidos.");
-
-        const { data, error } = await supabaseClient.auth.signUp({
-            email: email,
-            password: password,
-            options: {
-                data: { 
-                    full_name: nombre,
-                    phone_number: telefono // Guardar teléfono explícito en Supabase Metadata
-                } 
-            }
-        });
-
-        if (error) {
-            alert("Error en el registro: " + error.message);
-        } else {
-            alert("¡Registro exitoso! Ya puedes iniciar sesión.");
-        }
+    function show(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('oculto');
     }
 
-    async function cerrarSesion() {
-        await supabaseClient.auth.signOut();
-    }
-
-    function show(id) { document.getElementById(id).classList.remove('oculto'); }
-    function ocultar() { ['pLogin','pClienteComercios','pClienteProds','pRegComercio','pDuenio','pRepartidor','pAdmin'].forEach(i => document.getElementById(i).classList.add('oculto')); }
-
-    function actUserBar() {
-        show('barraUsuario');
-        const nombre = user.user_metadata?.full_name || user.email;
-        document.getElementById('lblUser').innerText = nombre;
-    }
-
-    async function evalRol() {
-        ocultar();
-        if (user.email === EMAIL_ADMIN) {
-            document.getElementById('lblRol').innerText = 'ADMINISTRADOR';
-            show('pAdmin');
-            cargarAdmin();
-            return;
-        }
-
-        const { data: c } = await supabaseClient.from('comercios').select('*').eq('owner_id', user.id).single();
-        if (c) {
-            miComercio = c;
-            document.getElementById('lblRol').innerText = 'DUEÑO';
-            show('pDuenio');
-            cargarDuenio();
-        } else {
-            document.getElementById('lblRol').innerText = 'CLIENTE';
-            show('pClienteComercios');
-            cargarComercios();
-        }
-    }
-
-
-    // Cargar solicitudes pendientes en el panel admin
-async function cargarSolicitudesComerciosAdmin() {
-    const contenedor = document.getElementById('listaSolicitudesComercios');
-    if (!contenedor) return;
-
-    const { data: solicitudes, error } = await supabaseClient
-        .from('comercios')
-        .select('*')
-        .eq('estado', 'pendiente');
-
-    if (error || !solicitudes || solicitudes.length === 0) {
-        contenedor.innerHTML = "<p>No hay solicitudes pendientes de comercios.</p>";
+    // --- EVALUACIÓN DE ROLES Y ACCESO EXCLUSIVO ---
+ // --- EVALUACIÓN DE ROLES Y REDIRECCIÓN ---
+async function evalRol() {
+    ocultar();
+    
+    // Si no hay sesión iniciada o el correo NO coincide exactamente con EMAIL_ADMIN
+    if (!user || user.email !== EMAIL_ADMIN) {
+        document.getElementById('lblRol').innerText = 'CLIENTE';
+        cargarComercios(); // Redirige directamente a la lista de comercios públicos
         return;
     }
 
-    contenedor.innerHTML = "";
-
-    solicitudes.forEach(c => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.style.marginBottom = '12px';
-        card.innerHTML = `
-            <div style="display: flex; gap: 12px; align-items: center;">
-                <img src="${c.logo_url || DEFAULT_LOGO_SVG}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;">
-                <div style="flex: 1;">
-                    <h4 style="margin: 0;">${c.nombre}</h4>
-                    <p style="font-size: 12px; color: #666; margin: 2px 0;"><b>Tel:</b> ${c.telefono}</p>
-                    <p style="font-size: 12px; color: #666; margin: 2px 0;"><b>Ubicación:</b> ${c.direccion}</p>
-                </div>
-            </div>
-            <div style="display: flex; gap: 8px; margin-top: 10px;">
-                <button class="btn btn-secundario" style="flex:1;" onclick="verProductosComercio(${JSON.stringify(c).replace(/"/g, '&quot;')})">🔍 Visitar Productos</button>
-                <button class="btn btn-modo" style="flex:1; background:#2E6A38;" onclick="responderSolicitudComercio('${c.id}', 'aprobado')">✅ Aceptar</button>
-                <button class="btn btn-danger" style="flex:1;" onclick="responderSolicitudComercio('${c.id}', 'rechazado')">❌ Rechazar</button>
-            </div>
-        `;
-        contenedor.appendChild(card);
-    });
+    // Si es el Administrador AUTORIZADO, entra a su panel exclusivo
+    document.getElementById('lblRol').innerText = 'ADMINISTRADOR';
+    show('pAdmin');
+    cargarAdmin();
 }
 
-// Lógica de aprobación o rechazo
-window.responderSolicitudComercio = async function(idComercio, nuevoEstado) {
-    try {
-        const { error } = await supabaseClient
-            .from('comercios')
-            .update({ estado: nuevoEstado })
-            .eq('id', idComercio);
-
-        if (error) throw error;
-
-        alert(`Comercio ${nuevoEstado === 'aprobado' ? 'aprobado' : 'rechazado'} con éxito.`);
-        cargarSolicitudesComerciosAdmin(); // Recargar la lista
-    } catch (err) {
-        console.error("Error al responder solicitud:", err);
-        alert("Ocurrió un error al actualizar la solicitud.");
-    }
-};
-
-
-    
-    // --- MÓDULOS DE COMERCIO Y PEDIDOS ---
+    // --- VISTA PÚBLICA / CLIENTE ---
     async function cargarComercios() {
         ocultar();
         show('pClienteComercios');
-        const { data: cs } = await supabaseClient.from('comercios').select('*');
-        document.getElementById('listaComercios').innerHTML = (cs && cs.length) ? cs.map(c => `
+        const { data: cs } = await supabaseClient.from('comercios').select('*').eq('estado', 'aprobado');
+        const contenedor = document.getElementById('listaComercios');
+        if (!contenedor) return;
+
+        contenedor.innerHTML = (cs && cs.length) ? cs.map(c => `
             <div class="tarjeta">
-                <img src="${c.logo_url || 'https://via.placeholder.com/150'}">
+                <img src="${c.logo_url || DEFAULT_LOGO_SVG}">
                 <h4>${c.nombre}</h4>
                 <button class="btn btn-p" onclick="verProds('${c.id}')">Ver Menú</button>
             </div>
-        `).join('') : '<p>Sin comercios disponibles</p>';
+        `).join('') : '<p>Sin comercios disponibles por el momento.</p>';
     }
 
-    async function verProds(id) {
-        const { data: c } = await supabaseClient.from('comercios').select('*').eq('id', id).single();
-        comercioSel = c;
-        ocultar();
-        show('pClienteProds');
-        document.getElementById('txtComercioSel').innerText = c.nombre;
-
-        const { data: ps } = await supabaseClient.from('productos').select('*').eq('comercio_id', id);
-        document.getElementById('listaProdsCliente').innerHTML = (ps && ps.length) ? ps.map(p => `
-            <div class="tarjeta">
-                <img src="${p.imagen_url || 'https://via.placeholder.com/150'}">
-                <h4>${p.nombre}</h4>
-                <p>$${Number(p.precio).toFixed(2)}</p>
-                <button class="btn btn-p" onclick="addCar('${p.id}', '${p.nombre}', ${p.precio})">+ Agregar</button>
-            </div>
-        `).join('') : '<p>Sin productos disponibles</p>';
-    }
-
-    function addCar(id, nombre, precio) {
-        const item = carrito.find(i => i.id === id);
-        if (item) item.cant++;
-        else carrito.push({ id, nombre, precio, cant: 1 });
-        actCar();
-    }
-
-    function actCar() {
-        const cant = carrito.reduce((a, i) => a + i.cant, 0);
-        const sub = carrito.reduce((a, i) => a + (i.precio * i.cant), 0);
-        if (cant > 0) {
-            show('barraCarrito');
-            document.getElementById('cantCar').innerText = cant;
-            document.getElementById('subCar').innerText = sub.toFixed(2);
-        } else {
-            document.getElementById('barraCarrito').classList.add('oculto');
-        }
-    }
-
-    function getCoordsCom() {
-        if (!comercioSel || !comercioSel.direccion) return { lat: 19.5694, lng: -99.7669 };
-        const m = comercioSel.direccion.match(/GPS:\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
-        return m ? { lat: parseFloat(m[1]), lng: parseFloat(m[2]) } : { lat: 19.5694, lng: -99.7669 };
-    }
-
-    function abrirCheckout() {
-        show('modalCheck');
-        document.getElementById('resumenCar').innerHTML = carrito.map(i => `<p>${i.cant}x ${i.nombre} - $${(i.precio * i.cant).toFixed(2)}</p>`).join('');
-        
-        // Autocompletar el teléfono del cliente registrado
-        const telCliente = user?.user_metadata?.phone_number || '';
-        const chkTelInput = document.getElementById('chkTel');
-        if (chkTelInput && telCliente) {
-            chkTelInput.value = telCliente;
-        }
-
-        const cCom = getCoordsCom();
-        setTimeout(() => {
-            if (!mapaE) {
-                mapaE = L.map('mapaEntrega').setView([cCom.lat, cCom.lng], 13);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaE);
-                marcCom = L.marker([cCom.lat, cCom.lng]).addTo(mapaE);
-                marcCli = L.marker([coordsEntrega.lat, coordsEntrega.lng], { draggable: true }).addTo(mapaE);
-                marcCli.on('dragend', e => {
-                    const p = e.target.getLatLng();
-                    coordsEntrega = { lat: p.lat, lng: p.lng };
-                    calcRuta();
-                });
-            } else {
-                mapaE.invalidateSize();
-                marcCom.setLatLng([cCom.lat, cCom.lng]);
-            }
-            calcRuta();
-        }, 300);
-    }
-
-    function cerrarCheckout() { document.getElementById('modalCheck').classList.add('oculto'); }
-
-    async function calcRuta() {
-        const sub = carrito.reduce((a, i) => a + (i.precio * i.cant), 0);
-        const cCom = getCoordsCom();
-        let dist = 0;
-        try {
-            const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${cCom.lng},${cCom.lat};${coordsEntrega.lng},${coordsEntrega.lat}?overview=full&geometries=geojson`);
-            const d = await r.json();
-            if (d.routes && d.routes[0]) {
-                dist = d.routes[0].distance / 1000;
-                const pts = d.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-                if (rutaLine) mapaE.removeLayer(rutaLine);
-                const colorRuta = dist > 7 ? '#e74c3c' : '#27ae60';
-                rutaLine = L.polyline(pts, { color: colorRuta, weight: 4 }).addTo(mapaE);
-                mapaE.fitBounds(rutaLine.getBounds());
-            }
-        } catch (e) {}
-
-        const env = 25 + (dist * 5);
-        const tot = sub + env;
-
-        document.getElementById('txtDist').innerText = dist.toFixed(2);
-        document.getElementById('txtEnv').innerText = env.toFixed(2);
-        document.getElementById('txtTot').innerText = tot.toFixed(2);
-
-        const btnConfirmar = document.getElementById('btnConfirmar');
-        if (btnConfirmar) {
-            if (dist > 7) {
-                btnConfirmar.disabled = true;
-                btnConfirmar.innerText = "Fuera de Cobertura (>7km)";
-                btnConfirmar.style.backgroundColor = "#95a5a6";
-            } else {
-                btnConfirmar.disabled = false;
-                btnConfirmar.innerText = "Confirmar Pedido";
-                btnConfirmar.style.backgroundColor = "";
-            }
-        }
-    }
-
-    async function procesarPedido() {
-        try {
-            const dist = parseFloat(document.getElementById('txtDist').innerText) || 0;
-            if (dist > 7) {
-                alert(`ERROR: La distancia de entrega (${dist.toFixed(2)} km) excede el límite de 7 km.`);
-                return;
-            }
-
-            const dirInput = document.getElementById('chkDir');
-            const telInput = document.getElementById('chkTel');
-
-            const dir = dirInput ? dirInput.value : '';
-            const tel = telInput ? telInput.value : '';
-
-            if (!dir.trim() || !tel.trim()) return alert("Por favor ingresa la dirección y teléfono de contacto.");
-
-            const btn = document.getElementById('btnConfirmar');
-            if (btn) btn.disabled = true;
-
-            const sub = carrito.reduce((a, i) => a + (i.precio * (i.cant || 1)), 0);
-            const env = parseFloat(document.getElementById('txtEnv').innerText) || 0;
-            const tot = sub + env;
-            const cCom = getCoordsCom();
-
-            const est = tot > 500 ? 'revision_admin' : 'pendiente';
-            const nomCliente = user?.user_metadata?.full_name || (user?.email ? user.email.split('@')[0] : 'Cliente');
-
-            const payload = {
-                cliente_nombre: nomCliente,
-                cliente_email: user ? user.email : '',
-                telefono_cliente: tel,
-                direccion_entrega: `${dir} (GPS: ${coordsEntrega.lat.toFixed(6)}, ${coordsEntrega.lng.toFixed(6)})`,
-                producto_nombre: carrito.map(i => `${i.cant || 1}x ${i.nombre}`).join(', '),
-                subtotal: sub,
-                costo_envio: env,
-                precio: tot,
-                comercio_id: comercioSel ? comercioSel.id : null,
-                comercio_nombre: comercioSel ? comercioSel.nombre : 'Comercio',
-                repartidor_id: null,
-                repartidor_nombre: null,
-                lat_origen: cCom.lat,
-                lng_origen: cCom.lng,
-                lat_destino: coordsEntrega.lat,
-                lng_destino: coordsEntrega.lng,
-                estado: est
-            };
-
-            const { error } = await supabaseClient.from('pedidos').insert([payload]);
-            if (btn) btn.disabled = false;
-
-            if (error) {
-                alert("Error al procesar pedido: " + error.message);
-            } else {
-                if (tot > 500) {
-                    alert("⚠️ Su pedido supera los $500 y ha sido enviado al Administrador para su aprobación.");
-                } else {
-                    alert("¡Pedido registrado exitosamente!");
-                }
-                carrito = [];
-                actCar();
-                cerrarCheckout();
-            }
-        } catch (err) {
-            console.error("Error inesperado al enviar el pedido:", err);
-            alert("Ocurrió un error inesperado.");
-            const btn = document.getElementById('btnConfirmar');
-            if (btn) btn.disabled = false;
-        }
-    }
-
-    // --- MÓDULO REPARTIDOR CON CAPTURA OBLIGATORIA DE NOMBRE ---
-    function activarModoRepartidor() {
-        ocultar();
-        show('pRepartidor');
-        document.getElementById('lblRol').innerText = 'REPARTIDOR';
-        cargarRadarRepartidor();
-
-        supabaseClient.channel('live_repartidor')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
-                cargarRadarRepartidor();
-            })
-            .subscribe();
-    }
-
-    async function cargarRadarRepartidor() {
-        const { data: act } = await supabaseClient.from('pedidos')
-            .select('*')
-            .eq('repartidor_id', user.id)
-            .eq('estado', 'en_camino')
-            .maybeSingle();
-
-        if (act) {
-            pedidoActivoId = act.id;
-            show('seccionPedidoActivo');
-            document.getElementById('detallePedidoActivo').innerHTML = `
-                <b>Comercio:</b> ${act.comercio_nombre}<br>
-                <b>Cliente:</b> ${act.cliente_nombre} (${act.telefono_cliente || 'Sin teléfono'})<br>
-                <b>Productos:</b> ${act.producto_nombre || 'N/A'}<br>
-                <b>Dirección de Entrega:</b> ${act.direccion_entrega}<br>
-                <b>Ganancia Envío:</b> <span style="color:var(--p); font-weight:bold;">$${Number(act.costo_envio || 25).toFixed(2)}</span>
-            `;
-            renderRutaRepartidor(act);
-        } else {
-            pedidoActivoId = null;
-            document.getElementById('seccionPedidoActivo').classList.add('oculto');
-        }
-
-        const { data: peds } = await supabaseClient.from('pedidos')
-            .select('*')
-            .eq('estado', 'despachado')
-            .order('created_at', { ascending: true });
-
-        document.getElementById('listaPedidosRepartidor').innerHTML = (peds && peds.length) ? peds.map(p => `
-            <div style="background:#fff; border:1px solid #ddd; padding:10px; margin-bottom:8px; border-radius:6px; border-left:4px solid var(--r);">
-                <b>Comercio:</b> ${p.comercio_nombre}<br>
-                <b>Cliente:</b> ${p.cliente_nombre}<br>
-                <b>Teléfono Cliente:</b> ${p.telefono_cliente || 'N/A'}<br>
-                <b>Productos:</b> ${p.producto_nombre || 'N/A'}<br>
-                <b>Dirección de Entrega:</b> ${p.direccion_entrega}<br>
-                <b>Pago Envío:</b> $${Number(p.costo_envio || 25).toFixed(2)} | <b>Total Pedido:</b> $${Number(p.precio).toFixed(2)}<br>
-                <button class="btn btn-r" style="margin-top:6px;" onclick="tomarPedido('${p.id}')" ${act ? 'disabled style="opacity:0.5;"' : ''}>
-                    ${act ? 'Ya tienes un pedido activo' : '🛵 Tomar este Pedido'}
-                </button>
-            </div>
-        `).join('') : '<p>No hay pedidos pendientes por entregar en este momento.</p>';
-    }
-
-    // TOMAR PEDIDO REFORZADO CON PROMPT DE RESPALDO
-    async function tomarPedido(pedidoId) {
-        if (pedidoActivoId) return alert("Ya tienes un pedido activo en ruta.");
-
-        let nombreRepartidor = user.user_metadata?.full_name || user.user_metadata?.name;
-
-        if (!nombreRepartidor || nombreRepartidor.trim() === '') {
-            const defaultNom = user.email ? user.email.split('@')[0] : 'Repartidor';
-            nombreRepartidor = prompt("Por favor ingresa tu Nombre Completo para tomar la entrega:", defaultNom);
-            
-            if (!nombreRepartidor || !nombreRepartidor.trim()) {
-                return alert("Es obligatorio ingresar tu nombre para poder tomar el pedido.");
-            }
-        }
-
-        const { data, error } = await supabaseClient.from('pedidos').update({
-            repartidor_id: user.id,
-            repartidor_nombre: nombreRepartidor,
-            estado: 'en_camino'
-        }).eq('id', pedidoId).select();
-
-        if (error) {
-            alert("Error de Supabase al tomar pedido: " + error.message);
-        } else if (!data || data.length === 0) {
-            alert("⚠️ Atención: Tu política de seguridad RLS en Supabase impidió actualizar el pedido. Revisa que las políticas UPDATE en la tabla 'pedidos' admitan repartidores.");
-        } else {
-            alert("¡Pedido tomado con éxito!");
-            cargarRadarRepartidor();
-        }
-    }
-
-    async function marcarEntregado() {
-        if (!pedidoActivoId) return;
-
-        const { error } = await supabaseClient.from('pedidos').update({
-            estado: 'entregado'
-        }).eq('id', pedidoActivoId);
-
-        if (error) {
-            alert("Error al finalizar entrega: " + error.message);
-        } else {
-            alert("¡Entrega completada con éxito!");
-            cargarRadarRepartidor();
-        }
-    }
-
-    function renderRutaRepartidor(ped) {
-        setTimeout(() => {
-            const latO = ped.lat_origen || 19.5694, lngO = ped.lng_origen || -99.7669;
-            const latD = ped.lat_destino || 19.5694, lngD = ped.lng_destino || -99.7669;
-
-            if (!mapaR) {
-                mapaR = L.map('mapaRutaRepartidor').setView([latO, lngO], 13);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapaR);
-            } else {
-                mapaR.invalidateSize();
-            }
-
-            L.marker([latO, lngO]).addTo(mapaR).bindPopup("Comercio").openPopup();
-            L.marker([latD, lngD]).addTo(mapaR).bindPopup("Cliente");
-
-            fetch(`https://router.project-osrm.org/route/v1/driving/${lngO},${latO};${lngD},${latD}?overview=full&geometries=geojson`)
-                .then(r => r.json())
-                .then(d => {
-                    if (d.routes && d.routes[0]) {
-                        const pts = d.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-                        if (rutaRepartidorLine) mapaR.removeLayer(rutaRepartidorLine);
-                        rutaRepartidorLine = L.polyline(pts, { color: '#e67e22', weight: 5 }).addTo(mapaR);
-                        mapaR.fitBounds(rutaRepartidorLine.getBounds());
-                    }
-                }).catch(() => {});
-        }, 300);
-    }
-
-    // --- PANELES DE ADMINISTRACIÓN Y DUEÑO ---
+    // --- PANEL DE DUEÑO DE COMERCIO ---
     function cargarDuenio() {
-        document.getElementById('duenioNom').innerText = miComercio.nombre;
+        if (document.getElementById('duenioNom')) {
+            document.getElementById('duenioNom').innerText = miComercio.nombre;
+        }
         cargarPedidosDuenio();
-        supabaseClient.channel('live_comercio').on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos', filter: `comercio_id=eq.${miComercio.id}` }, () => cargarPedidosDuenio()).subscribe();
+        supabaseClient.channel('live_comercio').on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table: 'pedidos', 
+            filter: `comercio_id=eq.${miComercio.id}` 
+        }, () => cargarPedidosDuenio()).subscribe();
     }
 
     async function cargarPedidosDuenio() {
-        const { data: peds } = await supabaseClient.from('pedidos').select('*').eq('comercio_id', miComercio.id).neq('estado', 'revision_admin').order('created_at', { ascending: false });
+        const { data: peds } = await supabaseClient
+            .from('pedidos')
+            .select('*')
+            .eq('comercio_id', miComercio.id)
+            .neq('estado', 'revision_admin')
+            .order('created_at', { ascending: false });
+
         const contenedor = document.getElementById('listaPedidosDuenio');
         if (!contenedor) return;
 
@@ -683,7 +264,7 @@ window.responderSolicitudComercio = async function(idComercio, nuevoEstado) {
                 </thead>
                 <tbody>
                     ${peds.map(p => {
-                        const repMostrar = p.repartidor_nombre || (p.repartidor_id ? 'Asignado (Sin nombre registrado)' : 'Sin asignar');
+                        const repMostrar = p.repartidor_nombre || (p.repartidor_id ? 'Asignado' : 'Sin asignar');
                         return `
                         <tr style="border-bottom:1px solid #ddd;">
                             <td>${p.created_at ? new Date(p.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}</td>
@@ -709,7 +290,16 @@ window.responderSolicitudComercio = async function(idComercio, nuevoEstado) {
         cargarPedidosDuenio();
     }
 
+    // --- PANEL EXCLUSIVO DE ADMINISTRADOR ---
     function cargarAdmin() {
+        // Validación estricta por si la función es llamada manualmente
+        if (!user || user.email !== EMAIL_ADMIN) {
+            alert("Acceso denegado. No tienes permisos de Administrador.");
+            evalRol();
+            return;
+        }
+
+        cargarSolicitudesComerciosAdmin();
         cargarRevAdmin();
         cargarTablaAdmin();
         cargarMetricasAdmin();
@@ -717,7 +307,7 @@ window.responderSolicitudComercio = async function(idComercio, nuevoEstado) {
         supabaseClient.channel('live_admin')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
                 if (payload.new && payload.new.estado === 'revision_admin') {
-                    alert(`🚨 ¡NUEVA ALERTA! Se ha recibido un pedido de $${Number(payload.new.precio).toFixed(2)} pesos que requiere tu aprobación.`);
+                    alert(`🚨 ¡NUEVA ALERTA! Pedido retenido de $${Number(payload.new.precio).toFixed(2)} requiere aprobación.`);
                 }
                 cargarRevAdmin(); 
                 cargarTablaAdmin(); 
@@ -728,14 +318,67 @@ window.responderSolicitudComercio = async function(idComercio, nuevoEstado) {
                 cargarTablaAdmin(); 
                 cargarMetricasAdmin();
             })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'comercios' }, () => {
+                cargarSolicitudesComerciosAdmin();
+                cargarMetricasAdmin();
+            })
             .subscribe();
+    }
+
+    async function cargarSolicitudesComerciosAdmin() {
+        const contenedor = document.getElementById('listaSolicitudesComercios');
+        if (!contenedor) return;
+
+        const { data: coms, error } = await supabaseClient
+            .from('comercios')
+            .select('*')
+            .eq('estado', 'pendiente')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            contenedor.innerHTML = '<p>Error al obtener solicitudes de comercios.</p>';
+            return;
+        }
+
+        contenedor.innerHTML = (coms && coms.length) ? coms.map(c => `
+            <div style="border:1px solid #f39c12; background:#fffdf5; padding:12px; margin-bottom:10px; border-radius:6px;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <img src="${c.logo_url || DEFAULT_LOGO_SVG}" style="width:50px; height:50px; border-radius:4px; object-fit:cover;">
+                    <div>
+                        <h4 style="margin:0; color:#d35400;">🏢 ${c.nombre}</h4>
+                        <small><b>Teléfono:</b> ${c.telefono || 'N/A'}</small><br>
+                        <small><b>Dirección:</b> ${c.direccion || 'N/A'}</small>
+                    </div>
+                </div>
+                <div style="margin-top:10px; display:flex; gap:8px;">
+                    <button class="btn btn-p" onclick="responderSolicitudComercio('${c.id}', 'aprobado')">✅ Aprobar Comercio</button>
+                    <button class="btn btn-d" style="background:#e74c3c;" onclick="responderSolicitudComercio('${c.id}', 'rechazado')">❌ Rechazar</button>
+                    <button class="btn btn-w" onclick='verProductosComercio(${JSON.stringify(c)})'>🔍 Visitar Productos</button>
+                </div>
+            </div>
+        `).join('') : '<p>No hay solicitudes de comercios pendientes de revisión.</p>';
+    }
+
+    async function responderSolicitudComercio(id, nuevoEstado) {
+        if (!confirm(`¿Estás seguro de marcar este comercio como: ${nuevoEstado.toUpperCase()}?`)) return;
+
+        const { error } = await supabaseClient.from('comercios').update({ estado: nuevoEstado }).eq('id', id);
+        if (error) {
+            alert("Error al responder la solicitud: " + error.message);
+        } else {
+            cargarAdmin();
+        }
     }
 
     async function cargarRevAdmin() {
         const contenedor = document.getElementById('listaAdminRevision');
         if (!contenedor) return;
 
-        const { data: peds, error } = await supabaseClient.from('pedidos').select('*').eq('estado', 'revision_admin').order('created_at', { ascending: false });
+        const { data: peds, error } = await supabaseClient
+            .from('pedidos')
+            .select('*')
+            .eq('estado', 'revision_admin')
+            .order('created_at', { ascending: false });
 
         if (error) {
             contenedor.innerHTML = '<p>Error al obtener revisiones.</p>';
@@ -821,6 +464,7 @@ window.responderSolicitudComercio = async function(idComercio, nuevoEstado) {
         if (document.getElementById('mPed')) document.getElementById('mPed').innerText = c3 || 0;
     }
 
+    // --- REGISTRO Y GESTIÓN DE PRODUCTOS/COMERCIOS ---
     function mostrarRegComercio() {
         ocultar();
         show('pRegComercio');
@@ -847,8 +491,10 @@ window.responderSolicitudComercio = async function(idComercio, nuevoEstado) {
             nombre: document.getElementById('regNom').value,
             telefono: document.getElementById('regTel').value,
             direccion: `${document.getElementById('regDir').value} (GPS: ${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)})`,
-            logo_url: url
+            logo_url: url,
+            estado: 'pendiente' // El comercio entra como pendiente para ser aprobado por el admin
         }]);
+        alert("Solicitud de comercio enviada. Espera la autorización del administrador.");
         evalRol();
     }
 
@@ -872,12 +518,33 @@ window.responderSolicitudComercio = async function(idComercio, nuevoEstado) {
     }
 
     async function eliminarComercio() {
-        if (confirm("¿Eliminar comercio?")) {
+        if (confirm("¿Eliminar comercio de la plataforma?")) {
             await supabaseClient.from('comercios').delete().eq('id', miComercio.id);
             miComercio = null;
             evalRol();
         }
     }
+
+    window.verProductosComercio = async function(comercio) {
+        comercioSel = comercio;
+        ocultar();
+        show('pClienteProds');
+        if (document.getElementById('txtComercioSel')) {
+            document.getElementById('txtComercioSel').innerText = `${comercio.nombre} (Vista Inspección Admin)`;
+        }
+
+        const { data: ps } = await supabaseClient.from('productos').select('*').eq('comercio_id', comercio.id);
+        const contenedor = document.getElementById('listaProdsCliente');
+        if (!contenedor) return;
+
+        contenedor.innerHTML = (ps && ps.length) ? ps.map(p => `
+            <div class="tarjeta">
+                <img src="${p.imagen_url || 'https://via.placeholder.com/150'}">
+                <h4>${p.nombre}</h4>
+                <p>$${Number(p.precio).toFixed(2)}</p>
+            </div>
+        `).join('') : '<p>Sin productos registrados en este comercio</p>';
+    };
 </script>
 </body>
 </html>
