@@ -1617,29 +1617,36 @@ window.procesarPedido = procesarPedidoFinal;
 
     
     // PANEL DE DUEÑO, HORA DE PEDIDO Y REFRESH DE ESTADOS
-    async function cargarPanelDuenio() {
-        ocultarTodasLasPantallas();
-        document.getElementById('pantallaDuenio').classList.remove('oculto');
-        document.getElementById('nombreComercioDuenio').innerText = `🏬 ${miComercio.nombre}`;
-        document.getElementById('infoComercioDuenio').innerText = `Dirección: ${miComercio.direccion || 'N/A'} | Horario: ${miComercio.horario || 'N/A'}`;
-        cargarProductosDuenio();
-    }
+   async function cargarPanelDuenio() {
+    ocultarTodasLasPantallas();
+    document.getElementById('pantallaDuenio').classList.remove('oculto');
+    
+    // ASIGNACIÓN DE LOGO E INFORMACIÓN DEL COMERCIO
+    const imgEl = document.getElementById('imgComercioDuenio');
+    const logoUrl = miComercio.logo_url || miComercio.logo || DEFAULT_LOGO_SVG;
+    if (imgEl) imgEl.src = logoUrl;
 
-    window.eliminarMiComercio = async function() {
-        if (!miComercio) return;
-        if (confirm("⚠️ ¿Deseas ELIMINAR tu comercio por completo y todos sus productos?")) {
-            try {
-                await supabaseClient.from('productos').delete().eq('comercio_id', miComercio.id);
-                const { error } = await supabaseClient.from('comercios').delete().eq('id', miComercio.id);
-                if (error) throw error;
-                alert("Tu comercio ha sido eliminado.");
-                miComercio = null;
-                await verificarSiEsDuenio();
-            } catch (err) {
-                alert("Error: " + err.message);
-            }
+    document.getElementById('nombreComercioDuenio').innerText = `🏬 ${miComercio.nombre}`;
+    document.getElementById('infoComercioDuenio').innerText = `Dirección: ${miComercio.direccion || 'N/A'} | Horario: ${miComercio.horario || 'N/A'}`;
+    
+    cargarProductosDuenio();
+}
+
+window.eliminarMiComercio = async function() {
+    if (!miComercio) return;
+    if (confirm("⚠️ ¿Deseas ELIMINAR tu comercio por completo y todos sus productos?")) {
+        try {
+            await supabaseClient.from('productos').delete().eq('comercio_id', miComercio.id);
+            const { error } = await supabaseClient.from('comercios').delete().eq('id', miComercio.id);
+            if (error) throw error;
+            alert("Tu comercio ha sido eliminado.");
+            miComercio = null;
+            await verificarSiEsDuenio();
+        } catch (err) {
+            alert("Error: " + err.message);
         }
-    };
+    }
+};
 
     function formatearFechaHora(fechaIso) {
         if (!fechaIso) return 'Reciente';
