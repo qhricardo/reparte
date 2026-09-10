@@ -1194,60 +1194,63 @@ async function cargarComerciosCliente() {
         }
     }
     
-    // REGISTRAR COMERCIO CON MAPA
-    function mostrarFormularioCrearComercio() {
-        ocultarTodasLasPantallas();
-        document.getElementById('pantallaRegistroComercio').classList.remove('oculto');
+   // ==========================================
+// REGISTRAR COMERCIO CON MAPA Y APROBACIÓN
+// ==========================================
 
-        setTimeout(() => {
-            if (!mapaRegComercio) {
-                mapaRegComercio = L.map('mapaComercioReg').setView([coordsComercioRegistro.lat, coordsComercioRegistro.lng], 14);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaRegComercio);
+function mostrarFormularioCrearComercio() {
+    ocultarTodasLasPantallas();
+    document.getElementById('pantallaRegistroComercio').classList.remove('oculto');
 
-                marcadorComercioReg = L.marker([coordsComercioRegistro.lat, coordsComercioRegistro.lng], { draggable: true }).addTo(mapaRegComercio);
+    setTimeout(() => {
+        if (!mapaRegComercio) {
+            mapaRegComercio = L.map('mapaComercioReg').setView([coordsComercioRegistro.lat, coordsComercioRegistro.lng], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaRegComercio);
 
-                marcadorComercioReg.on('dragend', function (e) {
-                    const pos = e.target.getLatLng();
-                    coordsComercioRegistro = { lat: pos.lat, lng: pos.lng };
-                    obtenerNombreDireccion(pos.lat, pos.lng, 'direccionComercioReg');
-                });
+            marcadorComercioReg = L.marker([coordsComercioRegistro.lat, coordsComercioRegistro.lng], { draggable: true }).addTo(mapaRegComercio);
 
-                mapaRegComercio.on('click', function(e) {
-                    marcadorComercioReg.setLatLng(e.latlng);
-                    coordsComercioRegistro = { lat: e.latlng.lat, lng: e.latlng.lng };
-                    obtenerNombreDireccion(e.latlng.lat, e.latlng.lng, 'direccionComercioReg');
-                });
-            } else {
-                mapaRegComercio.invalidateSize();
-            }
-        }, 300);
-    }
+            marcadorComercioReg.on('dragend', function (e) {
+                const pos = e.target.getLatLng();
+                coordsComercioRegistro = { lat: pos.lat, lng: pos.lng };
+                obtenerNombreDireccion(pos.lat, pos.lng, 'direccionComercioReg');
+            });
 
-    async function buscarUbicacionComercio() {
-        const dir = document.getElementById('direccionComercioReg').value;
-        if (!dir.trim()) return;
-
-        try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(dir)}`);
-            const results = await res.json();
-            if (results && results.length > 0) {
-                const lat = parseFloat(results[0].lat);
-                const lon = parseFloat(results[0].lon);
-                coordsComercioRegistro = { lat, lng: lon };
-                
-                if (mapaRegComercio && marcadorComercioReg) {
-                    mapaRegComercio.setView([lat, lon], 15);
-                    marcadorComercioReg.setLatLng([lat, lon]);
-                }
-            } else {
-                alert("Ubicación no encontrada.");
-            }
-        } catch (e) {
-            console.error(e);
+            mapaRegComercio.on('click', function(e) {
+                marcadorComercioReg.setLatLng(e.latlng);
+                coordsComercioRegistro = { lat: e.latlng.lat, lng: e.latlng.lng };
+                obtenerNombreDireccion(e.latlng.lat, e.latlng.lng, 'direccionComercioReg');
+            });
+        } else {
+            mapaRegComercio.invalidateSize();
         }
-    }
+    }, 300);
+}
 
-   // ✅ CÓDIGO ACTUALIZADO (Sube la imagen a Supabase Storage primero)
+async function buscarUbicacionComercio() {
+    const dir = document.getElementById('direccionComercioReg').value;
+    if (!dir.trim()) return;
+
+    try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(dir)}`);
+        const results = await res.json();
+        if (results && results.length > 0) {
+            const lat = parseFloat(results[0].lat);
+            const lon = parseFloat(results[0].lon);
+            coordsComercioRegistro = { lat, lng: lon };
+            
+            if (mapaRegComercio && marcadorComercioReg) {
+                mapaRegComercio.setView([lat, lon], 15);
+                marcadorComercioReg.setLatLng([lat, lon]);
+            }
+        } else {
+            alert("Ubicación no encontrada.");
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+// EVENTO GUARDAR COMERCIO
 document.getElementById('formComercio').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btnGuardar = e.target.querySelector('button[type="submit"]');
@@ -1282,24 +1285,28 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
 
         if (btnGuardar) btnGuardar.innerText = "Guardando comercio...";
 
-        // 4. Armar el objeto para la base de datos con la URL pública generada
+        // 4. Armar objeto para la BD con estado pendiente
         const textoDir = document.getElementById('direccionComercioReg').value;
         const nuevoComercio = {
-    usuario_id: usuarioActual.id,
-    nombre: document.getElementById('nombreComercioReg').value,
-    telefono: document.getElementById('telefonoComercioReg').value,
-    direccion: `${textoDir} (GPS: ${coordsComercioRegistro.lat.toFixed(6)}, ${coordsComercioRegistro.lng.toFixed(6)})`,
-    horario: document.getElementById('horarioComercioReg').value,
-    logo_url: publicUrlData.publicUrl,
-    estado: 'pendiente' // 👈 Se guarda pendiente de aprobación
-};
+            usuario_id: usuarioActual.id,
+            nombre: document.getElementById('nombreComercioReg').value,
+            telefono: document.getElementById('telefonoComercioReg').value,
+            direccion: `${textoDir} (GPS: ${coordsComercioRegistro.lat.toFixed(6)}, ${coordsComercioRegistro.lng.toFixed(6)})`,
+            horario: document.getElementById('horarioComercioReg').value,
+            logo_url: publicUrlData.publicUrl,
+            estado: 'pendiente'
+        };
 
-const { error: insertError } = await supabaseClient.from('comercios').insert([nuevoComercio]);
-if (insertError) throw insertError;
+        // 5. Insertar registro en Supabase
+        const { error: insertError } = await supabaseClient.from('comercios').insert([nuevoComercio]);
+        if (insertError) throw insertError;
 
-alert("¡Comercio enviado a revisión! El administrador validará tu solicitud pronto.");
-document.getElementById('formComercio').reset();
-        verificarSiEsDuenio();
+        alert("¡Comercio enviado a revisión! El administrador validará tu solicitud pronto.");
+        document.getElementById('formComercio').reset();
+        
+        if (typeof verificarSiEsDuenio === 'function') {
+            verificarSiEsDuenio();
+        }
 
     } catch (err) {
         alert("Error al registrar el comercio: " + err.message);
