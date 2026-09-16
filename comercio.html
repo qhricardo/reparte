@@ -1319,15 +1319,35 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
 });
 
 
-// Configuración de horario límite (21 = 9:00 PM)
-const HORA_CIERRE_PEDIDOS = 21; 
+function verificarHorarioServicio() {
+  const ahora = new Date();
+  const hora = ahora.getHours(); // Retorna la hora de 0 a 23
 
-function esHorarioPermitidoPedidos() {
-    const horaActual = new Date().getHours();
-    // Retorna false si son las 21:00 hrs (9:00 PM) o más
-    return horaActual < HORA_CIERRE_PEDIDOS; 
+  // Define las horas de servicio. Por ejemplo: abierto de 8:00 AM a 9:00 PM (21:00)
+  const HORA_APERTURA = 8;
+  const HORA_CIERRE = 21; 
+
+  if (hora >= HORA_CIERRE || hora < HORA_APERTURA) {
+    return false; // Cerrado
+  }
+  return true; // Abierto
 }
 
+// Ejemplo de uso en la función del botón de envío/confirmación:
+function hacerPedido() {
+  if (!verificarHorarioServicio()) {
+    alert("Lo sentimos, el servicio está cerrado. Nuestro horario de atención finaliza a las 9:00 p.m.");
+    return; // Detiene la ejecución del pedido
+  }
+
+  // Lógica normal para procesar el pedido...
+}
+
+    function obtenerHoraLocal() {
+  const opciones = { timeZone: 'America/Mexico_City', hour: '2-digit', hour12: false };
+  const horaString = new Intl.DateTimeFormat([], opciones).format(new Date());
+  return parseInt(horaString, 10);
+}
 
 // CARRITO Y CHECKOUT
 function agregarAlCarrito(id, nombre, precio) {
