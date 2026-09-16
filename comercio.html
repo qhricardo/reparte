@@ -1319,69 +1319,38 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
 });
 
 
-// 1. Usar asignación segura para el carrito sin redeclarar let/const
-window.carrito = window.carrito || [];
+// Configuración de horario límite (21 = 9:00 PM)
+const HORA_CIERRE_PEDIDOS = 21; 
 
-// 2. Función de horario CDMX segura (no interrumpe la base de datos)
-function verificarHorarioServicio() {
-    try {
-        const horaString = new Date().toLocaleTimeString('en-US', { 
-            timeZone: 'America/Mexico_City', 
-            hour: 'numeric', 
-            hour12: false 
-        });
-        let hora = parseInt(horaString, 10);
-        if (isNaN(hora)) return true; // Si hay error en la fecha, no bloquea la app
-        if (hora === 24) hora = 0;
-
-        const HORA_APERTURA = 8;  // 8:00 AM
-        const HORA_CIERRE = 21;  // 9:00 PM (21:00 hrs)
-
-        if (hora >= HORA_CIERRE || hora < HORA_APERTURA) {
-            return false; // Cerrado
-        }
-        return true; // Abierto
-    } catch (e) {
-        console.error("Error al verificar horario:", e);
-        return true; // En caso de fallo, permite el flujo para no romper la app
-    }
+function esHorarioPermitidoPedidos() {
+    const horaActual = new Date().getHours();
+    // Retorna false si son las 21:00 hrs (9:00 PM) o más
+    return horaActual < HORA_CIERRE_PEDIDOS; 
 }
 
-// 3. Modificar ÚNICAMENTE la función de agregar al carrito
-function agregarAlCarrito(id, nombre, precio) {
-    // La validación se activa SOLAMENTE al hacer clic en un producto
-    if (!verificarHorarioServicio()) {
-        alert("Lo sentimos, el servicio está cerrado. Nuestro horario de atención finaliza a las 9:00 p.m.");
-        return; 
-    }
 
-    const existente = window.carrito.find(item => item.id === id);
-    if (existente) {
-        existente.cantidad++;
-    } else {
-        window.carrito.push({ id, nombre, precio: parseFloat(precio), cantidad: 1 });
-    }
+// CARRITO Y CHECKOUT
+function agregarAlCarrito(id, nombre, precio) {
+    const existente = carrito.find(item => item.id === id);
+    if (existente) existente.cantidad++;
+    else carrito.push({ id, nombre, precio, cantidad: 1 });
     actualizarBarraCarrito();
 }
 
 function actualizarBarraCarrito() {
     const barra = document.getElementById('barraCarrito');
-    if (!barra) return;
-
-    const cant = window.carrito.reduce((acc, item) => acc + item.cantidad, 0);
-    const subtotal = window.carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+    const cant = carrito.reduce((acc, item) => acc + item.cantidad, 0);
+    const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
 
     if (cant > 0) {
         barra.classList.remove('oculto');
-        const elCant = document.getElementById('cantCarrito');
-        const elSubtotal = document.getElementById('subtotalCarrito');
-        if (elCant) elCant.innerText = cant;
-        if (elSubtotal) elSubtotal.innerText = subtotal.toFixed(2);
+        document.getElementById('cantCarrito').innerText = cant;
+        document.getElementById('subtotalCarrito').innerText = subtotal.toFixed(2);
     } else {
         barra.classList.add('oculto');
     }
 }
-    
+
 function obtenerCoordsComercioActivo() {
     if (!comercioSeleccionadoObjeto || !comercioSeleccionadoObjeto.direccion) {
         return { lat: 19.5694, lng: -99.7669 };
