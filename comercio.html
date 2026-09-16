@@ -1319,19 +1319,27 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
 });
 
 
-// 1. Helper para obtener la hora oficial en CDMX
+// Variable global del carrito (esencial)
+let carrito = carrito || [];
+
+// 1. Helper seguro para obtener la hora en CDMX (0 - 23)
 function obtenerHoraLocal() {
-    const opciones = { timeZone: 'America/Mexico_City', hour: '2-digit', hour12: false };
-    const horaString = new Intl.DateTimeFormat([], opciones).format(new Date());
-    return parseInt(horaString, 10);
+    const horaString = new Date().toLocaleTimeString('en-US', { 
+        timeZone: 'America/Mexico_City', 
+        hour: 'numeric', 
+        hour12: false 
+    });
+    const hora = parseInt(horaString, 10);
+    return hora === 24 ? 0 : hora;
 }
 
-// 2. Función de verificación de horario
+// 2. Función de verificación de horario (8:00 AM a 9:00 PM)
 function verificarHorarioServicio() {
     const hora = obtenerHoraLocal();
     const HORA_APERTURA = 8;
-    const HORA_CIERRE = 21; // 9:00 PM
+    const HORA_CIERRE = 21; // 21 = 9:00 PM
 
+    // Si es igual o mayor a las 21:00 (9 PM) o menor a las 8:00 AM -> Cerrado
     if (hora >= HORA_CIERRE || hora < HORA_APERTURA) {
         return false; // Cerrado
     }
@@ -1340,32 +1348,41 @@ function verificarHorarioServicio() {
 
 // 3. CARRITO Y CHECKOUT
 function agregarAlCarrito(id, nombre, precio) {
-    // Validar horario antes de permitir agregar items
+    // Validar horario antes de agregar
     if (!verificarHorarioServicio()) {
         alert("Lo sentimos, el servicio está cerrado. Nuestro horario de atención finaliza a las 9:00 p.m.");
-        return; // Cancela la acción de agregar al carrito
+        return; // Detiene el flujo
     }
 
     const existente = carrito.find(item => item.id === id);
-    if (existente) existente.cantidad++;
-    else carrito.push({ id, nombre, precio, cantidad: 1 });
+    if (existente) {
+        existente.cantidad++;
+    } else {
+        carrito.push({ id, nombre, precio: parseFloat(precio), cantidad: 1 });
+    }
     actualizarBarraCarrito();
 }
 
 function actualizarBarraCarrito() {
     const barra = document.getElementById('barraCarrito');
+    if (!barra) return; // Evita errores si el elemento no existe en el DOM
+
     const cant = carrito.reduce((acc, item) => acc + item.cantidad, 0);
     const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
 
     if (cant > 0) {
         barra.classList.remove('oculto');
-        document.getElementById('cantCarrito').innerText = cant;
-        document.getElementById('subtotalCarrito').innerText = subtotal.toFixed(2);
+        const elCant = document.getElementById('cantCarrito');
+        const elSubtotal = document.getElementById('subtotalCarrito');
+        
+        if (elCant) elCant.innerText = cant;
+        if (elSubtotal) elSubtotal.innerText = subtotal.toFixed(2);
     } else {
         barra.classList.add('oculto');
     }
 }
 
+    
 function obtenerCoordsComercioActivo() {
     if (!comercioSeleccionadoObjeto || !comercioSeleccionadoObjeto.direccion) {
         return { lat: 19.5694, lng: -99.7669 };
