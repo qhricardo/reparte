@@ -1319,67 +1319,68 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
 });
 
 
+// 1. Usar asignación segura para el carrito sin redeclarar let/const
+window.carrito = window.carrito || [];
 
-// 1. Helper seguro para obtener la hora en CDMX (0 - 23)
-function obtenerHoraLocal() {
-    const horaString = new Date().toLocaleTimeString('en-US', { 
-        timeZone: 'America/Mexico_City', 
-        hour: 'numeric', 
-        hour12: false 
-    });
-    const hora = parseInt(horaString, 10);
-    return hora === 24 ? 0 : hora;
-}
-
-// 2. Función de verificación de horario (8:00 AM a 9:00 PM)
+// 2. Función de horario CDMX segura (no interrumpe la base de datos)
 function verificarHorarioServicio() {
-    const hora = obtenerHoraLocal();
-    const HORA_APERTURA = 8;
-    const HORA_CIERRE = 21; // 21 = 9:00 PM
+    try {
+        const horaString = new Date().toLocaleTimeString('en-US', { 
+            timeZone: 'America/Mexico_City', 
+            hour: 'numeric', 
+            hour12: false 
+        });
+        let hora = parseInt(horaString, 10);
+        if (isNaN(hora)) return true; // Si hay error en la fecha, no bloquea la app
+        if (hora === 24) hora = 0;
 
-    // Si es igual o mayor a las 21:00 (9 PM) o menor a las 8:00 AM -> Cerrado
-    if (hora >= HORA_CIERRE || hora < HORA_APERTURA) {
-        return false; // Cerrado
+        const HORA_APERTURA = 8;  // 8:00 AM
+        const HORA_CIERRE = 21;  // 9:00 PM (21:00 hrs)
+
+        if (hora >= HORA_CIERRE || hora < HORA_APERTURA) {
+            return false; // Cerrado
+        }
+        return true; // Abierto
+    } catch (e) {
+        console.error("Error al verificar horario:", e);
+        return true; // En caso de fallo, permite el flujo para no romper la app
     }
-    return true; // Abierto
 }
 
-// 3. CARRITO Y CHECKOUT
+// 3. Modificar ÚNICAMENTE la función de agregar al carrito
 function agregarAlCarrito(id, nombre, precio) {
-    // Validar horario antes de agregar
+    // La validación se activa SOLAMENTE al hacer clic en un producto
     if (!verificarHorarioServicio()) {
         alert("Lo sentimos, el servicio está cerrado. Nuestro horario de atención finaliza a las 9:00 p.m.");
-        return; // Detiene el flujo
+        return; 
     }
 
-    const existente = carrito.find(item => item.id === id);
+    const existente = window.carrito.find(item => item.id === id);
     if (existente) {
         existente.cantidad++;
     } else {
-        carrito.push({ id, nombre, precio: parseFloat(precio), cantidad: 1 });
+        window.carrito.push({ id, nombre, precio: parseFloat(precio), cantidad: 1 });
     }
     actualizarBarraCarrito();
 }
 
 function actualizarBarraCarrito() {
     const barra = document.getElementById('barraCarrito');
-    if (!barra) return; // Evita errores si el elemento no existe en el DOM
+    if (!barra) return;
 
-    const cant = carrito.reduce((acc, item) => acc + item.cantidad, 0);
-    const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+    const cant = window.carrito.reduce((acc, item) => acc + item.cantidad, 0);
+    const subtotal = window.carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
 
     if (cant > 0) {
         barra.classList.remove('oculto');
         const elCant = document.getElementById('cantCarrito');
         const elSubtotal = document.getElementById('subtotalCarrito');
-        
         if (elCant) elCant.innerText = cant;
         if (elSubtotal) elSubtotal.innerText = subtotal.toFixed(2);
     } else {
         barra.classList.add('oculto');
     }
 }
-
     
 function obtenerCoordsComercioActivo() {
     if (!comercioSeleccionadoObjeto || !comercioSeleccionadoObjeto.direccion) {
