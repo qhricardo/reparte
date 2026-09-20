@@ -1321,48 +1321,50 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
 // 1. Función para verificar el horario (8:00 AM a 9:00 PM CDMX)
 function esHorarioAbierto() {
     try {
-        // Obtiene la hora actual en la zona 'America/Mexico_City' de forma limpia
         const fechaCDMX = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Mexico_City" }));
-        const hora = fechaCDMX.getHours(); // Devuelve un entero exacto entre 0 y 23
+        const hora = fechaCDMX.getHours();
 
         const HORA_APERTURA = 8;  // 8:00 AM
         const HORA_CIERRE = 21;  // 9:00 PM (21:00)
 
-        // Si es mayor/igual a las 21:00 hrs o menor a las 8:00 hrs -> Cerrado
         if (hora >= HORA_CIERRE || hora < HORA_APERTURA) {
             return false;
         }
         return true;
     } catch (e) {
         console.error("Error al validar horario:", e);
-        return true; // En caso de fallo en el dispositivo del cliente, no frena la app
+        return true;
     }
 }
 
-
-// CARRITO Y CHECKOUT
+// 2. CARRITO Y CHECKOUT
 function agregarAlCarrito(id, nombre, precio) {
-    // Validar el horario únicamente al momento de dar clic
     if (!esHorarioAbierto()) {
         alert("Lo sentimos, el servicio está cerrado. Nuestro horario de atención finaliza a las 9:00 p.m.");
-        return; // Detiene la acción de comprar
+        return;
     }
     const existente = carrito.find(item => item.id === id);
-    if (existente) existente.cantidad++;
-    else carrito.push({ id, nombre, precio, cantidad: 1 });
-    actualizarBarraCarrito();
+    if (existente) {
+        existente.cantidad++;
+    } else {
+        carrito.push({ id, nombre, precio, cantidad: 1 });
     }
-
+    actualizarBarraCarrito();
+}
 
 function actualizarBarraCarrito() {
     const barra = document.getElementById('barraCarrito');
+    if (!barra) return;
+
     const cant = carrito.reduce((acc, item) => acc + item.cantidad, 0);
     const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
 
     if (cant > 0) {
         barra.classList.remove('oculto');
-        document.getElementById('cantCarrito').innerText = cant;
-        document.getElementById('subtotalCarrito').innerText = subtotal.toFixed(2);
+        const elCant = document.getElementById('cantCarrito');
+        const elSubtotal = document.getElementById('subtotalCarrito');
+        if (elCant) elCant.innerText = cant;
+        if (elSubtotal) elSubtotal.innerText = subtotal.toFixed(2);
     } else {
         barra.classList.add('oculto');
     }
