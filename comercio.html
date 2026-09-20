@@ -1318,40 +1318,24 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
     }
 });
 
-// 1. Función para verificar el horario (8:00 AM a 9:00 PM CDMX)
-function esHorarioAbierto() {
-    try {
-        const fechaCDMX = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Mexico_City" }));
-        const hora = fechaCDMX.getHours();
+// Configuración de horario límite (21 = 9:00 PM)
+const HORA_CIERRE_PEDIDOS = 21; 
 
-        const HORA_APERTURA = 8;  // 8:00 AM
-        const HORA_CIERRE = 21;  // 9:00 PM (21:00)
-
-        if (hora >= HORA_CIERRE || hora < HORA_APERTURA) {
-            return false;
-        }
-        return true;
-    } catch (e) {
-        console.error("Error al validar horario:", e);
-        return true;
-    }
+function esHorarioPermitidoPedidos() {
+    const horaActual = new Date().getHours();
+    // Retorna false si son las 21:00 hrs (9:00 PM) o más
+    return horaActual < HORA_CIERRE_PEDIDOS; 
 }
 
-// 2. CARRITO Y CHECKOUT
+
+// CARRITO Y CHECKOUT
 function agregarAlCarrito(id, nombre, precio) {
-    if (!esHorarioAbierto()) {
-        alert("Lo sentimos, el servicio está cerrado. Nuestro horario de atención finaliza a las 9:00 p.m.");
-        return;
-    }
     const existente = carrito.find(item => item.id === id);
-    if (existente) {
-        existente.cantidad++;
-    } else {
-        carrito.push({ id, nombre, precio, cantidad: 1 });
-    }
+    if (existente) existente.cantidad++;
+    else carrito.push({ id, nombre, precio, cantidad: 1 });
     actualizarBarraCarrito();
 }
-
+    
 function actualizarBarraCarrito() {
     const barra = document.getElementById('barraCarrito');
     if (!barra) return;
