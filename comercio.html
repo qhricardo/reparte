@@ -1318,19 +1318,36 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
     }
 });
 
+// Evalúa si la columna 'abierto' es true Y ADEMÁS si la hora actual está dentro del horario laboral
+function esComercioAbierto(comercio) {
+    // 1. Si en Supabase 'abierto' está en false, está cerrado
+    if (!comercio || comercio.abierto === false) {
+        return false;
+    }
 
-// Configuración de horario límite (21 = 9:00 PM)
-const HORA_CIERRE_PEDIDOS = 21; 
+    // 2. Comprobar la hora oficial de México
+    const opciones = { timeZone: 'America/Mexico_City', hour: '2-digit', hour12: false };
+    let hora = parseInt(new Intl.DateTimeFormat([], opciones).format(new Date()), 10);
+    if (hora === 24) hora = 0;
 
-function esHorarioPermitidoPedidos() {
-    const horaActual = new Date().getHours();
-    // Retorna false si son las 21:00 hrs (9:00 PM) o más
-    return horaActual < HORA_CIERRE_PEDIDOS; 
+    const HORA_APERTURA = 8;  // 8:00 AM
+    const HORA_CIERRE = 21;  // 9:00 PM
+
+    if (hora >= HORA_CIERRE || hora < HORA_APERTURA) {
+        return false; // Cerrado después de las 9:00 PM
+    }
+
+    return true; // Abierto
 }
 
 
+
 // CARRITO Y CHECKOUT
-function agregarAlCarrito(id, nombre, precio) {
+function agregarAlCarrito(id, nombre, precio, comercioData) {
+    if (!esComercioAbierto(comercioData)) {
+        alert("Lo sentimos, el comercio está cerrado. Nuestro horario de atención finaliza a las 9:00 p.m.");
+        return; // Detiene la compra
+    }
     const existente = carrito.find(item => item.id === id);
     if (existente) existente.cantidad++;
     else carrito.push({ id, nombre, precio, cantidad: 1 });
