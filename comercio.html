@@ -1318,21 +1318,40 @@ document.getElementById('formComercio').addEventListener('submit', async (e) => 
     }
 });
 
-// Configuración de horario límite (21 = 9:00 PM)
-const HORA_CIERRE_PEDIDOS = 21; 
+// Configuración de horario límite (8:00 AM a 9:00 PM CDMX)
+const HORA_APERTURA_PEDIDOS = 8;  // 8:00 AM
+const HORA_CIERRE_PEDIDOS = 21;   // 9:00 PM (21:00)
 
 function esHorarioPermitidoPedidos() {
-    const horaActual = new Date().getHours();
-    // Retorna false si son las 21:00 hrs (9:00 PM) o más
-    return horaActual < HORA_CIERRE_PEDIDOS; 
-}
+    try {
+        // Obtiene la hora en CDMX de forma segura
+        const fechaCDMX = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Mexico_City" }));
+        const horaActual = fechaCDMX.getHours();
 
+        // Retorna false si es antes de las 8:00 AM o a partir de las 9:00 PM (21:00)
+        return horaActual >= HORA_APERTURA_PEDIDOS && horaActual < HORA_CIERRE_PEDIDOS;
+    } catch (e) {
+        console.error("Error al obtener la hora:", e);
+        return true; // En caso de fallo no frena la ejecución
+    }
+}
 
 // CARRITO Y CHECKOUT
 function agregarAlCarrito(id, nombre, precio) {
+    // 1. Bloqueo por horario
+    if (!esHorarioPermitidoPedidos()) {
+        alert("Lo sentimos, el servicio está cerrado. Nuestro horario de atención finaliza a las 9:00 p.m.");
+        return; // Detiene la compra y no agrega el producto
+    }
+
+    // 2. Agregar al carrito normal
     const existente = carrito.find(item => item.id === id);
-    if (existente) existente.cantidad++;
-    else carrito.push({ id, nombre, precio, cantidad: 1 });
+    if (existente) {
+        existente.cantidad++;
+    } else {
+        carrito.push({ id, nombre, precio: parseFloat(precio), cantidad: 1 });
+    }
+
     actualizarBarraCarrito();
 }
     
