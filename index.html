@@ -845,88 +845,94 @@
     };
 
   
-    // --- NOTIFICACIONES ESTILO COMERCIO PARA ADMIN ---
-    function reproducirSonidoNotificacion() {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        audio.play().catch(() => {});
+  // --- NOTIFICACIONES ESTILO COMERCIO PARA ADMIN ---
+function reproducirSonidoNotificacion() {
+    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+    audio.play().catch(() => {});
+}
+
+function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
+    const toast = document.createElement('div');
+    toast.className = 'notificacion-toast';
+    toast.style.background = colorFondo;
+    toast.innerHTML = mensaje;
+    document.body.appendChild(toast);
+
+    reproducirSonidoNotificacion();
+
+    setTimeout(() => toast.remove(), 5000);
+}
+
+// 1. Notificación Pedido Normal
+function lanzarNotificacionAdminPedido(nuevoPedido) {
+    crearToastAdmin(`🛒 ¡Nuevo Pedido de $${Number(nuevoPedido.precio).toFixed(2)}!`, '#27ae60');
+}
+
+// 2. Notificación Pedido Retenido (> $500)
+function lanzarNotificacionAdminRetenido(nuevoPedido) {
+    crearToastAdmin(`🚨 ¡Pedido Retenido de $${Number(nuevoPedido.precio).toFixed(2)} por revisión!`, '#e74c3c');
+}
+
+// 3. Notificación Solicitud de Comercio Pendiente
+function lanzarNotificacionAdminComercio(nuevoComercio) {
+    crearToastAdmin(`🏢 ¡Nueva Solicitud de Comercio: ${nuevoComercio.nombre}!`, '#f39c12');
+}
+
+// --- PANEL EXCLUSIVO DE ADMINISTRADOR ---
+async function cargarAdmin() {
+    if (!user || user.email !== EMAIL_ADMIN) {
+        alert("Acceso denegado. No tienes permisos de Administrador.");
+        evalRol();
+        return;
     }
 
-    function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
-        const toast = document.createElement('div');
-        toast.className = 'notificacion-toast';
-        toast.style.background = colorFondo;
-        toast.innerHTML = mensaje;
-        document.body.appendChild(toast);
+    // Cargar datos iniciales
+    cargarSolicitudesComerciosAdmin();
+    cargarRevAdmin();
+    cargarTablaAdmin();
+    cargarMetricasAdmin();
 
-        reproducirSonidoNotificacion();
-
-        setTimeout(() => toast.remove(), 5000);
+    // 1. Desuscribir canal previo para evitar el crash de callbacks
+    if (canalAdmin) {
+        await supabaseClient.removeChannel(canalAdmin);
+        canalAdmin = null;
     }
 
-    // 1. Notificación Pedido Normal
-    function lanzarNotificacionAdminPedido(nuevoPedido) {
-        crearToastAdmin(`🛒 ¡Nuevo Pedido de $${Number(nuevoPedido.precio).toFixed(2)}!`, '#27ae60');
-    }
-
-    // 2. Notificación Pedido Retenido (> $500)
-    function lanzarNotificacionAdminRetenido(nuevoPedido) {
-        crearToastAdmin(`🚨 ¡Pedido Retenido de $${Number(nuevoPedido.precio).toFixed(2)} por revisión!`, '#e74c3c');
-    }
-
-    // 3. Notificación Solicitud de Comercio Pendiente
-    function lanzarNotificacionAdminComercio(nuevoComercio) {
-        crearToastAdmin(`🏢 ¡Nueva Solicitud de Comercio: ${nuevoComercio.nombre}!`, '#f39c12');
-    }
-
-    // --- PANEL EXCLUSIVO DE ADMINISTRADOR ---
-    function cargarAdmin() {
-        if (!user || user.email !== EMAIL_ADMIN) {
-            alert("Acceso denegado. No tienes permisos de Administrador.");
-            evalRol();
-            return;
-        }
-
-        cargarSolicitudesComerciosAdmin();
-        cargarRevAdmin();
-        cargarTablaAdmin();
-        cargarMetricasAdmin();
-        
-        // Escuchadores en tiempo real con notificaciones
-        supabaseClient.channel('live_admin')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
-                const nuevo = payload.new;
-                if (nuevo) {
-                    if (nuevo.estado === 'revision_admin') {
-                        // Evento 2: Pedido Retenido > $500
-                        lanzarNotificacionAdminRetenido(nuevo);
-                    } else if (nuevo.estado === 'pendiente') {
-                        // Evento 1: Pedido Normal Recibido
-                        lanzarNotificacionAdminPedido(nuevo);
-                    }
+    // 2. Configurar eventos de Realtime
+    canalAdmin = supabaseClient.channel('live_admin')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
+            const nuevo = payload.new;
+            if (nuevo) {
+                if (nuevo.estado === 'revision_admin') {
+                    lanzarNotificacionAdminRetenido(nuevo);
+                } else if (nuevo.estado === 'pendiente') {
+                    lanzarNotificacionAdminPedido(nuevo);
                 }
-                cargarRevAdmin(); 
-                cargarTablaAdmin(); 
-                cargarMetricasAdmin();
-            })
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedidos' }, () => {
-                cargarRevAdmin(); 
-                cargarTablaAdmin(); 
-                cargarMetricasAdmin();
-            })
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comercios' }, payload => {
-                // Evento 3: Nueva Solicitud de Comercio Pendiente
-                if (payload.new && payload.new.estado === 'pendiente') {
-                    lanzarNotificacionAdminComercio(payload.new);
-                }
-                cargarSolicitudesComerciosAdmin();
-                cargarMetricasAdmin();
-            })
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'comercios' }, () => {
-                cargarSolicitudesComerciosAdmin();
-                cargarMetricasAdmin();
-            })
-            .subscribe();
-    }
+            }
+            cargarRevAdmin(); 
+            cargarTablaAdmin(); 
+            cargarMetricasAdmin();
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedidos' }, () => {
+            cargarRevAdmin(); 
+            cargarTablaAdmin(); 
+            cargarMetricasAdmin();
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comercios' }, payload => {
+            if (payload.new && payload.new.estado === 'pendiente') {
+                lanzarNotificacionAdminComercio(payload.new);
+            }
+            cargarSolicitudesComerciosAdmin();
+            cargarMetricasAdmin();
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'comercios' }, () => {
+            cargarSolicitudesComerciosAdmin();
+            cargarMetricasAdmin();
+        });
+
+    // 3. Suscribir el canal limpiamente
+    canalAdmin.subscribe();
+}
     
 </script>
 </body>
