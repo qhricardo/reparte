@@ -904,6 +904,28 @@
       navigator.serviceWorker.register('./sw-admin.js', { scope: './' });
     });
   }
+
+    // Funciones de Badge PWA
+function actualizarNotificacionBadge(conteo) {
+  if ('setAppBadge' in navigator) {
+    conteo > 0 ? navigator.setAppBadge(conteo) : navigator.clearAppBadge();
+  }
+}
+
+// Monitoreo Global del Admin
+function verificarPedidosGlobales(pedidos) {
+  // Cuenta todos los pedidos activos en el sistema (sin entregar)
+  const activos = pedidos.filter(p => p.estado !== 'entregado' && p.estado !== 'cancelado').length;
+  actualizarNotificacionBadge(activos);
+}
+
+// Solicitar permiso de notificación al hacer clic
+document.addEventListener('click', () => {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}, { once: true });
+        
 </script>
 </body>
 </html>
