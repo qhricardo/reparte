@@ -401,6 +401,29 @@
         .subscribe();
     }
 
+
+    // Funciones de Badge PWA
+function actualizarNotificacionBadge(conteo) {
+  if ('setAppBadge' in navigator) {
+    conteo > 0 ? navigator.setAppBadge(conteo) : navigator.clearAppBadge();
+  }
+}
+
+// Escuchar ofertas de reparto disponibles
+function verificarPedidosRadar(pedidosDisponibles) {
+  // Cuenta los pedidos listos para ser tomados por un repartidor
+  const disponibles = pedidosDisponibles.filter(p => p.estado === 'listo_para_reparto').length;
+  actualizarNotificacionBadge(disponibles);
+}
+
+// Solicitar permiso de notificación al hacer clic
+document.addEventListener('click', () => {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}, { once: true });
+
+    
     window.addEventListener('DOMContentLoaded', async () => {
       const { data: { session } } = await supabaseClient.auth.getSession();
       
