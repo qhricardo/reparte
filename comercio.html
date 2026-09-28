@@ -2142,26 +2142,43 @@ window.toggleEstadoComercio = async function() {
 
 
     
-    // Funciones de Badge PWA
-function actualizarNotificacionBadge(conteo) {
+   // 1. Función para pintar el globo "1" en el icono de la App
+function actualizarGloboNotificacion(cantidad) {
   if ('setAppBadge' in navigator) {
-    conteo > 0 ? navigator.setAppBadge(conteo) : navigator.clearAppBadge();
+    if (cantidad > 0) {
+      navigator.setAppBadge(cantidad).catch(err => console.log('Error Badge:', err));
+    } else {
+      navigator.clearAppBadge().catch(err => console.log('Error Clear:', err));
+    }
   }
 }
 
-// Escuchar cambios de Supabase o actualizar conteo
-function verificarPedidosPendientesComercio(pedidos) {
-  // Cuenta solo los pedidos que están en estado "pendiente" o "nuevo"
-  const nuevos = pedidos.filter(p => p.estado === 'pendiente' || p.estado === 'nuevo').length;
-  actualizarNotificacionBadge(nuevos);
+// 2. Suscribirse a Supabase Realtime para capturar nuevos pedidos
+if (typeof supabase !== 'undefined' && supabaseClient) {
+  supabaseClient
+    .channel('pedidos-comercio-badge')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
+      // Al recibir un nuevo pedido, pintar un '1' en el icono de la app
+      actualizarGloboNotificacion(1);
+      
+      // Lanzar también una notificación local visible en la barra de estado
+      if (Notification.permission === 'granted') {
+        new Notification('¡Nuevo Pedido Recibido!', {
+          body: `Pedido #${payload.new.id || ''} por $${payload.new.total || ''}`,
+          icon: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png'
+        });
+      }
+    })
+    .subscribe();
 }
 
-// Solicitar permiso de notificación al hacer clic en cualquier parte activa
-document.addEventListener('click', () => {
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
+// 3. Limpiar el globo en el icono cuando el usuario abra o enfoque la app
+window.addEventListener('focus', () => {
+  // Limpia el badge al abrir
+  if ('clearAppBadge' in navigator) {
+    navigator.clearAppBadge();
   }
-}, { once: true });
+});
 
     
 // Asegúrate de llamar a esta función cuando cargues los datos del dueño
