@@ -898,5 +898,13 @@
         canalAdmin.subscribe();
     }
 </script>
+    <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw-admin.js', { scope: './' });
+    });
+  }
+</script>
 </body>
 </html>
+
