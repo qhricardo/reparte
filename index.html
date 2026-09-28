@@ -231,10 +231,12 @@
 
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // --- VARIABLES GLOBALES (Se agrega canalAdmin) ---
     let user = null, miComercio = null, comercioSel = null, carrito = [];
     let coordsEntrega = { lat: 19.5694, lng: -99.7669 };
     let mapaC = null, marcC = null, mapaE = null, marcCli = null;
     let mapaR = null, pedidoActivoId = null;
+    let canalAdmin = null;
 
     // --- INICIALIZACIÓN Y AUTENTICACIÓN ---
     window.addEventListener('DOMContentLoaded', async () => {
@@ -249,28 +251,28 @@
         }
     
         supabaseClient.auth.onAuthStateChange((event, session) => {
-        if (session) {
-            user = session.user;
-            actualizarBarraUsuario();
-            evalRol();
-        } else {
-            user = null;
-            ocultar();
-            show('pLogin');
-            document.getElementById('barraUsuario').classList.add('oculto');
-        }
+            if (session) {
+                user = session.user;
+                actualizarBarraUsuario();
+                evalRol();
+            } else {
+                user = null;
+                ocultar();
+                show('pLogin');
+                document.getElementById('barraUsuario').classList.add('oculto');
+            }
+        });
     });
-});
 
-   async function loginGoogle() {
-    const { error } = await supabaseClient.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-            redirectTo: window.location.origin + window.location.pathname
-        }
-    });
-    if (error) alert("Error al iniciar sesión con Google: " + error.message);
-}
+    async function loginGoogle() {
+        const { error } = await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin + window.location.pathname
+            }
+        });
+        if (error) alert("Error al iniciar sesión con Google: " + error.message);
+    }
 
     async function loginEmail(e) {
         e.preventDefault();
@@ -342,7 +344,7 @@
         ocultar();
         actualizarBarraUsuario();
 
-        // Si no es admin, redirigir directamente a la pantalla de comercios (sin vistas ocultas)
+        // Si no es admin, redirigir directamente a la pantalla de comercios
         if (!user || user.email !== EMAIL_ADMIN) {
             document.getElementById('lblRol').innerText = 'CLIENTE';
             cargarComercios();
@@ -368,7 +370,6 @@
             <div class="tarjeta">
                 <img src="${c.logo_url || DEFAULT_LOGO_SVG}">
                 <h4>${c.nombre}</h4>
-                 
             </div>
         `).join('') : '<p>Sin comercios disponibles por el momento.</p>';
     }
@@ -524,11 +525,9 @@
                             <td><b>${p.cliente_nombre}</b></td>
                             <td>${p.telefono_cliente || 'N/A'}</td>
                             <td>${p.producto_nombre || 'Sin detalle'}</td>
-                            <td><b style="color:var(--r);">${repMostrar}</b></td>
-                            <td>$${Number(p.precio).toFixed(2)}</td>
+                            <td><b style="color:var(--r);">${repMostrar}</b></td>                             <td>$${Number(p.precio).toFixed(2)}</td>
                             <td>
-                                <span class="badge st-${p.estado}">${p.estado}</span><br>
-                                ${p.estado === 'pendiente' ? `<button class="btn btn-p" onclick="setEstado('${p.id}','preparado')">👨‍🍳 Aceptar</button>` : ''}
+                                <span class="badge st-${p.estado}">${p.estado}</span><br>${p.estado === 'pendiente' ? `<button class="btn btn-p" onclick="setEstado('${p.id}','preparado')">👨‍🍳 Aceptar</button>` : ''}
                                 ${p.estado === 'preparado' ? `<button class="btn btn-w" onclick="setEstado('${p.id}','despachado')">📦 Despachar</button>` : ''}
                             </td>
                         </tr>
@@ -589,40 +588,7 @@
         cargarPedidosRepartidor();
     }
 
-    // --- PANEL EXCLUSIVO DE ADMINISTRADOR ---
-    function cargarAdmin() {
-        if (!user || user.email !== EMAIL_ADMIN) {
-            alert("Acceso denegado. No tienes permisos de Administrador.");
-            evalRol();
-            return;
-        }
-
-        cargarSolicitudesComerciosAdmin();
-        cargarRevAdmin();
-        cargarTablaAdmin();
-        cargarMetricasAdmin();
-        
-        supabaseClient.channel('live_admin')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
-                if (payload.new && payload.new.estado === 'revision_admin') {
-                    alert(`🚨 ¡NUEVA ALERTA! Pedido retenido de $${Number(payload.new.precio).toFixed(2)} requiere aprobación.`);
-                }
-                cargarRevAdmin(); 
-                cargarTablaAdmin(); 
-                cargarMetricasAdmin();
-            })
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedidos' }, () => {
-                cargarRevAdmin(); 
-                cargarTablaAdmin(); 
-                cargarMetricasAdmin();
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'comercios' }, () => {
-                cargarSolicitudesComerciosAdmin();
-                cargarMetricasAdmin();
-            })
-            .subscribe();
-    }
-
+    // --- RENDERIZADO DE VISTAS ADMIN ---
     async function cargarSolicitudesComerciosAdmin() {
         const contenedor = document.getElementById('listaSolicitudesComercios');
         if (!contenedor) return;
@@ -742,8 +708,7 @@
                             <td>${p.comercio_nombre}</td>
                             <td>${p.producto_nombre || 'Sin detalle'}</td>
                             <td>${p.direccion_entrega || 'Sin dirección'}</td>
-                            <td><b style="color:var(--r);">${repMostrar}</b></td>
-                            <td>$${Number(p.precio).toFixed(2)}</td>
+                            <td><b style="color:var(--r);">${repMostrar}</b></td>                             <td>$${Number(p.precio).toFixed(2)}</td>
                             <td><span class="badge st-${p.estado}">${p.estado}</span></td>
                         </tr>
                     `}).join('')}
@@ -844,96 +809,90 @@
         `).join('') : '<p>Sin productos registrados en este comercio</p>';
     };
 
-  
-  // --- NOTIFICACIONES ESTILO COMERCIO PARA ADMIN ---
-function reproducirSonidoNotificacion() {
-    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-    audio.play().catch(() => {});
-}
-
-function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
-    const toast = document.createElement('div');
-    toast.className = 'notificacion-toast';
-    toast.style.background = colorFondo;
-    toast.innerHTML = mensaje;
-    document.body.appendChild(toast);
-
-    reproducirSonidoNotificacion();
-
-    setTimeout(() => toast.remove(), 5000);
-}
-
-// 1. Notificación Pedido Normal
-function lanzarNotificacionAdminPedido(nuevoPedido) {
-    crearToastAdmin(`🛒 ¡Nuevo Pedido de $${Number(nuevoPedido.precio).toFixed(2)}!`, '#27ae60');
-}
-
-// 2. Notificación Pedido Retenido (> $500)
-function lanzarNotificacionAdminRetenido(nuevoPedido) {
-    crearToastAdmin(`🚨 ¡Pedido Retenido de $${Number(nuevoPedido.precio).toFixed(2)} por revisión!`, '#e74c3c');
-}
-
-// 3. Notificación Solicitud de Comercio Pendiente
-function lanzarNotificacionAdminComercio(nuevoComercio) {
-    crearToastAdmin(`🏢 ¡Nueva Solicitud de Comercio: ${nuevoComercio.nombre}!`, '#f39c12');
-}
-
-// --- PANEL EXCLUSIVO DE ADMINISTRADOR ---
-async function cargarAdmin() {
-    if (!user || user.email !== EMAIL_ADMIN) {
-        alert("Acceso denegado. No tienes permisos de Administrador.");
-        evalRol();
-        return;
+    // --- NOTIFICACIONES ESTILO COMERCIO PARA ADMIN ---
+    function reproducirSonidoNotificacion() {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.play().catch(() => {});
     }
 
-    // Cargar datos iniciales
-    cargarSolicitudesComerciosAdmin();
-    cargarRevAdmin();
-    cargarTablaAdmin();
-    cargarMetricasAdmin();
+    function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
+        const toast = document.createElement('div');
+        toast.className = 'notificacion-toast';
+        toast.style.background = colorFondo;
+        toast.innerHTML = mensaje;
+        document.body.appendChild(toast);
 
-    // 1. Desuscribir canal previo para evitar el crash de callbacks
-    if (canalAdmin) {
-        await supabaseClient.removeChannel(canalAdmin);
-        canalAdmin = null;
+        reproducirSonidoNotificacion();
+
+        setTimeout(() => toast.remove(), 5000);
     }
 
-    // 2. Configurar eventos de Realtime
-    canalAdmin = supabaseClient.channel('live_admin')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
-            const nuevo = payload.new;
-            if (nuevo) {
-                if (nuevo.estado === 'revision_admin') {
-                    lanzarNotificacionAdminRetenido(nuevo);
-                } else if (nuevo.estado === 'pendiente') {
-                    lanzarNotificacionAdminPedido(nuevo);
+    function lanzarNotificacionAdminPedido(nuevoPedido) {
+        crearToastAdmin(`🛒 ¡Nuevo Pedido de $${Number(nuevoPedido.precio).toFixed(2)}!`, '#27ae60');
+    }
+
+    function lanzarNotificacionAdminRetenido(nuevoPedido) {
+        crearToastAdmin(`🚨 ¡Pedido Retenido de $${Number(nuevoPedido.precio).toFixed(2)} por revisión!`, '#e74c3c');
+    }
+
+    function lanzarNotificacionAdminComercio(nuevoComercio) {
+        crearToastAdmin(`🏢 ¡Nueva Solicitud de Comercio: ${nuevoComercio.nombre}!`, '#f39c12');
+    }
+
+    // --- PANEL EXCLUSIVO DE ADMINISTRADOR ---
+    async function cargarAdmin() {
+        if (!user || user.email !== EMAIL_ADMIN) {
+            alert("Acceso denegado. No tienes permisos de Administrador.");
+            evalRol();
+            return;
+        }
+
+        // Cargar vista y tablas iniciales
+        cargarSolicitudesComerciosAdmin();
+        cargarRevAdmin();
+        cargarTablaAdmin();
+        cargarMetricasAdmin();
+
+        // Limpieza del canal existente para no duplicar listeners
+        if (canalAdmin) {
+            await supabaseClient.removeChannel(canalAdmin);
+            canalAdmin = null;
+        }
+
+        // Configuración limpia de realtime
+        canalAdmin = supabaseClient.channel('live_admin')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
+                const nuevo = payload.new;
+                if (nuevo) {
+                    if (nuevo.estado === 'revision_admin') {
+                        lanzarNotificacionAdminRetenido(nuevo);
+                    } else if (nuevo.estado === 'pendiente') {
+                        lanzarNotificacionAdminPedido(nuevo);
+                    }
                 }
-            }
-            cargarRevAdmin(); 
-            cargarTablaAdmin(); 
-            cargarMetricasAdmin();
-        })
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedidos' }, () => {
-            cargarRevAdmin(); 
-            cargarTablaAdmin(); 
-            cargarMetricasAdmin();
-        })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comercios' }, payload => {
-            if (payload.new && payload.new.estado === 'pendiente') {
-                lanzarNotificacionAdminComercio(payload.new);
-            }
-            cargarSolicitudesComerciosAdmin();
-            cargarMetricasAdmin();
-        })
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'comercios' }, () => {
-            cargarSolicitudesComerciosAdmin();
-            cargarMetricasAdmin();
-        });
+                cargarRevAdmin(); 
+                cargarTablaAdmin(); 
+                cargarMetricasAdmin();
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedidos' }, () => {
+                cargarRevAdmin(); 
+                cargarTablaAdmin(); 
+                cargarMetricasAdmin();
+            })
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comercios' }, payload => {
+                if (payload.new && payload.new.estado === 'pendiente') {
+                    lanzarNotificacionAdminComercio(payload.new);
+                }
+                cargarSolicitudesComerciosAdmin();
+                cargarMetricasAdmin();
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'comercios' }, () => {
+                cargarSolicitudesComerciosAdmin();
+                cargarMetricasAdmin();
+            });
 
-    // 3. Suscribir el canal limpiamente
-    canalAdmin.subscribe();
-}
-    
+        canalAdmin.subscribe();
+    }
 </script>
 </body>
 </html>
