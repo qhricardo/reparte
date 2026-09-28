@@ -10,6 +10,15 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+    <!-- Configuración PWA Comercio -->
+    <link rel="manifest" href="manifest-comercio.json">
+    <meta name="theme-color" content="#16a34a">
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw-comercio.js', { scope: './comercio.html' });
+      }
+    </script>
+
 <style>
     :root {
     /* Paleta Profesional & Gastronómica - Ixtlahuaca Premium */
