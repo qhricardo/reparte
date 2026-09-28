@@ -6,6 +6,16 @@
   <title>Reparte - Panel de Repartidores</title>
   <!-- Supabase JS Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Configuración PWA Repartidor -->
+  <link rel="manifest" href="manifest-repartidor.json">
+  <meta name="theme-color" content="#2563eb">
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw-repartidor.js', { scope: './repartidor.html' });
+    }
+  </script>
+
   <style>
     :root {
       --primary: #2563eb;
