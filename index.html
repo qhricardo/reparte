@@ -11,7 +11,57 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <!-- CSS -->
-    <style>:root{--p:#27ae60;--d:#e74c3c;--w:#f39c12;--r:#e67e22;--dark:#2c3e50;}body{font-family:sans-serif;margin:0;padding:10px;background:#f4f6f7;}.card{background:#fff;padding:15px;border-radius:8px;margin-bottom:15px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}.oculto{display:none!important;}.btn{padding:8px 14px;border:none;border-radius:5px;font-weight:bold;cursor:pointer;margin:2px;}.btn-p{background:var(--p);color:#fff;}.btn-d{background:var(--d);color:#fff;}.btn-w{background:var(--w);color:#fff;}.btn-r{background:var(--r);color:#fff;}.btn-s{background:#7f8c8d;color:#fff;}.btn-g{background:#4285F4;color:#fff;}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}.tarjeta{border:1px solid #ddd;padding:10px;border-radius:6px;text-align:center;background:#fff;}.tarjeta img{width:100%;height:120px;object-fit:cover;border-radius:4px;}#mapaComercio,#mapaEntrega,#mapaRutaRepartidor{height:250px;width:100%;border-radius:6px;margin:8px 0;}.modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;}.modal-content{background:#fff;padding:20px;border-radius:8px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;}#barraCarrito{position:fixed;bottom:15px;left:15px;right:15px;max-width:500px;margin:auto;background:var(--dark);color:#fff;padding:10px 20px;border-radius:25px;display:flex;justify-content:space-between;align-items:center;z-index:999;}.badge{padding:3px 7px;border-radius:10px;color:#fff;font-size:11px;font-weight:bold;}.st-revision_admin{background:#8e44ad;}.st-pendiente{background:var(--w);}.st-preparado{background:#3498db;}.st-despachado{background:var(--r);}.st-en_camino{background:#2980b9;}.st-entregado{background:var(--p);}.st-cancelado{background:var(--d);}table{width:100%;border-collapse:collapse;font-size:12px;}th,td{border:1px solid #ddd;padding:6px;text-align:left;}</style>
+    <style>
+    :root{--p:#27ae60;--d:#e74c3c;--w:#f39c12;--r:#e67e22;--dark:#2c3e50;}
+    body{font-family:sans-serif;margin:0;padding:10px;background:#f4f6f7;}
+    .card{background:#fff;padding:15px;border-radius:8px;margin-bottom:15px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}
+    .oculto{display:none!important;}
+    .btn{padding:8px 14px;border:none;border-radius:5px;font-weight:bold;cursor:pointer;margin:2px;}
+    .btn-p{background:var(--p);color:#fff;}
+    .btn-d{background:var(--d);color:#fff;}
+    .btn-w{background:var(--w);color:#fff;}
+    .btn-r{background:var(--r);color:#fff;}
+    .btn-s{background:#7f8c8d;color:#fff;}
+    .btn-g{background:#4285F4;color:#fff;}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}
+    .tarjeta{border:1px solid #ddd;padding:10px;border-radius:6px;text-align:center;background:#fff;}
+    .tarjeta img{width:100%;height:120px;object-fit:cover;border-radius:4px;}
+    #mapaComercio,#mapaEntrega,#mapaRutaRepartidor{height:250px;width:100%;border-radius:6px;margin:8px 0;}
+    .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;}
+    .modal-content{background:#fff;padding:20px;border-radius:8px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;}
+    #barraCarrito{position:fixed;bottom:15px;left:15px;right:15px;max-width:500px;margin:auto;background:var(--dark);color:#fff;padding:10px 20px;border-radius:25px;display:flex;justify-content:space-between;align-items:center;z-index:999;}
+    .badge{padding:3px 7px;border-radius:10px;color:#fff;font-size:11px;font-weight:bold;}
+    .st-revision_admin{background:#8e44ad;}
+    .st-pendiente{background:var(--w);}
+    .st-preparado{background:#3498db;}
+    .st-despachado{background:var(--r);}
+    .st-en_camino{background:#2980b9;}
+    .st-entregado{background:var(--p);}
+    .st-cancelado{background:var(--d);}
+    table{width:100%;border-collapse:collapse;font-size:12px;}
+    th,td{border:1px solid #ddd;padding:6px;text-align:left;}
+
+    /* NOTIFICACIONES TOAST COMERCIO / ADMIN */
+    .notificacion-toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: var(--dark);
+        color: #fff;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-weight: bold;
+        font-size: 14px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 9999;
+        animation: fadeInToast 0.3s ease-out;
+    }
+
+    @keyframes fadeInToast {
+        from { transform: translateY(-20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+</style>
 </head>
 <body>
 
@@ -793,6 +843,91 @@
             </div>
         `).join('') : '<p>Sin productos registrados en este comercio</p>';
     };
+
+  
+    // --- NOTIFICACIONES ESTILO COMERCIO PARA ADMIN ---
+    function reproducirSonidoNotificacion() {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.play().catch(() => {});
+    }
+
+    function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
+        const toast = document.createElement('div');
+        toast.className = 'notificacion-toast';
+        toast.style.background = colorFondo;
+        toast.innerHTML = mensaje;
+        document.body.appendChild(toast);
+
+        reproducirSonidoNotificacion();
+
+        setTimeout(() => toast.remove(), 5000);
+    }
+
+    // 1. Notificación Pedido Normal
+    function lanzarNotificacionAdminPedido(nuevoPedido) {
+        crearToastAdmin(`🛒 ¡Nuevo Pedido de $${Number(nuevoPedido.precio).toFixed(2)}!`, '#27ae60');
+    }
+
+    // 2. Notificación Pedido Retenido (> $500)
+    function lanzarNotificacionAdminRetenido(nuevoPedido) {
+        crearToastAdmin(`🚨 ¡Pedido Retenido de $${Number(nuevoPedido.precio).toFixed(2)} por revisión!`, '#e74c3c');
+    }
+
+    // 3. Notificación Solicitud de Comercio Pendiente
+    function lanzarNotificacionAdminComercio(nuevoComercio) {
+        crearToastAdmin(`🏢 ¡Nueva Solicitud de Comercio: ${nuevoComercio.nombre}!`, '#f39c12');
+    }
+
+    // --- PANEL EXCLUSIVO DE ADMINISTRADOR ---
+    function cargarAdmin() {
+        if (!user || user.email !== EMAIL_ADMIN) {
+            alert("Acceso denegado. No tienes permisos de Administrador.");
+            evalRol();
+            return;
+        }
+
+        cargarSolicitudesComerciosAdmin();
+        cargarRevAdmin();
+        cargarTablaAdmin();
+        cargarMetricasAdmin();
+        
+        // Escuchadores en tiempo real con notificaciones
+        supabaseClient.channel('live_admin')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
+                const nuevo = payload.new;
+                if (nuevo) {
+                    if (nuevo.estado === 'revision_admin') {
+                        // Evento 2: Pedido Retenido > $500
+                        lanzarNotificacionAdminRetenido(nuevo);
+                    } else if (nuevo.estado === 'pendiente') {
+                        // Evento 1: Pedido Normal Recibido
+                        lanzarNotificacionAdminPedido(nuevo);
+                    }
+                }
+                cargarRevAdmin(); 
+                cargarTablaAdmin(); 
+                cargarMetricasAdmin();
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedidos' }, () => {
+                cargarRevAdmin(); 
+                cargarTablaAdmin(); 
+                cargarMetricasAdmin();
+            })
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comercios' }, payload => {
+                // Evento 3: Nueva Solicitud de Comercio Pendiente
+                if (payload.new && payload.new.estado === 'pendiente') {
+                    lanzarNotificacionAdminComercio(payload.new);
+                }
+                cargarSolicitudesComerciosAdmin();
+                cargarMetricasAdmin();
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'comercios' }, () => {
+                cargarSolicitudesComerciosAdmin();
+                cargarMetricasAdmin();
+            })
+            .subscribe();
+    }
+    
 </script>
 </body>
 </html>
