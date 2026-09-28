@@ -2140,6 +2140,30 @@ window.toggleEstadoComercio = async function() {
     }
 };
 
+
+    
+    // Funciones de Badge PWA
+function actualizarNotificacionBadge(conteo) {
+  if ('setAppBadge' in navigator) {
+    conteo > 0 ? navigator.setAppBadge(conteo) : navigator.clearAppBadge();
+  }
+}
+
+// Escuchar cambios de Supabase o actualizar conteo
+function verificarPedidosPendientesComercio(pedidos) {
+  // Cuenta solo los pedidos que están en estado "pendiente" o "nuevo"
+  const nuevos = pedidos.filter(p => p.estado === 'pendiente' || p.estado === 'nuevo').length;
+  actualizarNotificacionBadge(nuevos);
+}
+
+// Solicitar permiso de notificación al hacer clic en cualquier parte activa
+document.addEventListener('click', () => {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}, { once: true });
+
+    
 // Asegúrate de llamar a esta función cuando cargues los datos del dueño
 // Ejemplo: actualizarBotonEstadoComercio(miComercio.abierto !== false);
 
