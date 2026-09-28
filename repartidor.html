@@ -105,17 +105,10 @@
     let currentUser = null;
     let canalRadar = null;
 
-    // --- INSTANCIA GLOBAL DE AUDIO PARA EVITAR BLOQUEO DE AUTOPLAY ---
-    const audioGlobal = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-    audioGlobal.preload = 'auto';
-    let audioDesbloqueado = false;
-
+    // --- FUNCIONES DE NOTIFICACIÓN Y SONIDO ---
     function reproducirSonidoNotificacion() {
-      if (!audioDesbloqueado) {
-        console.warn("⚠️ El audio aún no ha sido activado por toque/clic del usuario.");
-      }
-      audioGlobal.currentTime = 0;
-      audioGlobal.play().catch(err => console.error("Error al reproducir audio:", err));
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.play().catch(err => console.log("El navegador requiere interacción previa del usuario:", err));
     }
 
     function crearToastRepartidor(mensaje, colorFondo = '#16a34a', conSonido = false) {
@@ -134,27 +127,8 @@
       }, 5000);
     }
 
-    // --- DESBLOQUEO DE AUDIO GLOBAL ---
-    function desbloquearAudioGlobal() {
-      if (audioDesbloqueado) return;
-      
-      // Reproducimos brevemente la misma instancia y la pausamos
-      audioGlobal.play().then(() => {
-        audioGlobal.pause();
-        audioGlobal.currentTime = 0;
-        audioDesbloqueado = true;
-        console.log("🔊 Instancia global de audio habilitada para notificaciones en segundo plano.");
-      }).catch(err => {
-        console.log("Intento de desbloqueo fallido, esperando próxima interacción:", err);
-      });
-    }
-
-    document.addEventListener('click', desbloquearAudioGlobal);
-    document.addEventListener('touchstart', desbloquearAudioGlobal);
-
     // --- MÉTODOS GLOBALES DE AUTENTICACIÓN ---
     window.loginWithGoogle = async function() {
-      desbloquearAudioGlobal();
       const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: window.location.href }
@@ -168,7 +142,6 @@
     };
 
     window.tomarPedido = async function(pedidoId) {
-      desbloquearAudioGlobal();
       const { data: activos } = await supabaseClient
         .from('pedidos')
         .select('id')
@@ -206,13 +179,13 @@
       if (error) {
         alert("Error al tomar el pedido: " + error.message);
       } else {
+        // Confirmación visual sin sonido
         crearToastRepartidor("🛵 ¡Pedido asignado! En camino a la entrega.", "#16a34a", false);
         cargarPedidos();
       }
     };
 
     window.entregarPedido = async function(pedidoId) {
-      desbloquearAudioGlobal();
       const { error } = await supabaseClient
         .from('pedidos')
         .update({ estado: 'entregado' })
@@ -378,6 +351,7 @@
           const nuevoPedido = payload.new;
           const estadoAnterior = payload.old ? payload.old.estado : null;
 
+          // Suena si se inserta un pedido despachado o si pasa a estado 'despachado'
           if (
             nuevoPedido && 
             nuevoPedido.estado === 'despachado' && 
@@ -411,6 +385,24 @@
         }
       });
     });
+
+    let audioDesbloqueado = false;
+
+    function desbloquearAudio() {
+      if (audioDesbloqueado) return;
+      
+      const audioDummy = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audioDummy.volume = 0;
+      audioDummy.play().then(() => {
+        audioDesbloqueado = true;
+        console.log("🔊 Audio habilitado correctamente en el navegador");
+      }).catch(() => {
+        // Se volverá a intentar en la siguiente interacción si falla
+      });
+    }
+
+    document.addEventListener('click', desbloquearAudio, { once: true });
+    document.addEventListener('touchstart', desbloquearAudio, { once: true });
   </script>
 </body>
 </html>
