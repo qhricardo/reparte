@@ -10,17 +10,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <!-- Configuración PWA Administrador -->
-    <link rel="manifest" href="manifest-admin.json">
-    <meta name="theme-color" content="#0f172a">
-    <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw-admin.js', { scope: './' });
-      }
-    </script>
-
     <!-- CSS -->
-    <style>
     <style>
     :root{--p:#27ae60;--d:#e74c3c;--w:#f39c12;--r:#e67e22;--dark:#2c3e50;}
     body{font-family:sans-serif;margin:0;padding:10px;background:#f4f6f7;}
