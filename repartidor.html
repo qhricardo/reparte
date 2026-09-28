@@ -108,17 +108,19 @@
     // --- FUNCIONES DE NOTIFICACIÓN Y SONIDO ---
     function reproducirSonidoNotificacion() {
       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      audio.play().catch(err => console.log("El reproductor esperó interacción previa del usuario:", err));
+      audio.play().catch(err => console.log("El navegador requiere interacción previa del usuario:", err));
     }
 
-    function crearToastRepartidor(mensaje, colorFondo = '#16a34a') {
+    function crearToastRepartidor(mensaje, colorFondo = '#16a34a', conSonido = false) {
       const toast = document.createElement('div');
       toast.className = 'notificacion-toast';
       toast.style.background = colorFondo;
       toast.innerHTML = mensaje;
       document.body.appendChild(toast);
 
-      reproducirSonidoNotificacion();
+      if (conSonido) {
+        reproducirSonidoNotificacion();
+      }
 
       setTimeout(() => {
         toast.remove();
@@ -177,6 +179,8 @@
       if (error) {
         alert("Error al tomar el pedido: " + error.message);
       } else {
+        // Confirmación visual sin sonido
+        crearToastRepartidor("🛵 ¡Pedido asignado! En camino a la entrega.", "#16a34a", false);
         cargarPedidos();
       }
     };
@@ -191,7 +195,7 @@
       if (error) {
         alert("Error al marcar como entregado: " + error.message);
       } else {
-        crearToastRepartidor("🎉 ¡Pedido entregado con éxito!", "#2563eb");
+        crearToastRepartidor("🎉 ¡Pedido entregado con éxito!", "#2563eb", false);
         cargarPedidos();
       }
     };
@@ -344,14 +348,16 @@
       canalRadar = supabaseClient
         .channel('radar-repartidores')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, (payload) => {
-          const pedido = payload.new;
-          
-          // Notificar cuando un comercio despacha un nuevo pedido disponible en el radar
-          if (pedido && pedido.estado === 'despachado') {
-            const nombreComercio = pedido.comercio_nombre || 'un comercio';
-            const totalCliente = pedido.precio ? parseFloat(pedido.precio).toFixed(2) : '0.00';
-            
-            crearToastRepartidor(`🛵 ¡Nuevo Pedido Listo! ${nombreComercio} ($${totalCliente})`, '#16a34a');
+          const nuevoPedido = payload.new;
+          const estadoAnterior = payload.old ? payload.old.estado : null;
+
+          // Suena si se inserta un pedido despachado o si pasa a estado 'despachado'
+          if (
+            nuevoPedido && 
+            nuevoPedido.estado === 'despachado' && 
+            (payload.eventType === 'INSERT' || estadoAnterior !== 'despachado')
+          ) {
+            crearToastRepartidor("🚨 ¡Nuevo pedido disponible en el radar!", "#d97706", true);
           }
 
           cargarPedidos();
@@ -382,23 +388,21 @@
 
     let audioDesbloqueado = false;
 
-function desbloquearAudio() {
-  if (audioDesbloqueado) return;
-  
-  // Creamos un audio silencioso para habilitar los permisos del navegador
-  const audioDummy = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-  audioDummy.volume = 0;
-  audioDummy.play().then(() => {
-    audioDesbloqueado = true;
-    console.log("🔊 Audio habilitado correctamente en el navegador");
-  }).catch(() => {
-    // Si aún no interactúa, se intentará en el siguiente toque
-  });
-}
+    function desbloquearAudio() {
+      if (audioDesbloqueado) return;
+      
+      const audioDummy = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audioDummy.volume = 0;
+      audioDummy.play().then(() => {
+        audioDesbloqueado = true;
+        console.log("🔊 Audio habilitado correctamente en el navegador");
+      }).catch(() => {
+        // Se volverá a intentar en la siguiente interacción si falla
+      });
+    }
 
-// Escuchar cualquier interacción inicial del repartidor
-document.addEventListener('click', desbloquearAudio, { once: true });
-document.addEventListener('touchstart', desbloquearAudio, { once: true });
+    document.addEventListener('click', desbloquearAudio, { once: true });
+    document.addEventListener('touchstart', desbloquearAudio, { once: true });
   </script>
 </body>
 </html>
