@@ -24,10 +24,37 @@
     .badge { display: inline-block; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
     .badge-pendiente { background: #fef3c7; color: #92400e; }
     .badge-en_camino { background: #dbeafe; color: #1e40af; }
+    .badge-despachado { background: #dcfce7; color: #166534; }
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     .radar-pulse { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); animation: pulse 1.5s infinite; }
     .comercio-box { background: #f1f5f9; padding: 10px; border-radius: 8px; margin: 8px 0; border-left: 4px solid var(--primary); }
     .alerta-pedido { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 10px; border-radius: 8px; margin-bottom: 12px; text-align: center; font-weight: bold; font-size: 14px; }
+    
+    /* ESTILOS DE NOTIFICACIÓN TOAST */
+    .notificacion-toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      left: 20px;
+      max-width: 400px;
+      margin: 0 auto;
+      background: #1e293b;
+      color: white;
+      padding: 14px 18px;
+      border-radius: 10px;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
+      z-index: 9999;
+      font-weight: 600;
+      font-size: 14px;
+      animation: slideIn 0.3s ease-out;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    @keyframes slideIn {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
     @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
   </style>
 </head>
@@ -76,8 +103,29 @@
     window.supabaseClient = supabaseClient;
 
     let currentUser = null;
+    let canalRadar = null;
 
-    // METODOS GLOBAL
+    // --- FUNCIONES DE NOTIFICACIÓN Y SONIDO ---
+    function reproducirSonidoNotificacion() {
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.play().catch(err => console.log("El reproductor esperó interacción previa del usuario:", err));
+    }
+
+    function crearToastRepartidor(mensaje, colorFondo = '#16a34a') {
+      const toast = document.createElement('div');
+      toast.className = 'notificacion-toast';
+      toast.style.background = colorFondo;
+      toast.innerHTML = mensaje;
+      document.body.appendChild(toast);
+
+      reproducirSonidoNotificacion();
+
+      setTimeout(() => {
+        toast.remove();
+      }, 5000);
+    }
+
+    // --- MÉTODOS GLOBALES DE AUTENTICACIÓN ---
     window.loginWithGoogle = async function() {
       const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
@@ -87,53 +135,51 @@
     };
 
     window.logout = async function() {
+      if (canalRadar) await supabaseClient.removeChannel(canalRadar);
       await supabaseClient.auth.signOut();
     };
 
-  window.tomarPedido = async function(pedidoId) {
-  const { data: activos } = await supabaseClient
-    .from('pedidos')
-    .select('id')
-    .eq('repartidor_id', currentUser.id)
-    .eq('estado', 'en_camino');
+    window.tomarPedido = async function(pedidoId) {
+      const { data: activos } = await supabaseClient
+        .from('pedidos')
+        .select('id')
+        .eq('repartidor_id', currentUser.id)
+        .eq('estado', 'en_camino');
 
-  if (activos && activos.length > 0) {
-    alert("⚠️ Solo puedes tomar 1 pedido a la vez. Entrega tu pedido activo primero.");
-    return;
-  }
+      if (activos && activos.length > 0) {
+        alert("⚠️ Solo puedes tomar 1 pedido a la vez. Entrega tu pedido activo primero.");
+        return;
+      }
 
-  // Extraer el nombre probando múltiples propiedades posibles de Supabase Auth / Google OAuth
-  let nombreRepartidor = 
-    currentUser.user_metadata?.full_name || 
-    currentUser.user_metadata?.name || 
-    currentUser.user_metadata?.custom_claims?.name;
+      let nombreRepartidor = 
+        currentUser.user_metadata?.full_name || 
+        currentUser.user_metadata?.name || 
+        currentUser.user_metadata?.custom_claims?.name;
 
-  // Si Google no entregó ningún nombre en metadata, extraemos el nombre desde el correo
-  if (!nombreRepartidor && currentUser.email) {
-    const usuarioCorreo = currentUser.email.split('@')[0];
-    nombreRepartidor = usuarioCorreo.charAt(0).toUpperCase() + usuarioCorreo.slice(1);
-  }
+      if (!nombreRepartidor && currentUser.email) {
+        const usuarioCorreo = currentUser.email.split('@')[0];
+        nombreRepartidor = usuarioCorreo.charAt(0).toUpperCase() + usuarioCorreo.slice(1);
+      }
 
-  // Valor por defecto por si tampoco hay correo
-  if (!nombreRepartidor) {
-    nombreRepartidor = 'Repartidor';
-  }
+      if (!nombreRepartidor) {
+        nombreRepartidor = 'Repartidor';
+      }
 
-  const { error } = await supabaseClient
-    .from('pedidos')
-    .update({
-      estado: 'en_camino',
-      repartidor_id: currentUser.id,
-      repartidor_nombre: nombreRepartidor // O 'nombre_repartidor' según el nombre exacto de la columna en tu BD
-    })
-    .eq('id', pedidoId);
+      const { error } = await supabaseClient
+        .from('pedidos')
+        .update({
+          estado: 'en_camino',
+          repartidor_id: currentUser.id,
+          repartidor_nombre: nombreRepartidor
+        })
+        .eq('id', pedidoId);
 
-  if (error) {
-    alert("Error al tomar el pedido: " + error.message);
-  } else {
-    cargarPedidos();
-  }
-};
+      if (error) {
+        alert("Error al tomar el pedido: " + error.message);
+      } else {
+        cargarPedidos();
+      }
+    };
 
     window.entregarPedido = async function(pedidoId) {
       const { error } = await supabaseClient
@@ -145,6 +191,7 @@
       if (error) {
         alert("Error al marcar como entregado: " + error.message);
       } else {
+        crearToastRepartidor("🎉 ¡Pedido entregado con éxito!", "#2563eb");
         cargarPedidos();
       }
     };
@@ -187,7 +234,6 @@
     }
 
     async function cargarPedidos() {
-      // AJUSTE: Ahora consulta únicamente pedidos con estado 'despachado' o los 'en_camino' del repartidor activo
       const { data: pedidos, error } = await supabaseClient
         .from('pedidos')
         .select('*')
@@ -235,7 +281,6 @@
       }
 
       pedidos.forEach(pedido => {
-        // AJUSTE: Ignora los pedidos despachados si el repartidor ya tiene un pedido activo en camino
         if (tienePedidoActivo && pedido.estado === 'despachado') {
           return;
         }
@@ -247,7 +292,6 @@
         let estadoBadge = pedido.estado || 'despachado';
         let botonAccion = '';
 
-        // AJUSTE: Permite tomar el pedido cuando su estado sea 'despachado'
         if (estadoBadge === 'despachado') {
           if (!tienePedidoActivo) {
             botonAccion = `<button class="btn-take" onclick="window.tomarPedido('${pedido.id}')">Tomar Pedido</button>`;
@@ -259,45 +303,57 @@
         const comercioInfo = diccComercios[pedido.comercio_id] || {};
         const horaPedido = formatearHora(pedido.created_at);
         const nombreCliente = obtenerNombreCliente(pedido);
-        
         const telefonoCliente = pedido.telefono_cliente || pedido.telefono || pedido.cliente_telefono || 'Sin teléfono';
 
-       // Obtiene el subtotal a pagar al comercio (respalda si viene como subtotal o si no existe)
-const subtotalComercio = pedido.subtotal !== undefined 
-  ? parseFloat(pedido.subtotal).toFixed(2) 
-  : (pedido.precio !== undefined ? parseFloat(pedido.precio).toFixed(2) : '0.00');
+        const subtotalComercio = pedido.subtotal !== undefined 
+          ? parseFloat(pedido.subtotal).toFixed(2) 
+          : (pedido.precio !== undefined ? parseFloat(pedido.precio).toFixed(2) : '0.00');
 
-card.innerHTML = `
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-    <span style="font-size:12px; color:#64748b; font-weight:bold;">🕒 ${horaPedido}</span>
-    <span class="badge badge-${estadoBadge}">${estadoBadge.replace('_', ' ')}</span>
-  </div>
+        card.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+            <span style="font-size:12px; color:#64748b; font-weight:bold;">🕒 ${horaPedido}</span>
+            <span class="badge badge-${estadoBadge}">${estadoBadge.replace('_', ' ')}</span>
+          </div>
 
-  <div class="comercio-box">
-    <h4 style="margin:0 0 4px 0;">🏪 ${comercioInfo.nombre || pedido.comercio_nombre || 'Comercio'}</h4>
-    <p style="margin:2px 0; font-size:13px;"><strong>📍 Recoger en:</strong> ${comercioInfo.direccion || 'Dirección no especificada'}</p>
-    <p style="margin:2px 0; font-size:13px;"><strong>📞 Tel. Comercio:</strong> ${comercioInfo.telefono || 'Sin teléfono'}</p>
-    <p style="margin:6px 0 0 0; font-size:14px; color:#d97706; font-weight:bold;">
-      💰 Pagar en Comercio: $${subtotalComercio} <small style="font-weight:normal; font-size:11px; color:#64748b;">(Subtotal sin envío)</small>
-    </p>
-  </div>
+          <div class="comercio-box">
+            <h4 style="margin:0 0 4px 0;">🏪 ${comercioInfo.nombre || pedido.comercio_nombre || 'Comercio'}</h4>
+            <p style="margin:2px 0; font-size:13px;"><strong>📍 Recoger en:</strong> ${comercioInfo.direccion || 'Dirección no especificada'}</p>
+            <p style="margin:2px 0; font-size:13px;"><strong>📞 Tel. Comercio:</strong> ${comercioInfo.telefono || 'Sin teléfono'}</p>
+            <p style="margin:6px 0 0 0; font-size:14px; color:#d97706; font-weight:bold;">
+              💰 Pagar en Comercio: $${subtotalComercio} <small style="font-weight:normal; font-size:11px; color:#64748b;">(Subtotal sin envío)</small>
+            </p>
+          </div>
 
-  <p style="margin: 6px 0;"><strong>📦 Producto:</strong> ${pedido.producto_nombre || 'Producto sin nombre'}</p>
-  <p style="margin: 4px 0;"><strong>👤 Cliente:</strong> ${nombreCliente}</p>
-  <p style="margin: 4px 0;"><strong>🏠 Dirección de entrega:</strong> ${pedido.direccion_entrega || 'Sin dirección'}</p>
-  <p style="margin: 4px 0;"><strong>📱 Tel. Cliente:</strong> <a href="tel:${telefonoCliente}" style="color:var(--primary); font-weight:bold;">${telefonoCliente}</a></p>
-  <p style="margin: 6px 0; font-size: 15px; color: var(--success);"><strong>💵 Total a cobrar al cliente:</strong> $${pedido.precio || '0.00'}</p>
+          <p style="margin: 6px 0;"><strong>📦 Producto:</strong> ${pedido.producto_nombre || 'Producto sin nombre'}</p>
+          <p style="margin: 4px 0;"><strong>👤 Cliente:</strong> ${nombreCliente}</p>
+          <p style="margin: 4px 0;"><strong>🏠 Dirección de entrega:</strong> ${pedido.direccion_entrega || 'Sin dirección'}</p>
+          <p style="margin: 4px 0;"><strong>📱 Tel. Cliente:</strong> <a href="tel:${telefonoCliente}" style="color:var(--primary); font-weight:bold;">${telefonoCliente}</a></p>
+          <p style="margin: 6px 0; font-size: 15px; color: var(--success);"><strong>💵 Total a cobrar al cliente:</strong> $${pedido.precio || '0.00'}</p>
 
-  ${botonAccion}
-`;
+          ${botonAccion}
+        `;
         contenedor.appendChild(card);
       });
     }
 
-    function suscribirRadarEnTiempoReal() {
-      supabaseClient
-        .channel('radar-pedidos')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
+    async function suscribirRadarEnTiempoReal() {
+      if (canalRadar) {
+        await supabaseClient.removeChannel(canalRadar);
+      }
+
+      canalRadar = supabaseClient
+        .channel('radar-repartidores')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, (payload) => {
+          const pedido = payload.new;
+          
+          // Notificar cuando un comercio despacha un nuevo pedido disponible en el radar
+          if (pedido && pedido.estado === 'despachado') {
+            const nombreComercio = pedido.comercio_nombre || 'un comercio';
+            const totalCliente = pedido.precio ? parseFloat(pedido.precio).toFixed(2) : '0.00';
+            
+            crearToastRepartidor(`🛵 ¡Nuevo Pedido Listo! ${nombreComercio} ($${totalCliente})`, '#16a34a');
+          }
+
           cargarPedidos();
         })
         .subscribe();
@@ -323,6 +379,6 @@ card.innerHTML = `
         }
       });
     });
-</script>
+  </script>
 </body>
 </html>
