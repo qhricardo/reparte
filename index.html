@@ -979,6 +979,31 @@
     window.addEventListener('focus', () => {
         detenerAlertasVisualesAdmin();
     });
+
+    // Solicitar permisos explícitamente en iOS
+async function solicitarPermisoIOS() {
+    if ('Notification' in window) {
+        const permiso = await Notification.requestPermission();
+        if (permiso === 'granted') {
+            alert('¡Notificaciones activadas correctamente en tu iPhone!');
+            // Activar badge de prueba
+            if ('setAppBadge' in navigator) {
+                navigator.setAppBadge(1);
+            }
+        } else if (permiso === 'denied') {
+            alert('Las notificaciones fueron bloqueadas. Habilítalas en Ajustes de iOS > Notificaciones > Admin Reparte.');
+        }
+    } else {
+        alert('Este dispositivo o versión de iOS no soporta notificaciones Web.');
+    }
+}
+
+// Vincula esta función al primer toque del usuario en la app
+document.addEventListener('click', () => {
+    if ('Notification' in window && Notification.permission === 'default') {
+        solicitarPermisoIOS();
+    }
+}, { once: true });
 </script>
 </body>
 </html>
