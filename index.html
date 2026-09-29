@@ -949,27 +949,36 @@
             canalAdmin = null;
         }
 
-        // Configuración limpia de realtime
+       // Configuración limpia de realtime con depuración activada
         canalAdmin = supabaseClient.channel('live_admin')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
+                console.log('📡 ¡Evento INSERT recibido en pedidos!:', payload.new);
                 const nuevo = payload.new;
+                
                 if (nuevo) {
                     if (nuevo.estado === 'revision_admin') {
                         lanzarNotificacionAdminRetenido(nuevo);
                     } else if (nuevo.estado === 'pendiente') {
                         lanzarNotificacionAdminPedido(nuevo);
+                    } else {
+                        // Fallback por si el estado no coincide exactamente
+                        console.warn(`Estado no mapeado ("${nuevo.estado}"), disparando notificación general:`, nuevo);
+                        lanzarNotificacionAdminPedido(nuevo);
                     }
                 }
+                
                 cargarRevAdmin(); 
                 cargarTablaAdmin(); 
                 cargarMetricasAdmin();
             })
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedidos' }, () => {
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedidos' }, payload => {
+                console.log('📡 ¡Evento UPDATE recibido en pedidos!:', payload.new);
                 cargarRevAdmin(); 
                 cargarTablaAdmin(); 
                 cargarMetricasAdmin();
             })
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comercios' }, payload => {
+                console.log('📡 ¡Evento INSERT recibido en comercios!:', payload.new);
                 if (payload.new && payload.new.estado === 'pendiente') {
                     lanzarNotificacionAdminComercio(payload.new);
                 }
@@ -981,7 +990,9 @@
                 cargarMetricasAdmin();
             });
 
-        canalAdmin.subscribe();
+        canalAdmin.subscribe((status) => {
+            console.log('🟢 Estado de conexión Supabase Realtime (live_admin):', status);
+        });
     }
 </script>
 
