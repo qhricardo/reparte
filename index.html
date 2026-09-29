@@ -227,22 +227,6 @@
         </div>
     </div>
 
-    <button onclick="pedirPermisoDirectoiOS()" style="padding: 10px; background: #3498db; color: white; border: none; border-radius: 5px; margin: 10px;">
-  🔔 Activar Notificaciones iPhone
-    </button>
-
-    <script>
-    async function pedirPermisoDirectoiOS() {
-  if ('Notification' in window) {
-    const perm = await Notification.requestPermission();
-        alert('Permiso de notificaciones: ' + perm);
-      } else {
-        alert('Tu versión de iOS no soporta notificaciones Web.');
-      }
-    }
-    </script>
-    
-
 <script>
     const SUPABASE_URL = "https://jelhlxjbzbegntfyereb.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_2XGww5rHw0UQ7nvtcODg3A_w_r_hiit"; 
