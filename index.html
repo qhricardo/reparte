@@ -844,32 +844,32 @@
         }
     }
 
-   function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
-    // 1. Toast interno en la página
+  function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
+    // 1. Toast visual en pantalla
     const toast = document.createElement('div');
     toast.className = 'notificacion-toast';
     toast.style.background = colorFondo;
     toast.innerHTML = mensaje;
     document.body.appendChild(toast);
 
+    // Reproducir audio
     reproducirSonidoNotificacion();
 
-    // 2. Notificación Nativa del Sistema Operativo (Para la PWA Instalada)
+    // 2. Notificación del sistema operativo (iOS / Android)
     if ('Notification' in window && Notification.permission === 'granted') {
-        try {
+        const mensajeLimpio = mensaje.replace(/<[^>]*>?/gm, '');
+
+        // En iOS DEBE usarse siempre el Service Worker
+        if ('serviceWorker' in navigator) {
             navigator.serviceWorker.ready.then(registration => {
                 registration.showNotification('Reparte Admin', {
-                    body: mensaje.replace(/<[^>]*>?/gm, ''), // Limpiar HTML
+                    body: mensajeLimpio,
                     icon: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png',
                     badge: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png',
-                    vibrate: [200, 100, 200]
+                    tag: 'notificacion-admin',
+                    renotify: true
                 });
-            });
-        } catch (e) {
-            new Notification('Reparte Admin', {
-                body: mensaje.replace(/<[^>]*>?/gm, ''),
-                icon: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png'
-            });
+            }).catch(err => console.error('Error al mostrar notificación en iOS:', err));
         }
     }
 
