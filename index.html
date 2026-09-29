@@ -844,17 +844,37 @@
         }
     }
 
-    function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
-        const toast = document.createElement('div');
-        toast.className = 'notificacion-toast';
-        toast.style.background = colorFondo;
-        toast.innerHTML = mensaje;
-        document.body.appendChild(toast);
+   function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
+    // 1. Toast interno en la página
+    const toast = document.createElement('div');
+    toast.className = 'notificacion-toast';
+    toast.style.background = colorFondo;
+    toast.innerHTML = mensaje;
+    document.body.appendChild(toast);
 
-        reproducirSonidoNotificacion();
+    reproducirSonidoNotificacion();
 
-        setTimeout(() => toast.remove(), 5000);
+    // 2. Notificación Nativa del Sistema Operativo (Para la PWA Instalada)
+    if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+            navigator.serviceWorker.ready.then(registration => {
+                registration.showNotification('Reparte Admin', {
+                    body: mensaje.replace(/<[^>]*>?/gm, ''), // Limpiar HTML
+                    icon: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png',
+                    badge: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png',
+                    vibrate: [200, 100, 200]
+                });
+            });
+        } catch (e) {
+            new Notification('Reparte Admin', {
+                body: mensaje.replace(/<[^>]*>?/gm, ''),
+                icon: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png'
+            });
+        }
     }
+
+    setTimeout(() => toast.remove(), 5000);
+}
 
     function lanzarNotificacionAdminPedido(nuevoPedido) {
         crearToastAdmin(`🛒 ¡Nuevo Pedido de $${Number(nuevoPedido.precio || 0).toFixed(2)}!`, '#27ae60');
