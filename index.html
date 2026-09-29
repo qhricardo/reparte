@@ -817,10 +817,30 @@
     let intervaloTituloAdmin = null;
     const tituloOriginalAdmin = document.title;
 
-    function reproducirSonidoNotificacion() {
+  function reproducirSonidoNotificacion() {
+    try {
+        // Intento 1: Audio HTML5
         const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        audio.play().catch(() => {});
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(() => {
+                // Intento 2: Fallback sintético Web Audio API para iOS
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.8);
+            });
+        }
+    } catch (e) {
+        console.log("Error de audio:", e);
     }
+}
 
     function activarAlertasVisualesAdmin(mensaje) {
         // 1. Activar Badge en el icono de la PWA
