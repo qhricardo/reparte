@@ -814,9 +814,34 @@
     };
 
     // --- NOTIFICACIONES ESTILO COMERCIO PARA ADMIN ---
+    let intervaloTituloAdmin = null;
+    const tituloOriginalAdmin = document.title;
+
     function reproducirSonidoNotificacion() {
         const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
         audio.play().catch(() => {});
+    }
+
+    function activarAlertasVisualesAdmin(mensaje) {
+        // 1. Activar Badge en el icono de la PWA
+        actualizarNotificacionBadge(1);
+
+        // 2. Parpadear título de la ventana
+        if (!intervaloTituloAdmin) {
+            let mostrando = false;
+            intervaloTituloAdmin = setInterval(() => {
+                document.title = mostrando ? tituloOriginalAdmin : `🔔 ${mensaje}`;
+                mostrando = !mostrando;
+            }, 1000);
+        }
+    }
+
+    function detenerAlertasVisualesAdmin() {
+        if (intervaloTituloAdmin) {
+            clearInterval(intervaloTituloAdmin);
+            intervaloTituloAdmin = null;
+            document.title = tituloOriginalAdmin;
+        }
     }
 
     function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
@@ -832,15 +857,18 @@
     }
 
     function lanzarNotificacionAdminPedido(nuevoPedido) {
-        crearToastAdmin(`🛒 ¡Nuevo Pedido de $${Number(nuevoPedido.precio).toFixed(2)}!`, '#27ae60');
+        crearToastAdmin(`🛒 ¡Nuevo Pedido de $${Number(nuevoPedido.precio || 0).toFixed(2)}!`, '#27ae60');
+        activarAlertasVisualesAdmin("NUEVO PEDIDO");
     }
 
     function lanzarNotificacionAdminRetenido(nuevoPedido) {
-        crearToastAdmin(`🚨 ¡Pedido Retenido de $${Number(nuevoPedido.precio).toFixed(2)} por revisión!`, '#e74c3c');
+        crearToastAdmin(`🚨 ¡Pedido Retenido de $${Number(nuevoPedido.precio || 0).toFixed(2)} por revisión!`, '#e74c3c');
+        activarAlertasVisualesAdmin("PEDIDO RETENIDO");
     }
 
     function lanzarNotificacionAdminComercio(nuevoComercio) {
         crearToastAdmin(`🏢 ¡Nueva Solicitud de Comercio: ${nuevoComercio.nombre}!`, '#f39c12');
+        activarAlertasVisualesAdmin("SOLICITUD COMERCIO");
     }
 
     // --- PANEL EXCLUSIVO DE ADMINISTRADOR ---
@@ -898,35 +926,42 @@
         canalAdmin.subscribe();
     }
 </script>
-    <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw-admin.js', { scope: './' });
-    });
-  }
+
+<script>
+    // Registro de Service Worker PWA
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw-admin.js', { scope: './' });
+        });
+    }
 
     // Funciones de Badge PWA
-function actualizarNotificacionBadge(conteo) {
-  if ('setAppBadge' in navigator) {
-    conteo > 0 ? navigator.setAppBadge(conteo) : navigator.clearAppBadge();
-  }
-}
+    function actualizarNotificacionBadge(conteo) {
+        if ('setAppBadge' in navigator) {
+            conteo > 0 ? navigator.setAppBadge(conteo) : navigator.clearAppBadge();
+        }
+    }
 
-// Monitoreo Global del Admin
-function verificarPedidosGlobales(pedidos) {
-  // Cuenta todos los pedidos activos en el sistema (sin entregar)
-  const activos = pedidos.filter(p => p.estado !== 'entregado' && p.estado !== 'cancelado').length;
-  actualizarNotificacionBadge(activos);
-}
+    // Monitoreo Global del Admin
+    function verificarPedidosGlobales(pedidos) {
+        const activos = pedidos.filter(p => p.estado !== 'entregado' && p.estado !== 'cancelado').length;
+        actualizarNotificacionBadge(activos);
+    }
 
-// Solicitar permiso de notificación al hacer clic
-document.addEventListener('click', () => {
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
-}, { once: true });
-        
+    // Solicitar permiso de notificación e interactuar para limpiar alertas
+    document.addEventListener('click', () => {
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+        detenerAlertasVisualesAdmin();
+    });
+
+    window.addEventListener('focus', () => {
+        detenerAlertasVisualesAdmin();
+    });
 </script>
+</body>
+</html>
 </body>
 </html>
 
