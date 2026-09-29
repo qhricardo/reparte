@@ -844,38 +844,42 @@
         }
     }
 
-  function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
-    // 1. Toast visual en pantalla
+function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
+    // 1. Toast visual en la pantalla
     const toast = document.createElement('div');
     toast.className = 'notificacion-toast';
     toast.style.background = colorFondo;
     toast.innerHTML = mensaje;
     document.body.appendChild(toast);
 
-    // Reproducir audio
+    // 2. Reproducción de audio compatible con iOS
     reproducirSonidoNotificacion();
 
-    // 2. Notificación del sistema operativo (iOS / Android)
-    if ('Notification' in window && Notification.permission === 'granted') {
-        const mensajeLimpio = mensaje.replace(/<[^>]*>?/gm, '');
+    // 3. Notificación Nativa del Sistema (iOS y Android)
+    const mensajeLimpio = mensaje.replace(/<[^>]*>?/gm, '');
 
-        // En iOS DEBE usarse siempre el Service Worker
+    if ('Notification' in window && Notification.permission === 'granted') {
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.ready.then(registration => {
                 registration.showNotification('Reparte Admin', {
                     body: mensajeLimpio,
                     icon: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png',
                     badge: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png',
-                    tag: 'notificacion-admin',
-                    renotify: true
+                    tag: 'admin-alert-' + Date.now(),
+                    renotify: true,
+                    requireInteraction: true // Obliga a iOS a mantener la tira visible
                 });
-            }).catch(err => console.error('Error al mostrar notificación en iOS:', err));
+            }).catch(err => console.error("Error al notificar en SW:", err));
         }
     }
+
+    // 4. Actualizar Badge/Globo en el icono de iOS
+    actualizarNotificacionBadge(1);
 
     setTimeout(() => toast.remove(), 5000);
 }
 
+    
     function lanzarNotificacionAdminPedido(nuevoPedido) {
         crearToastAdmin(`🛒 ¡Nuevo Pedido de $${Number(nuevoPedido.precio || 0).toFixed(2)}!`, '#27ae60');
         activarAlertasVisualesAdmin("NUEVO PEDIDO");
