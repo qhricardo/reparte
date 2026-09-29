@@ -814,33 +814,46 @@
     };
 
     // --- NOTIFICACIONES ESTILO COMERCIO PARA ADMIN ---
-    let intervaloTituloAdmin = null;
+   let intervaloTituloAdmin = null;
     const tituloOriginalAdmin = document.title;
+    let audioCtxAdmin = null;
 
-  function reproducirSonidoNotificacion() {
-    try {
-        // Intento 1: Audio HTML5
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(() => {
-                // Intento 2: Fallback sintético Web Audio API para iOS
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-                gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.8);
-            });
+    // 1. Inicializar/Desbloquear el AudioContext de iOS en la primera interacción del usuario
+    async function desbloquearAudioAdmin() {
+        if (!audioCtxAdmin) {
+            audioCtxAdmin = new (window.AudioContext || window.webkitAudioContext)();
         }
-    } catch (e) {
-        console.log("Error de audio:", e);
+        if (audioCtxAdmin.state === 'suspended') {
+            await audioCtxAdmin.resume();
+        }
     }
-}
+
+    // 2. Reproductor de sonido optimizado para Safari iOS y Escritorio
+    function reproducirSonidoNotificacion() {
+        try {
+            // Intento 1: Audio HTML5
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(() => {
+                    // Intento 2: Fallback sintético Web Audio API (evita bloqueos en iOS)
+                    if (audioCtxAdmin) {
+                        const osc = audioCtxAdmin.createOscillator();
+                        const gain = audioCtxAdmin.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(880, audioCtxAdmin.currentTime); // Tono A5
+                        gain.gain.setValueAtTime(0.6, audioCtxAdmin.currentTime);
+                        osc.connect(gain);
+                        gain.connect(audioCtxAdmin.destination);
+                        osc.start();
+                        osc.stop(audioCtxAdmin.currentTime + 0.9);
+                    }
+                });
+            }
+        } catch (e) {
+            console.log("Error de audio:", e);
+        }
+    }
 
     function activarAlertasVisualesAdmin(mensaje) {
         // 1. Activar Badge en el icono de la PWA
@@ -862,44 +875,45 @@
             intervaloTituloAdmin = null;
             document.title = tituloOriginalAdmin;
         }
+        // Limpiar el globo en el icono de la PWA
+        actualizarNotificacionBadge(0);
     }
 
-function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
-    // 1. Toast visual en la pantalla
-    const toast = document.createElement('div');
-    toast.className = 'notificacion-toast';
-    toast.style.background = colorFondo;
-    toast.innerHTML = mensaje;
-    document.body.appendChild(toast);
+    function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
+        // 1. Toast visual en la pantalla
+        const toast = document.createElement('div');
+        toast.className = 'notificacion-toast';
+        toast.style.background = colorFondo;
+        toast.innerHTML = mensaje;
+        document.body.appendChild(toast);
 
-    // 2. Reproducción de audio compatible con iOS
-    reproducirSonidoNotificacion();
+        // 2. Reproducción de audio compatible con iOS
+        reproducirSonidoNotificacion();
 
-    // 3. Notificación Nativa del Sistema (iOS y Android)
-    const mensajeLimpio = mensaje.replace(/<[^>]*>?/gm, '');
+        // 3. Notificación Nativa del Sistema (obligatorio Service Worker en iOS)
+        const mensajeLimpio = mensaje.replace(/<[^>]*>?/gm, '');
 
-    if ('Notification' in window && Notification.permission === 'granted') {
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.ready.then(registration => {
-                registration.showNotification('Reparte Admin', {
-                    body: mensajeLimpio,
-                    icon: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png',
-                    badge: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png',
-                    tag: 'admin-alert-' + Date.now(),
-                    renotify: true,
-                    requireInteraction: true // Obliga a iOS a mantener la tira visible
-                });
-            }).catch(err => console.error("Error al notificar en SW:", err));
+        if ('Notification' in window && Notification.permission === 'granted') {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.ready.then(registration => {
+                    registration.showNotification('Reparte Admin', {
+                        body: mensajeLimpio,
+                        icon: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png',
+                        badge: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png',
+                        tag: 'admin-alert-' + Date.now(),
+                        renotify: true,
+                        requireInteraction: true // Mantiene visible la tira en iOS/Android
+                    });
+                }).catch(err => console.error("Error al notificar en SW:", err));
+            }
         }
+
+        // 4. Actualizar Badge/Globo en el icono
+        actualizarNotificacionBadge(1);
+
+        setTimeout(() => toast.remove(), 5000);
     }
 
-    // 4. Actualizar Badge/Globo en el icono de iOS
-    actualizarNotificacionBadge(1);
-
-    setTimeout(() => toast.remove(), 5000);
-}
-
-    
     function lanzarNotificacionAdminPedido(nuevoPedido) {
         crearToastAdmin(`🛒 ¡Nuevo Pedido de $${Number(nuevoPedido.precio || 0).toFixed(2)}!`, '#27ae60');
         activarAlertasVisualesAdmin("NUEVO PEDIDO");
@@ -982,7 +996,7 @@ function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
     // Funciones de Badge PWA
     function actualizarNotificacionBadge(conteo) {
         if ('setAppBadge' in navigator) {
-            conteo > 0 ? navigator.setAppBadge(conteo) : navigator.clearAppBadge();
+            conteo > 0 ? navigator.setAppBadge(conteo).catch(() => {}) : navigator.clearAppBadge().catch(() => {});
         }
     }
 
@@ -992,10 +1006,27 @@ function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
         actualizarNotificacionBadge(activos);
     }
 
-    // Solicitar permiso de notificación e interactuar para limpiar alertas
+    // Solicitar permisos explícitamente en iOS
+    async function solicitarPermisoIOS() {
+        await desbloquearAudioAdmin();
+
+        if ('Notification' in window) {
+            const permiso = await Notification.requestPermission();
+            if (permiso === 'granted') {
+                console.log('Permisos de notificación concedidos en iOS/PWA.');
+            } else if (permiso === 'denied') {
+                alert('Las notificaciones fueron bloqueadas. Habilítalas en Ajustes > Notificaciones.');
+            }
+        } else {
+            console.log('Este dispositivo no soporta notificaciones Web.');
+        }
+    }
+
+    // Captura interacción del usuario para activar sonido, solicitar permisos y limpiar alertas
     document.addEventListener('click', () => {
+        desbloquearAudioAdmin();
         if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission();
+            solicitarPermisoIOS();
         }
         detenerAlertasVisualesAdmin();
     });
@@ -1003,31 +1034,6 @@ function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
     window.addEventListener('focus', () => {
         detenerAlertasVisualesAdmin();
     });
-
-    // Solicitar permisos explícitamente en iOS
-async function solicitarPermisoIOS() {
-    if ('Notification' in window) {
-        const permiso = await Notification.requestPermission();
-        if (permiso === 'granted') {
-            alert('¡Notificaciones activadas correctamente en tu iPhone!');
-            // Activar badge de prueba
-            if ('setAppBadge' in navigator) {
-                navigator.setAppBadge(1);
-            }
-        } else if (permiso === 'denied') {
-            alert('Las notificaciones fueron bloqueadas. Habilítalas en Ajustes de iOS > Notificaciones > Admin Reparte.');
-        }
-    } else {
-        alert('Este dispositivo o versión de iOS no soporta notificaciones Web.');
-    }
-}
-
-// Vincula esta función al primer toque del usuario en la app
-document.addEventListener('click', () => {
-    if ('Notification' in window && Notification.permission === 'default') {
-        solicitarPermisoIOS();
-    }
-}, { once: true });
 </script>
 </body>
 </html>
