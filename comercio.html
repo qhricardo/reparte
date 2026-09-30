@@ -2258,11 +2258,11 @@ async function suscribirWebPushComercio() {
     const userId = session.user.id;
     alert("5️⃣ Usuario autenticado (" + userId.substring(0, 8) + "...). Buscando comercio...");
 
-    // Obtener el ID del comercio asociado al usuario
+    // CORRECCIÓN: Se usa 'usuario_id' en lugar de 'user_id'
     const { data: comercioData, error: comercioError } = await supabaseClient
       .from('comercios')
       .select('id')
-      .eq('user_id', userId)
+      .eq('usuario_id', userId)
       .maybeSingle();
 
     if (comercioError || !comercioData) {
@@ -2298,7 +2298,6 @@ async function suscribirWebPushComercio() {
 
     alert("8️⃣ Guardando suscripción en Supabase...");
 
-    // Registrar en Supabase especificando ROL y COMERCIO_ID
     const subscriptionPayload = {
       user_id: userId,
       rol: 'comercio',
@@ -2316,7 +2315,6 @@ async function suscribirWebPushComercio() {
     } else {
       alert("🎉 ¡Notificaciones Push activadas con éxito para este comercio!");
       
-      // Actualizar estado visual del botón
       const btn = document.getElementById('btnActivarPushComercio');
       if (btn) {
         btn.style.backgroundColor = '#16a34a';
@@ -2397,27 +2395,24 @@ async function suscribirWebPushComercio() {
 
 // Listener global de autenticación de Supabase
 supabaseClient.auth.onAuthStateChange(async (event, session) => {
-  // Se dispara automáticamente cuando el usuario inicia sesión o abre la app ya autenticado
   if (session && session.user) {
     try {
-      // 1. Consultar el ID del comercio asociado a este usuario
-      const { data: comercio, error } = await supabaseClient
+      const { data: comercio } = await supabaseClient
         .from('comercios')
         .select('id')
-        .eq('user_id', session.user.id)
+        .eq('usuario_id', session.user.id)
         .maybeSingle();
 
       if (comercio && comercio.id) {
-        // 2. Guardar el ID en la variable global si la usas
         window.miComercioId = comercio.id;
-
-        // 3. PASO 2: Invocar la suscripción Push
-        if (typeof suscribirWebPushComercio === 'function') {
+        
+        // Verificar si la notificación ya fue concedida previamente para evitar alertas innecesarias
+        if (Notification.permission === 'granted') {
           await suscribirWebPushComercio();
         }
       }
     } catch (err) {
-      console.error("Error al registrar WebPush del comercio:", err);
+      console.error("Error en auth state change:", err);
     }
   }
 });
