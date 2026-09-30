@@ -39,3 +39,71 @@ self.addEventListener('message', (event) => {
     }
   }
 });
+
+// ==========================================
+// PASO 3: MANEJO DE NOTIFICACIONES PUSH EN SEGUNDO PLANO / PWA
+// ==========================================
+
+// 1. Escuchar el evento Push que llega desde la Edge Function
+self.addEventListener('push', (event) => {
+  let title = "🛍️ ¡Nuevo Pedido Recibido!";
+  let body = "Tienes una nueva orden en tu comercio.";
+
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      title = payload.title || title;
+      body = payload.body || body;
+    } catch (err) {
+      body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: body,
+    icon: '/icon-192.png',     // Icono de la PWA
+    badge: '/badge.png',       // Icono monocromático para barra de estado en Android
+    vibrate: [200, 100, 200, 100, 200],
+    tag: 'nuevo-pedido-comercio',
+    renotify: true,
+    data: {
+      url: '/comercio.html'
+    }
+  };
+
+  // Actualizar la placa del icono al recibir la notificación
+  if ('setAppBadge' in navigator) {
+    navigator.setAppBadge(1);
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
+});
+
+// 2. Manejar el clic sobre la notificación Push
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  // Limpiar el badge al hacer clic
+  if ('clearAppBadge' in navigator) {
+    navigator.clearAppBadge();
+  }
+
+  const targetUrl = event.notification.data?.url || '/comercio.html';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Si la PWA/ventana ya está abierta, enfocarte en ella
+      for (const client of clientList) {
+        if (client.url.includes('comercio.html') && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // Si está cerrada, abrir la URL en una nueva ventana/instancia de PWA
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
