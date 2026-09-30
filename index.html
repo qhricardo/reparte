@@ -913,16 +913,21 @@ function urlBase64ToUint8Array(base64String) {
 
 // --- FUNCIÓN PRINCIPAL DE SUSCRIPCIÓN PARA ADMIN / COMERCIO ---
 async function suscribirWebPushiOS() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    alert("Push no soportado en este navegador.");
+    return;
+  }
 
   try {
     const permission = await Notification.requestPermission();
-    if (permission !== 'granted') return;
+    if (permission !== 'granted') {
+      alert("Permiso de notificación denegado.");
+      return;
+    }
 
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
 
-    // Desuscribir para regenerar claves limpias
     if (sub) {
       await sub.unsubscribe();
     }
@@ -934,26 +939,29 @@ async function suscribirWebPushiOS() {
       applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
     });
 
-    // ⚠️ Importante: Usar sub.toJSON() para asegurar que keys.p256dh y keys.auth no se corrompan
     const subscriptionPayload = {
       user_id: currentUser ? currentUser.id : null,
-      rol: 'admin', // O 'repartidor' / 'comercio' según la app
-      comercio_id: typeof currentComercioId !== 'undefined' ? currentComercioId : null,
-      subscription_json: sub.toJSON(), 
+      rol: 'admin',
+      comercio_id: null,
+      subscription_json: sub.toJSON(),
       updated_at: new Date().toISOString()
     };
 
-    const { error } = await supabaseClient
+    // Forzar guardado sin depender de conflicto en user_id
+    const { data, error } = await supabaseClient
       .from('suscripciones_push')
-      .upsert(subscriptionPayload, { onConflict: 'user_id' });
+      .insert([subscriptionPayload]);
 
     if (error) {
-      console.error('❌ Error al guardar en Supabase:', error.message);
+      alert("❌ Error guardando suscripción: " + error.message);
+      console.error("Error guardando suscripción:", error);
     } else {
-      console.log('✅ Suscripción Push registrada de forma válida.');
+      alert("✅ Suscripción guardada exitosamente en la BD.");
+      console.log("✅ Suscripción guardada:", data);
     }
   } catch (err) {
-    console.error('❌ Error en el proceso de suscripción:', err);
+    alert("❌ Error en el proceso: " + err.message);
+    console.error("Error en proceso:", err);
   }
 }
 
