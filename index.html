@@ -914,24 +914,32 @@ function urlBase64ToUint8Array(base64String) {
 // --- FUNCIÓN PRINCIPAL DE SUSCRIPCIÓN PARA ADMIN / COMERCIO ---
 async function suscribirWebPushiOS() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    alert("Push no soportado en este navegador.");
+    alert("Las notificaciones Push no son soportadas en este navegador o dispositivo.");
     return;
   }
 
   try {
+    // 1. Obtener usuario de forma segura desde la sesión activa de Supabase
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const userIdActual = session?.user?.id || null;
+
+    // 2. Solicitar permiso al usuario
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
-      alert("Permiso de notificación denegado.");
+      alert("Permiso de notificaciones denegado.");
       return;
     }
 
+    // 3. Obtener Service Worker y limpiar suscripción previa
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
 
     if (sub) {
       await sub.unsubscribe();
+      console.log('🔄 Suscripción anterior eliminada para renovar claves.');
     }
 
+    // 4. Generar suscripción con la clave VAPID actual
     const PUBLIC_VAPID_KEY = 'BOfAC-hVG0Tv3K0gqdIHctkhntEXYeN9TVA6EBvwVNUopHpsYDGpINqQhQ797CMJPuBIaHjl0mQztLETi72XNXs';
 
     sub = await reg.pushManager.subscribe({
@@ -939,29 +947,31 @@ async function suscribirWebPushiOS() {
       applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
     });
 
+    // 5. Estructurar el payload correctamente
     const subscriptionPayload = {
-      user_id: currentUser ? currentUser.id : null,
+      user_id: userIdActual,
       rol: 'admin',
       comercio_id: null,
       subscription_json: sub.toJSON(),
       updated_at: new Date().toISOString()
     };
 
-    // Forzar guardado sin depender de conflicto en user_id
+    // 6. Guardar en la tabla suscripciones_push
     const { data, error } = await supabaseClient
       .from('suscripciones_push')
-      .insert([subscriptionPayload]);
+      .upsert(subscriptionPayload, { onConflict: 'user_id' });
 
     if (error) {
-      alert("❌ Error guardando suscripción: " + error.message);
-      console.error("Error guardando suscripción:", error);
+      console.error("❌ Error al guardar en Supabase:", error.message);
+      alert("Error al guardar suscripción: " + error.message);
     } else {
-      alert("✅ Suscripción guardada exitosamente en la BD.");
-      console.log("✅ Suscripción guardada:", data);
+      console.log("✅ Suscripción guardada exitosamente:", data);
+      alert("🎉 ¡Notificaciones Push activadas con éxito!");
     }
+
   } catch (err) {
-    alert("❌ Error en el proceso: " + err.message);
-    console.error("Error en proceso:", err);
+    console.error("❌ Error en el proceso de suscripción:", err);
+    alert("Error al activar notificaciones: " + err.message);
   }
 }
 
