@@ -2193,44 +2193,50 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-// --- REGISTRO PUSH PARA COMERCIO ---
+// --- REGISTRO AUTOMÁTICO DE NOTIFICACIONES PUSH PARA COMERCIO ---
 async function suscribirWebPushComercio() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    console.log("❌ Web Push no es soportado en este navegador/PWA.");
+    console.log("❌ Web Push no es soportado en este navegador o PWA.");
     return;
   }
 
   try {
-    // 1. Obtener sesión del comercio
+    // 1. Obtener sesión activa del usuario
     const { data: { session } } = await supabaseClient.auth.getSession();
-    const userId = session?.user?.id;
+    if (!session || !session.user) return;
 
-    if (!userId) {
-      console.warn("⚠️ No hay sesión de comercio activa para guardar suscripción Push.");
+    const userId = session.user.id;
+
+    // 2. Consultar el id de la tabla 'comercios' asociado a este usuario
+    const { data: comercioData, error: comercioError } = await supabaseClient
+      .from('comercios')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (comercioError || !comercioData) {
+      console.warn("⚠️ No se encontró registro en la tabla 'comercios' para el usuario actual.");
       return;
     }
 
-    // 2. Determinar el ID del comercio (comercio_id)
-    // Asegúrate de que miComercioId contenga el ID del comercio activo
-    const idComercioActual = typeof miComercioId !== 'undefined' ? miComercioId : null;
+    const idComercioActual = comercioData.id;
 
-    // 3. Solicitar permiso de notificación
+    // 3. Solicitar permiso de notificaciones
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
-      console.warn("⚠️ Permiso de notificación denegado para el comercio.");
+      console.warn("⚠️ Permiso de notificación denegado por el usuario.");
       return;
     }
 
-    // 4. Obtener Service Worker activo
+    // 4. Obtener Service Worker activo y desuscribir token previo para renovar claves
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
 
-    // Si ya existía suscripción, la desvinculamos para evitar conflicto de VAPID Key
     if (sub) {
       await sub.unsubscribe();
     }
 
-    // Clave VAPID Pública actual
+    // 5. Suscribir usando la clave pública VAPID
     const PUBLIC_VAPID_KEY = 'BOfAC-hVG0Tv3K0gqdIHctkhntEXYeN9TVA6EBvwVNUopHpsYDGpINqQhQ797CMJPuBIaHjl0mQztLETi72XNXs';
 
     sub = await reg.pushManager.subscribe({
@@ -2238,7 +2244,7 @@ async function suscribirWebPushComercio() {
       applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
     });
 
-    // 5. Enviar payload a Supabase guardando ROL y COMERCIO_ID
+    // 6. Guardar en suscripciones_push vinculando user_id, rol y comercio_id
     const subscriptionPayload = {
       user_id: userId,
       rol: 'comercio',
@@ -2247,20 +2253,30 @@ async function suscribirWebPushComercio() {
       updated_at: new Date().toISOString()
     };
 
-    const { error } = await supabaseClient
+    const { error: upsertError } = await supabaseClient
       .from('suscripciones_push')
       .upsert(subscriptionPayload, { onConflict: 'user_id' });
 
-    if (error) {
-      console.error("❌ Error guardando suscripción de comercio:", error.message);
+    if (upsertError) {
+      console.error("❌ Error guardando suscripción en Supabase:", upsertError.message);
     } else {
-      console.log("✅ Suscripción Web Push registrada con éxito para el Comercio:", idComercioActual);
+      console.log("✅ Suscripción Web Push registrada con éxito para el comercio:", idComercioActual);
     }
 
   } catch (err) {
-    console.error("❌ Error en suscribirWebPushComercio:", err);
+    console.error("❌ Error en el proceso de suscripción Push de comercio:", err);
   }
 }
+
+// --- INICIALIZACIÓN AUTOMÁTICA AL CARGAR LA PÁGINA / SESIÓN ---
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  if (session) {
+    // Se ejecuta automáticamente al iniciar sesión o restaurar la app
+    setTimeout(() => {
+      suscribirWebPushComercio();
+    }, 1000);
+  }
+});
     
 
     // Formulario Editar Producto
