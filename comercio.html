@@ -2181,76 +2181,85 @@ window.addEventListener('focus', () => {
 });
 
     
-// --- FUNCIÓN AUXILIAR VAPID ---
+// --- FUNCIÓN AUXILIAR CONVERSIÓN VAPID KEY ---
 function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
 }
 
-// --- FUNCIÓN PRINCIPAL DE SUSCRIPCIÓN PARA ADMIN / COMERCIO ---
-async function suscribirWebPushiOS() {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        alert('Las notificaciones Push no son soportadas en este navegador o dispositivo.');
-        return;
+// --- REGISTRO PUSH PARA COMERCIO ---
+async function suscribirWebPushComercio() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    console.log("❌ Web Push no es soportado en este navegador/PWA.");
+    return;
+  }
+
+  try {
+    // 1. Obtener sesión del comercio
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      console.warn("⚠️ No hay sesión de comercio activa para guardar suscripción Push.");
+      return;
     }
 
-    try {
-        // Solicitar permiso al usuario
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') {
-            alert('Permiso de notificaciones denegado.');
-            return;
-        }
+    // 2. Determinar el ID del comercio (comercio_id)
+    // Asegúrate de que miComercioId contenga el ID del comercio activo
+    const idComercioActual = typeof miComercioId !== 'undefined' ? miComercioId : null;
 
-        const reg = await navigator.serviceWorker.ready;
-        let sub = await reg.pushManager.getSubscription();
-
-        // Si existe una suscripción anterior, la eliminamos para evitar errores de VAPID Key
-        if (sub) {
-            await sub.unsubscribe();
-            console.log('🔄 Suscripción previa eliminada para renovación.');
-        }
-
-        // Coloca aquí tu NUEVA clave pública VAPID
-        const PUBLIC_VAPID_KEY = 'BOfAC-hVG0Tv3K0gqdIHctkhntEXYeN9TVA6EBvwVNUopHpsYDGpINqQhQ797CMJPuBIaHjl0mQztLETi72XNXs';
-
-        sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
-        });
-
-        // Determinar si el usuario es Admin o Comercio según tu lógica
-        // Si es comercio, asigna su comercio_id correspondiente
-        const subscriptionPayload = {
-            user_id: currentUser ? currentUser.id : null,
-            rol: 'admin', // O 'comercio' si aplica
-            comercio_id: currentComercioId || null, 
-            subscription_json: JSON.parse(JSON.stringify(sub)),
-            updated_at: new Date().toISOString()
-        };
-
-        // Guardar o actualizar en Supabase
-        const { error } = await supabaseClient
-            .from('suscripciones_push')
-            .upsert(subscriptionPayload, { onConflict: 'user_id' });
-
-        if (error) {
-            console.error('❌ Error en Supabase:', error.message);
-            alert('Error guardando la suscripción: ' + error.message);
-        } else {
-            console.log('✅ Suscripción Push guardada correctamente.');
-            alert('¡Notificaciones Push activadas con éxito!');
-        }
-    } catch (err) {
-        console.error('❌ Error al suscribir:', err);
-        alert('Error al activar notificaciones: ' + err.message);
+    // 3. Solicitar permiso de notificación
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      console.warn("⚠️ Permiso de notificación denegado para el comercio.");
+      return;
     }
+
+    // 4. Obtener Service Worker activo
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+
+    // Si ya existía suscripción, la desvinculamos para evitar conflicto de VAPID Key
+    if (sub) {
+      await sub.unsubscribe();
+    }
+
+    // Clave VAPID Pública actual
+    const PUBLIC_VAPID_KEY = 'BOfAC-hVG0Tv3K0gqdIHctkhntEXYeN9TVA6EBvwVNUopHpsYDGpINqQhQ797CMJPuBIaHjl0mQztLETi72XNXs';
+
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
+    });
+
+    // 5. Enviar payload a Supabase guardando ROL y COMERCIO_ID
+    const subscriptionPayload = {
+      user_id: userId,
+      rol: 'comercio',
+      comercio_id: idComercioActual,
+      subscription_json: sub.toJSON(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabaseClient
+      .from('suscripciones_push')
+      .upsert(subscriptionPayload, { onConflict: 'user_id' });
+
+    if (error) {
+      console.error("❌ Error guardando suscripción de comercio:", error.message);
+    } else {
+      console.log("✅ Suscripción Web Push registrada con éxito para el Comercio:", idComercioActual);
+    }
+
+  } catch (err) {
+    console.error("❌ Error en suscribirWebPushComercio:", err);
+  }
 }
     
 
