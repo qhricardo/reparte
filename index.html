@@ -874,50 +874,72 @@ let intervaloTituloAdmin = null;
         actualizarNotificacionBadge(0);
     }
 
-    // Convertidor auxiliar para clave VAPID
-    function urlBase64ToUint8Array(base64String) {
-        const padding = '='.repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-        const rawData = window.atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
-        }
-        return outputArray;
+   // FUNCIÓN AUXILIAR OBLIGATORIA PARA CONVERTIR LA CLAVE VAPID
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+// REGISTRO DE SUSCRIPCIÓN WEB PUSH EN SUPABASE
+async function suscribirWebPushiOS() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.log('Web Push no es soportado en este navegador/dispositivo.');
+        return;
     }
 
-    // REGISTRO DE SUSCRIPCIÓN WEB PUSH EN SUPABASE
-    async function suscribirWebPushiOS() {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-            console.log('Web Push no es soportado en este navegador/dispositivo.');
+    try {
+        // 1. Solicitar permiso explícito de notificaciones al usuario
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            console.warn('El usuario no concedió permiso para enviar notificaciones.');
             return;
         }
 
-        try {
-            const reg = await navigator.serviceWorker.ready;
-            let sub = await reg.pushManager.getSubscription();
+        // 2. Obtener el Service Worker activo
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
 
-            if (!sub) {
-                // Reemplaza esta cadena con tu clave pública VAPID de Supabase / Web Push
-                const PUBLIC_VAPID_KEY = 'BCYTe387sWvWTJYRnfzQ8RbRUKwdPLEnrBWGqtiDfvDjo4XyzbTceQ11SJwSrrv0PBb8PzHtteAerG2il3rzXYg'; 
-                sub = await reg.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
-                });
-            }
-
-            if (user && user.email === EMAIL_ADMIN) {
-                await supabaseClient.from('suscripciones_push').upsert({
-                    user_id: user.id,
-                    subscription_json: JSON.parse(JSON.stringify(sub)),
-                    updated_at: new Date().toISOString()
-                }, { onConflict: 'user_id' });
-                console.log('✅ Suscripción Web Push guardada en Supabase.');
-            }
-        } catch (err) {
-            console.error('Error suscribiendo a Web Push en iOS:', err);
+        // 3. Crear suscripción si no existe una activa
+        if (!sub) {
+            const PUBLIC_VAPID_KEY = 'BCYTe387sWvWTJYRnfzQ8RbRUKwdPLEnrBWGqtiDfvDjo4XyzbTceQ11SJwSrrv0PBb8PzHtteAerG2il3rzXYg'; 
+            sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
+            });
         }
+
+        // 4. Preparar payload de guardado en Supabase
+        const subscriptionPayload = {
+            subscription_json: JSON.parse(JSON.stringify(sub)),
+            updated_at: new Date().toISOString()
+        };
+
+        // Si tenemos el ID de usuario disponible, lo adjuntamos
+        if (typeof user !== 'undefined' && user && user.id) {
+            subscriptionPayload.user_id = user.id;
+        }
+
+        // 5. Guardar en Supabase (Se ejecuta siempre, incluso si user no se cargó aún)
+        const { data, error } = await supabaseClient
+            .from('suscripciones_push')
+            .upsert(subscriptionPayload);
+
+        if (error) {
+            console.error('❌ Error al insertar/actualizar suscripción en Supabase:', error.message);
+        } else {
+            console.log('✅ Suscripción Web Push guardada correctamente en Supabase.');
+        }
+
+    } catch (err) {
+        console.error('Error suscribiendo a Web Push en iOS:', err);
     }
+}
 
     // 3. Notificación local (Solo cuando la app está abierta)
     async function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
