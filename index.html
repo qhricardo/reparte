@@ -899,7 +899,7 @@ let intervaloTituloAdmin = null;
 
             if (!sub) {
                 // Reemplaza esta cadena con tu clave pública VAPID de Supabase / Web Push
-                const PUBLIC_VAPID_KEY = 'TU_CLAVE_PUBLICA_VAPID_AQUI'; 
+                const PUBLIC_VAPID_KEY = 'BCYTe387sWvWTJYRnfzQ8RbRUKwdPLEnrBWGqtiDfvDjo4XyzbTceQ11SJwSrrv0PBb8PzHtteAerG2il3rzXYg'; 
                 sub = await reg.pushManager.subscribe({
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
