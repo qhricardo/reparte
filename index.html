@@ -814,7 +814,7 @@
     };
 
     // --- NOTIFICACIONES ESTILO COMERCIO PARA ADMIN ---
- let intervaloTituloAdmin = null;
+let intervaloTituloAdmin = null;
     const tituloOriginalAdmin = document.title;
     let audioCtxAdmin = null;
 
@@ -886,10 +886,10 @@
         return outputArray;
     }
 
-    // PUNTO 2: Suscribir dispositivo a Web Push (VAPID / Supabase)
+    // REGISTRO DE SUSCRIPCIÓN WEB PUSH EN SUPABASE
     async function suscribirWebPushiOS() {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-            console.log('Web Push no es soportado en este navegador.');
+            console.log('Web Push no es soportado en este navegador/dispositivo.');
             return;
         }
 
@@ -898,7 +898,7 @@
             let sub = await reg.pushManager.getSubscription();
 
             if (!sub) {
-                // Reemplaza esta cadena por tu clave pública VAPID de Supabase
+                // Reemplaza esta cadena con tu clave pública VAPID de Supabase / Web Push
                 const PUBLIC_VAPID_KEY = 'TU_CLAVE_PUBLICA_VAPID_AQUI'; 
                 sub = await reg.pushManager.subscribe({
                     userVisibleOnly: true,
@@ -912,14 +912,14 @@
                     subscription_json: JSON.parse(JSON.stringify(sub)),
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'user_id' });
-                console.log('Suscripción Web Push registrada con éxito en Supabase.');
+                console.log('✅ Suscripción Web Push guardada en Supabase.');
             }
         } catch (err) {
-            console.error('Error al suscribir a Web Push en iOS:', err);
+            console.error('Error suscribiendo a Web Push en iOS:', err);
         }
     }
 
-    // 3. Función de Notificación compatible con Service Worker PWA en iOS (Soporte multi-evento)
+    // 3. Notificación local (Solo cuando la app está abierta)
     async function crearToastAdmin(mensaje, colorFondo = '#2c3e50') {
         const toast = document.createElement('div');
         toast.className = 'notificacion-toast';
@@ -967,7 +967,7 @@
         activarAlertasVisualesAdmin("SOLICITUD COMERCIO");
     }
 
-    // 4. Carga y reconexión forzada de Supabase para iOS PWA
+    // 4. Conexión Realtime
     async function cargarAdmin() {
         if (!user || user.email !== EMAIL_ADMIN) {
             alert("Acceso denegado. No tienes permisos de Administrador.");
@@ -991,13 +991,10 @@
 
         canalAdmin = supabaseClient.channel('live_admin_' + Date.now())
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
-                console.log('📡 Realtime INSERT Pedidos:', payload.new);
                 const nuevo = payload.new;
                 if (nuevo) {
                     if (nuevo.estado === 'revision_admin') {
                         lanzarNotificacionAdminRetenido(nuevo);
-                    } else if (nuevo.estado === 'pendiente') {
-                        lanzarNotificacionAdminPedido(nuevo);
                     } else {
                         lanzarNotificacionAdminPedido(nuevo);
                     }
@@ -1017,67 +1014,41 @@
                 }
                 cargarSolicitudesComerciosAdmin();
                 cargarMetricasAdmin();
-            })
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'comercios' }, () => {
-                cargarSolicitudesComerciosAdmin();
-                cargarMetricasAdmin();
             });
 
-        canalAdmin.subscribe((status) => {
-            console.log('🟢 Estado Realtime PWA iOS:', status);
-        });
+        canalAdmin.subscribe();
     }
 
-    // VITAL PARA PWA EN IPHONE: Forzar reconexión de Supabase al volver a la PWA instalada
+    // Reconexión en iOS al reabrir la app
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-            console.log('Reconectando canal Realtime en PWA iOS...');
             iniciarSuscripcionRealtimeAdmin();
             detenerAlertasVisualesAdmin();
         }
     });
-
-    // Mantenimiento activo del canal mientras la vista permanece abierta (cada 25 segundos)
-    setInterval(() => {
-        if (canalAdmin && supabaseClient && document.visibilityState === 'visible') {
-            actualizarNotificacionBadge(0);
-        }
-    }, 25000);
 </script>
 
 <script>
-    // Registro explícito del Service Worker PWA
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw-admin.js', { scope: './' })
-                .then(reg => console.log('SW Admin registrado con éxito:', reg.scope))
-                .catch(err => console.error('Error al registrar SW Admin:', err));
+            navigator.serviceWorker.register('./sw-admin.js', { scope: './' });
         });
     }
 
-    // Manejo de Badge / Globo
     function actualizarNotificacionBadge(conteo) {
         if ('setAppBadge' in navigator) {
             conteo > 0 ? navigator.setAppBadge(conteo).catch(() => {}) : navigator.clearAppBadge().catch(() => {});
         }
     }
 
-    function verificarPedidosGlobales(pedidos) {
-        const activos = pedidos.filter(p => p.estado !== 'entregado' && p.estado !== 'cancelado').length;
-        actualizarNotificacionBadge(activos);
-    }
-
-    // PUNTO 3: Solicitar permiso nativo de iOS y registrar Web Push al tocar la pantalla de la PWA
+    // Solicitar permiso nativo y activar Web Push al hacer clic
     async function solicitarPermisoIOS() {
         await desbloquearAudioAdmin();
 
         if ('Notification' in window) {
             const permiso = await Notification.requestPermission();
             if (permiso === 'granted') {
-                console.log('Permiso concedido en la PWA de iOS');
                 await suscribirWebPushiOS();
-            } else if (permiso === 'denied') {
-                alert('Notificaciones bloqueadas en iOS. Actívalas en Ajustes > Notificaciones > Admin Reparte.');
             }
         }
     }
@@ -1098,7 +1069,6 @@
         detenerAlertasVisualesAdmin();
     });
 </script>
-
 </body>
 </html>
 
