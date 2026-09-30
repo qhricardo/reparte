@@ -2342,6 +2342,35 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
         });
     }
 });
+
+
+// Listener global de autenticación de Supabase
+supabaseClient.auth.onAuthStateChange(async (event, session) => {
+  // Se dispara automáticamente cuando el usuario inicia sesión o abre la app ya autenticado
+  if (session && session.user) {
+    try {
+      // 1. Consultar el ID del comercio asociado a este usuario
+      const { data: comercio, error } = await supabaseClient
+        .from('comercios')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+
+      if (comercio && comercio.id) {
+        // 2. Guardar el ID en la variable global si la usas
+        window.miComercioId = comercio.id;
+
+        // 3. PASO 2: Invocar la suscripción Push
+        if (typeof suscribirWebPushComercio === 'function') {
+          await suscribirWebPushComercio();
+        }
+      }
+    } catch (err) {
+      console.error("Error al registrar WebPush del comercio:", err);
+    }
+  }
+});
+    
 </script>
 
 </body>
