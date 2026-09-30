@@ -2183,7 +2183,59 @@ window.addEventListener('focus', () => {
     
 // Asegúrate de llamar a esta función cuando cargues los datos del dueño
 // Ejemplo: actualizarBotonEstadoComercio(miComercio.abierto !== false);
+// REGISTRO DE SUSCRIPCIÓN WEB PUSH PARA EL COMERCIO
+async function suscribirWebPushComercio(comercioId) {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.log('Web Push no es soportado en este navegador/dispositivo.');
+        return;
+    }
 
+    try {
+        // 1. Pedir permisos de notificación
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            console.warn('Permiso de notificaciones no concedido por el comercio.');
+            return;
+        }
+
+        // 2. Obtener Service Worker activo
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+
+        // 3. Crear suscripción si no existe
+        if (!sub) {
+            const PUBLIC_VAPID_KEY = 'BCYTe387sWvWTJYRnfzQ8RbRUKwdPLEnrBWGqtiDfvDjo4XyzbTceQ11SJwSrrv0PBb8PzHtteAerG2il3rzXYg'; 
+            sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
+            });
+        }
+
+        // 4. Guardar suscripción vinculada al comercio_id
+        const subscriptionPayload = {
+            comercio_id: comercioId,
+            subscription_json: JSON.parse(JSON.stringify(sub)),
+            updated_at: new Date().toISOString()
+        };
+
+        if (typeof user !== 'undefined' && user && user.id) {
+            subscriptionPayload.user_id = user.id;
+        }
+
+        const { error } = await supabaseClient
+            .from('suscripciones_push')
+            .upsert(subscriptionPayload);
+
+        if (error) {
+            console.error('❌ Error guardando suscripción del comercio:', error.message);
+        } else {
+            console.log('✅ Notificaciones activadas para el comercio:', comercioId);
+        }
+
+    } catch (err) {
+        console.error('Error suscribiendo al Comercio:', err);
+    }
+}
     
 
     // Formulario Editar Producto
