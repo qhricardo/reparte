@@ -2204,7 +2204,7 @@ async function suscribirWebPushComercio(comercioId) {
 
         // 3. Crear suscripción si no existe
         if (!sub) {
-            const PUBLIC_VAPID_KEY = 'BCYTe387sWvWTJYRnfzQ8RbRUKwdPLEnrBWGqtiDfvDjo4XyzbTceQ11SJwSrrv0PBb8PzHtteAerG2il3rzXYg'; 
+            const PUBLIC_VAPID_KEY = 'BOfAC-hVG0Tv3K0gqdIHctkhntEXYeN9TVA6EBvwVNUopHpsYDGpINqQhQ797CMJPuBIaHjl0mQztLETi72XNXs'; 
             sub = await reg.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
