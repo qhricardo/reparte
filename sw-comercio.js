@@ -41,10 +41,10 @@ self.addEventListener('message', (event) => {
 });
 
 // ==========================================
-// PASO 3: MANEJO DE NOTIFICACIONES PUSH EN SEGUNDO PLANO / PWA
+// MANEJO DE NOTIFICACIONES PUSH EN SEGUNDO PLANO (iOS / PWA)
 // ==========================================
 
-// 1. Escuchar el evento Push que llega desde la Edge Function
+// 1. Escuchar evento Push
 self.addEventListener('push', (event) => {
   let title = "🛍️ ¡Nuevo Pedido Recibido!";
   let body = "Tienes una nueva orden en tu comercio.";
@@ -59,48 +59,50 @@ self.addEventListener('push', (event) => {
     }
   }
 
+  // Opciones ajustadas específicamente para el motor WebPush de iOS Safari
   const options = {
     body: body,
-    icon: '/icon-192.png',     // Icono de la PWA
-    badge: '/badge.png',       // Icono monocromático para barra de estado en Android
+    icon: '/icon-192.png',
+    badge: '/badge.png',
     vibrate: [200, 100, 200, 100, 200],
-    tag: 'nuevo-pedido-comercio',
+    // Tag único indispensable para obligar a iOS a mostrar tiras emergentes en segundo plano
+    tag: 'pedido-' + Date.now(),
     renotify: true,
     data: {
       url: '/comercio.html'
     }
   };
 
-  // Actualizar la placa del icono al recibir la notificación
+  // Intentar actualizar el Badge del ícono sin bloquear la notificación
   if ('setAppBadge' in navigator) {
-    navigator.setAppBadge(1);
+    navigator.setAppBadge(1).catch(() => {});
   }
 
+  // La promesa enviada a waitUntil debe ser directa y limpia
   event.waitUntil(
     self.registration.showNotification(title, options)
   );
 });
 
-// 2. Manejar el clic sobre la notificación Push
+// 2. Manejar clic sobre la notificación
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  // Limpiar el badge al hacer clic
   if ('clearAppBadge' in navigator) {
-    navigator.clearAppBadge();
+    navigator.clearAppBadge().catch(() => {});
   }
 
   const targetUrl = event.notification.data?.url || '/comercio.html';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Si la PWA/ventana ya está abierta, enfocarte en ella
+      // Si la PWA ya está abierta, enfocarse en ella
       for (const client of clientList) {
         if (client.url.includes('comercio.html') && 'focus' in client) {
           return client.focus();
         }
       }
-      // Si está cerrada, abrir la URL en una nueva ventana/instancia de PWA
+      // Si está cerrada en segundo plano, abrir la PWA
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }
