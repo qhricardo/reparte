@@ -1,4 +1,4 @@
-const CACHE_NAME = 'reparte-admin-v4';
+const CACHE_NAME = 'reparte-admin-v5';
 
 // 1. Instalación e Invocación Inmediata
 self.addEventListener('install', (e) => {
@@ -38,7 +38,32 @@ self.addEventListener('fetch', (e) => {
   );
 });
 
-// 3. Manejar interacciones con Notificaciones Nativas en Móviles
+// 3. Recepción de Notificaciones Web Push (Servidor / Supabase)
+self.addEventListener('push', (event) => {
+  let data = { title: 'Reparte Admin', body: '¡Tienes un nuevo evento de pedido!' };
+  
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png',
+    badge: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png',
+    vibrate: [200, 100, 200, 100, 200],
+    data: { url: './index.html' }
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+// 4. Manejar interacciones con Notificaciones Nativas en Móviles
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
