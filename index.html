@@ -912,57 +912,47 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 // REGISTRO DE SUSCRIPCIÓN WEB PUSH EN SUPABASE
-async function suscribirWebPushiOS() {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        console.log('Web Push no es soportado en este navegador/dispositivo.');
-        return;
-    }
+async function suscribirWebPushRepartidor() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 
     try {
-        // 1. Solicitar permiso explícito de notificaciones al usuario
         const permission = await Notification.requestPermission();
-        if (permission !== 'granted') {
-            console.warn('El usuario no concedió permiso para enviar notificaciones.');
-            return;
-        }
+        if (permission !== 'granted') return;
 
-        // 2. Obtener el Service Worker activo
         const reg = await navigator.serviceWorker.ready;
         let sub = await reg.pushManager.getSubscription();
 
-        // 3. Crear suscripción si no existe una activa
-        if (!sub) {
-            const PUBLIC_VAPID_KEY = 'BOfAC-hVG0Tv3K0gqdIHctkhntEXYeN9TVA6EBvwVNUopHpsYDGpINqQhQ797CMJPuBIaHjl0mQztLETi72XNXs'; 
-            sub = await reg.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
-            });
+        // Si ya existía una suscripción previa con la clave anterior, la anulamos
+        if (sub) {
+            await sub.unsubscribe();
+            console.log('🔄 Suscripción anterior desvinculada por cambio de llaves VAPID.');
         }
 
-        // 4. Preparar payload de guardado en Supabase
+        // Generar una suscripción completamente nueva con la clave actual
+        const PUBLIC_VAPID_KEY = 'TU_NUEVA_CLAVE_PUBLICA_AQUI'; 
+        sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
+        });
+
         const subscriptionPayload = {
+            user_id: currentUser ? currentUser.id : null,
+            rol: 'repartidor',
             subscription_json: JSON.parse(JSON.stringify(sub)),
             updated_at: new Date().toISOString()
         };
 
-        // Si tenemos el ID de usuario disponible, lo adjuntamos
-        if (typeof user !== 'undefined' && user && user.id) {
-            subscriptionPayload.user_id = user.id;
-        }
-
-        // 5. Guardar en Supabase (Se ejecuta siempre, incluso si user no se cargó aún)
-        const { data, error } = await supabaseClient
+        const { error } = await supabaseClient
             .from('suscripciones_push')
-            .upsert(subscriptionPayload);
+            .upsert(subscriptionPayload, { onConflict: 'user_id' });
 
         if (error) {
-            console.error('❌ Error al insertar/actualizar suscripción en Supabase:', error.message);
+            console.error('❌ Error guardando suscripción:', error.message);
         } else {
-            console.log('✅ Suscripción Web Push guardada correctamente en Supabase.');
+            console.log('✅ Suscripción Web Push renovada con éxito.');
         }
-
     } catch (err) {
-        console.error('Error suscribiendo a Web Push en iOS:', err);
+        console.error('Error suscribiendo:', err);
     }
 }
 
