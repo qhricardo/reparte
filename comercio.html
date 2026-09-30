@@ -2196,7 +2196,7 @@ window.addEventListener('focus', () => {
 });
 
     
-// --- FUNCIÓN AUXILIAR CONVERSIÓN VAPID KEY ---
+// --- FUNCIÓN AUXILIAR PARA CLAVE VAPID ---
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -2208,21 +2208,42 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-// --- REGISTRO AUTOMÁTICO DE NOTIFICACIONES PUSH PARA COMERCIO ---
-async function suscribirWebPushComercio() {
+// --- ACCIÓN DIRECTA DEL USUARIO (REQUISITO EXIGIDO POR IOS) ---
+async function solicitarPermisoPushManual() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    console.log("❌ Web Push no es soportado en este navegador o PWA.");
+    alert("❌ Este navegador o dispositivo no soporta Notificaciones Push.");
     return;
   }
 
   try {
-    // 1. Obtener sesión activa del usuario
+    // 1. Forzar el diálogo nativo de iOS/Android mediante un toque explícito
+    const permission = await Notification.requestPermission();
+
+    if (permission === 'granted') {
+      alert("✅ Permiso concedido. Registrando suscripción...");
+      await suscribirWebPushComercio();
+    } else if (permission === 'denied') {
+      alert("⚠️ Permiso denegado. Ve a Ajustes de tu iPhone > Notificaciones > Reparite y actívalas.");
+    } else {
+      alert("⚠️ No se seleccionó ninguna opción.");
+    }
+  } catch (err) {
+    alert("❌ Error al solicitar permiso: " + err.message);
+  }
+}
+
+// --- REGISTRO Y VINCULACIÓN EN SUPABASE ---
+async function suscribirWebPushComercio() {
+  try {
     const { data: { session } } = await supabaseClient.auth.getSession();
-    if (!session || !session.user) return;
+    if (!session?.user) {
+      alert("⚠️ Debes iniciar sesión primero.");
+      return;
+    }
 
     const userId = session.user.id;
 
-    // 2. Consultar el id de la tabla 'comercios' asociado a este usuario
+    // Obtener el ID del comercio asociado
     const { data: comercioData, error: comercioError } = await supabaseClient
       .from('comercios')
       .select('id')
@@ -2230,28 +2251,21 @@ async function suscribirWebPushComercio() {
       .maybeSingle();
 
     if (comercioError || !comercioData) {
-      console.warn("⚠️ No se encontró registro en la tabla 'comercios' para el usuario actual.");
+      alert("⚠️ No se encontró un comercio registrado para esta cuenta.");
       return;
     }
 
     const idComercioActual = comercioData.id;
 
-    // 3. Solicitar permiso de notificaciones
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      console.warn("⚠️ Permiso de notificación denegado por el usuario.");
-      return;
-    }
-
-    // 4. Obtener Service Worker activo y desuscribir token previo para renovar claves
+    // Asegurar Service Worker activo
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
 
+    // Renovar suscripción para garantizar VAPID limpia
     if (sub) {
       await sub.unsubscribe();
     }
 
-    // 5. Suscribir usando la clave pública VAPID
     const PUBLIC_VAPID_KEY = 'BOfAC-hVG0Tv3K0gqdIHctkhntEXYeN9TVA6EBvwVNUopHpsYDGpINqQhQ797CMJPuBIaHjl0mQztLETi72XNXs';
 
     sub = await reg.pushManager.subscribe({
@@ -2259,7 +2273,7 @@ async function suscribirWebPushComercio() {
       applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
     });
 
-    // 6. Guardar en suscripciones_push vinculando user_id, rol y comercio_id
+    // Registrar en Supabase especificando ROL y COMERCIO_ID
     const subscriptionPayload = {
       user_id: userId,
       rol: 'comercio',
@@ -2273,25 +2287,22 @@ async function suscribirWebPushComercio() {
       .upsert(subscriptionPayload, { onConflict: 'user_id' });
 
     if (upsertError) {
-      console.error("❌ Error guardando suscripción en Supabase:", upsertError.message);
+      alert("❌ Error guardando en BD: " + upsertError.message);
     } else {
-      console.log("✅ Suscripción Web Push registrada con éxito para el comercio:", idComercioActual);
+      alert("🎉 ¡Notificaciones Push activadas con éxito para este comercio!");
+      
+      // Ocultar o actualizar estado del botón
+      const btn = document.getElementById('btnActivarPushComercio');
+      if (btn) {
+        btn.style.backgroundColor = '#16a34a';
+        btn.innerHTML = '✅ Notificaciones Activas';
+      }
     }
 
   } catch (err) {
-    console.error("❌ Error en el proceso de suscripción Push de comercio:", err);
+    alert("❌ Error en el proceso de suscripción: " + err.message);
   }
 }
-
-// --- INICIALIZACIÓN AUTOMÁTICA AL CARGAR LA PÁGINA / SESIÓN ---
-supabaseClient.auth.onAuthStateChange((event, session) => {
-  if (session) {
-    // Se ejecuta automáticamente al iniciar sesión o restaurar la app
-    setTimeout(() => {
-      suscribirWebPushComercio();
-    }, 1000);
-  }
-});
     
 
     // Formulario Editar Producto
