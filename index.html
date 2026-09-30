@@ -78,6 +78,31 @@
         <button class="btn btn-d" onclick="cerrarSesion()">Cerrar Sesión</button>
     </div>
 
+
+    <button onclick="probarSuscripcionDirecta()" style="padding: 15px; background: #007bff; color: white; font-weight: bold; border-radius: 8px;">
+  🔔 Activar Notificaciones Push en este iPhone
+</button>
+
+<script>
+async function probarSuscripcionDirecta() {
+    try {
+        console.log("Iniciando suscripción...");
+        await suscribirWebPushiOS();
+        
+        // Verificar de inmediato si se guardó en la BD
+        const { data, error } = await supabaseClient.from('suscripciones_push').select('*');
+        if (error) {
+            alert("Error al consultar la tabla: " + error.message);
+        } else {
+            alert("✅ Éxito: Hay " + data.length + " suscripción(es) guardada(s) en Supabase.");
+        }
+    } catch (err) {
+        alert("Error en la suscripción: " + err.message);
+    }
+}
+</script>
+
+    
     <!-- ACCESO CON GOOGLE O CORREO -->
     <div id="pLogin" class="card" style="max-width: 380px; margin: 40px auto; text-align:center; padding: 25px;">
         <h2>🛒 Reparte Ixtlahuaca</h2>
