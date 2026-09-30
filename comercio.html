@@ -573,11 +573,10 @@ input:focus, textarea:focus {
         </button>
     </div>
 
-<!-- Botón visual para activar notificaciones Push en el Comercio -->
 <button id="btnActivarPushComercio" onclick="solicitarPermisoPushManual()" style="background-color: #2563eb; color: white; padding: 10px 16px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; margin: 10px 0;">
   🔔 Activar Notificaciones Push
 </button>
-    
+
     <!-- 2. EXPLORAR COMERCIOS -->
 <div id="pantallaClienteComercios" class="oculto">
     <!-- Banner de aviso fuera de horario -->
@@ -2208,22 +2207,29 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-// --- ACCIÓN DIRECTA DEL USUARIO (REQUISITO EXIGIDO POR IOS) ---
+// --- ACCIÓN DIRECTA DEL USUARIO (DIAGNÓSTICO + SOLICITUD NATIVA iOS/ANDROID) ---
 async function solicitarPermisoPushManual() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    alert("❌ Este navegador o dispositivo no soporta Notificaciones Push.");
+  alert("1️⃣ Botón presionado. Verificando compatibilidad...");
+
+  if (!('serviceWorker' in navigator)) {
+    alert("❌ Tu navegador no soporta Service Workers.");
+    return;
+  }
+  if (!('PushManager' in window)) {
+    alert("❌ Dispositivo/Navegador sin soporte Push. Asegúrate de abrir la app desde el icono instalado en la pantalla de inicio del iPhone.");
     return;
   }
 
   try {
-    // 1. Forzar el diálogo nativo de iOS/Android mediante un toque explícito
+    alert("2️⃣ Solicitando permiso nativo al sistema...");
     const permission = await Notification.requestPermission();
+    alert("3️⃣ Estado del permiso: " + permission);
 
     if (permission === 'granted') {
-      alert("✅ Permiso concedido. Registrando suscripción...");
+      alert("✅ Permiso concedido. Iniciando suscripción Web Push...");
       await suscribirWebPushComercio();
     } else if (permission === 'denied') {
-      alert("⚠️ Permiso denegado. Ve a Ajustes de tu iPhone > Notificaciones > Reparite y actívalas.");
+      alert("⚠️ Permiso denegado. Ve a Ajustes del iPhone > Notificaciones > Reparite y actívalas.");
     } else {
       alert("⚠️ No se seleccionó ninguna opción.");
     }
@@ -2232,18 +2238,27 @@ async function solicitarPermisoPushManual() {
   }
 }
 
-// --- REGISTRO Y VINCULACIÓN EN SUPABASE ---
+// --- REGISTRO Y VINCULACIÓN EN SUPABASE CON TIMEOUT DE SW ---
 async function suscribirWebPushComercio() {
   try {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (!session?.user) {
-      alert("⚠️ Debes iniciar sesión primero.");
+    alert("4️⃣ Verificando sesión activa en Supabase...");
+
+    if (typeof supabaseClient === 'undefined') {
+      alert("❌ Error: 'supabaseClient' no está definido en esta página.");
+      return;
+    }
+
+    const { data: { session }, error: sessionErr } = await supabaseClient.auth.getSession();
+
+    if (sessionErr || !session?.user) {
+      alert("⚠️ Debes iniciar sesión de nuevo en la app del comercio.");
       return;
     }
 
     const userId = session.user.id;
+    alert("5️⃣ Usuario autenticado (" + userId.substring(0, 8) + "...). Buscando comercio...");
 
-    // Obtener el ID del comercio asociado
+    // Obtener el ID del comercio asociado al usuario
     const { data: comercioData, error: comercioError } = await supabaseClient
       .from('comercios')
       .select('id')
@@ -2256,14 +2271,22 @@ async function suscribirWebPushComercio() {
     }
 
     const idComercioActual = comercioData.id;
+    alert("6️⃣ Comercio encontrado (ID: " + idComercioActual + "). Esperando Service Worker...");
 
-    // Asegurar Service Worker activo
-    const reg = await navigator.serviceWorker.ready;
+    // Control de tiempo de espera (5 segundos) por si navigator.serviceWorker.ready se congela en iOS
+    const swTimeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Tiempo de espera agotado para Service Worker ready")), 5000)
+    );
+
+    const reg = await Promise.race([navigator.serviceWorker.ready, swTimeout]);
+
     let sub = await reg.pushManager.getSubscription();
 
-    // Renovar suscripción para garantizar VAPID limpia
     if (sub) {
+      alert("7️⃣ Renovando suscripción previa...");
       await sub.unsubscribe();
+    } else {
+      alert("7️⃣ Creando nueva suscripción Web Push...");
     }
 
     const PUBLIC_VAPID_KEY = 'BOfAC-hVG0Tv3K0gqdIHctkhntEXYeN9TVA6EBvwVNUopHpsYDGpINqQhQ797CMJPuBIaHjl0mQztLETi72XNXs';
@@ -2272,6 +2295,8 @@ async function suscribirWebPushComercio() {
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
     });
+
+    alert("8️⃣ Guardando suscripción en Supabase...");
 
     // Registrar en Supabase especificando ROL y COMERCIO_ID
     const subscriptionPayload = {
@@ -2291,7 +2316,7 @@ async function suscribirWebPushComercio() {
     } else {
       alert("🎉 ¡Notificaciones Push activadas con éxito para este comercio!");
       
-      // Ocultar o actualizar estado del botón
+      // Actualizar estado visual del botón
       const btn = document.getElementById('btnActivarPushComercio');
       if (btn) {
         btn.style.backgroundColor = '#16a34a';
