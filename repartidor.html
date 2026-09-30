@@ -402,6 +402,62 @@
     }
 
 
+// --- FUNCIÓN AUXILIAR CONVERSIÓN VAPID KEY ---
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+// --- REGISTRO DE SUSCRIPCIÓN PUSH EN REPARTIDOR ---
+async function suscribirWebPushRepartidor() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.log('Web Push no es soportado en este dispositivo.');
+        return;
+    }
+
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+
+        if (!sub) {
+            const PUBLIC_VAPID_KEY = 'BCYTe387sWvWTJYRnfzQ8RbRUKwdPLEnrBWGqtiDfvDjo4XyzbTceQ11SJwSrrv0PBb8PzHtteAerG2il3rzXYg'; 
+            sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
+            });
+        }
+
+        const subscriptionPayload = {
+            user_id: currentUser ? currentUser.id : null,
+            rol: 'repartidor',
+            subscription_json: JSON.parse(JSON.stringify(sub)),
+            updated_at: new Date().toISOString()
+        };
+
+        const { error } = await supabaseClient
+            .from('suscripciones_push')
+            .upsert(subscriptionPayload, { onConflict: 'user_id' });
+
+        if (error) {
+            console.error('❌ Error guardando suscripción repartidor:', error.message);
+        } else {
+            console.log('✅ Notificaciones Push activadas para el Repartidor.');
+        }
+    } catch (err) {
+        console.error('Error suscribiendo al Repartidor:', err);
+    }
+}
+    
+
     // Funciones de Badge PWA
 function actualizarNotificacionBadge(conteo) {
   if ('setAppBadge' in navigator) {
