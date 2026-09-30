@@ -1,13 +1,16 @@
 const CACHE_NAME = 'reparte-comercio-v4';
 
+// 1. Instalación del Service Worker
 self.addEventListener('install', (e) => {
   self.skipWaiting();
 });
 
+// 2. Activación del Service Worker
 self.addEventListener('activate', (e) => {
   e.waitUntil(clients.claim());
 });
 
+// 3. Estrategia de Caché
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
@@ -27,24 +30,24 @@ self.addEventListener('fetch', (e) => {
   );
 });
 
-// Escuchar notificaciones para actualizar el Badge en el icono
+// 4. Escuchar mensajes internos para Badges
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SET_BADGE') {
     if ('setAppBadge' in navigator) {
-      navigator.setAppBadge(event.data.count || 1);
+      navigator.setAppBadge(event.data.count || 1).catch(() => {});
     }
   } else if (event.data && event.data.type === 'CLEAR_BADGE') {
     if ('clearAppBadge' in navigator) {
-      navigator.clearAppBadge();
+      navigator.clearAppBadge().catch(() => {});
     }
   }
 });
 
 // ==========================================
-// MANEJO DE NOTIFICACIONES PUSH EN SEGUNDO PLANO (iOS / PWA)
+// PASO 3: MANEJO DE NOTIFICACIONES PUSH EN SEGUNDO PLANO (PWA / iOS)
 // ==========================================
 
-// 1. Escuchar evento Push
+// Escuchar el evento Push que llega desde la Edge Function de Supabase
 self.addEventListener('push', (event) => {
   let title = "🛍️ ¡Nuevo Pedido Recibido!";
   let body = "Tienes una nueva orden en tu comercio.";
@@ -65,7 +68,7 @@ self.addEventListener('push', (event) => {
     icon: '/icon-192.png',
     badge: '/badge.png',
     vibrate: [200, 100, 200, 100, 200],
-    // Tag único indispensable para obligar a iOS a mostrar tiras emergentes en segundo plano
+    // Tag único indispensable para obligar a iOS a mostrar tiras emergentes con la app cerrada
     tag: 'pedido-' + Date.now(),
     renotify: true,
     data: {
@@ -78,13 +81,13 @@ self.addEventListener('push', (event) => {
     navigator.setAppBadge(1).catch(() => {});
   }
 
-  // La promesa enviada a waitUntil debe ser directa y limpia
+  // Promesa pura en waitUntil para garantizar el despliegue nativo
   event.waitUntil(
     self.registration.showNotification(title, options)
   );
 });
 
-// 2. Manejar clic sobre la notificación
+// Manejar clic sobre la notificación Push
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
@@ -96,13 +99,13 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Si la PWA ya está abierta, enfocarse en ella
+      // Si la PWA ya está abierta, enfocar la ventana
       for (const client of clientList) {
         if (client.url.includes('comercio.html') && 'focus' in client) {
           return client.focus();
         }
       }
-      // Si está cerrada en segundo plano, abrir la PWA
+      // Si está cerrada, abrir la PWA en una nueva instancia
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }
