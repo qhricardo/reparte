@@ -13,17 +13,20 @@
     <!-- Configuración PWA Comercio -->
     <link rel="manifest" href="manifest-comercio.json">
     <meta name="theme-color" content="#16a34a">
+    <!-- Requisitos PWA para iOS Safari -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Comercio">
+<link rel="apple-touch-icon" href="/icono-192.png">
     <script>
-     if ('serviceWorker' in navigator) {
+   if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw-comercio.js', { scope: '/' })
       .then((registration) => {
-        console.log('✅ Service Worker de Comercio registrado con éxito:', registration.scope);
-        // Forzar actualización si hay cambios en el SW
-        registration.update();
+        console.log('✅ Service Worker de Comercio registrado:', registration.scope);
       })
       .catch((error) => {
-        console.error('❌ Error registrando el Service Worker de Comercio:', error);
+        console.error('❌ Error registrando SW:', error);
       });
   });
 }
