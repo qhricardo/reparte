@@ -2162,34 +2162,44 @@ input:focus, textarea:focus {
     // IMPLEMENTACIÓN CORREGIDA DE NOTIFICACIONES PUSH PARA iOS / ANDROID
     // =========================================================================
 
-   async function guardarSuscripcionEnBaseDeDatos(sub) {
-  if (!usuarioActual) return;
+   async function guardarSuscripcionEnBaseDeDatos(subscription) {
+  try {
+    // 1. Extraer las llaves necesarias de la suscripción Push
+    const subJSON = subscription.toJSON();
+    const endpoint = subJSON.endpoint;
+    const p256dh = subJSON.keys ? subJSON.keys.p256dh : '';
+    const auth = subJSON.keys ? subJSON.keys.auth : '';
 
-  const subObj = JSON.parse(JSON.stringify(sub));
-  const p256dh = subObj.keys ? subObj.keys.p256dh : '';
-  const auth = subObj.keys ? subObj.keys.auth : '';
+    // 2. Obtener el ID del comercio/usuario activo
+    // (Asegúrate de ajustar 'comercioActivoId' según como manejes la sesión)
+    const comercioId = localStorage.getItem('comercio_id') || usuarioActual?.id;
 
-  // Determinar el ID del comercio correctamente
-  const idComercioActual = miComercio ? miComercio.id : window.miComercioId;
+    if (!comercioId) {
+      console.warn("No se encontró el ID del comercio para asociar la suscripción.");
+      return;
+    }
 
-  const registro = {
-    usuario_id: usuarioActual.id,
-    comercio_id: idComercioActual || null,
-    endpoint: subObj.endpoint,
-    p256dh: p256dh,
-    auth: auth,
-    rol: idComercioActual ? 'comercio' : 'cliente',
-    updated_at: new Date().toISOString()
-  };
+    // 3. Preparar el objeto con los datos a guardar
+    const datosSuscripcion = {
+      endpoint: endpoint,
+      p256dh: p256dh,
+      auth: auth,
+      comercio_id: comercioId, // O 'usuario_id' según la estructura de tu tabla
+      updated_at: new Date().toISOString()
+    };
 
-  const { error } = await supabaseClient
-    .from('suscripciones_push')
-    .upsert(registro, { onConflict: 'endpoint' });
+    // 4. Guardar o actualizar en Supabase (upsert)
+    const { data, error } = await supabaseClient
+      .from('suscripciones_push')
+      .upsert(datosSuscripcion, { onConflict: 'endpoint' });
 
-  if (error) {
-    console.error("Error guardando suscripción push en Supabase:", error);
-  } else {
-    console.log("✅ Suscripción Web Push guardada correctamente en Supabase.");
+    if (error) {
+      console.error('Error al guardar la suscripción en Supabase:', error);
+    } else {
+      console.log('Suscripción guardada/actualizada con éxito en la base de datos:', data);
+    }
+  } catch (err) {
+    console.error('Error inesperado en guardarSuscripcionEnBaseDeDatos:', err);
   }
 }
 
