@@ -2198,9 +2198,9 @@ window.addEventListener('focus', () => {
 });
 
     
-// --- FUNCIÓN AUXILIAR PARA CLAVE VAPID ---
+// Función auxiliar indispensable para convertir la clave VAPID
 function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
@@ -2243,90 +2243,58 @@ async function solicitarPermisoPushManual() {
 
 // --- REGISTRO Y VINCULACIÓN EN SUPABASE CON TIMEOUT DE SW ---
 async function suscribirWebPushComercio() {
+  const btn = document.getElementById('btnNotificaciones'); // Ajusta al ID de tu botón
+  if (btn) btn.disabled = true;
+
   try {
-    alert("4️⃣ Verificando sesión activa en Supabase...");
-
-    if (typeof supabaseClient === 'undefined') {
-      alert("❌ Error: 'supabaseClient' no está definido en esta página.");
+    // 1. Verificar soporte básico
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert('Tu navegador o dispositivo no soporta Notificaciones Push.');
       return;
     }
 
-    const { data: { session }, error: sessionErr } = await supabaseClient.auth.getSession();
+    // 2. PASO CRÍTICO EN iOS: Pedir permiso INMEDIATAMENTE en el hilo del clic
+    let permission = Notification.permission;
+    if (permission === 'default') {
+      permission = await Notification.requestPermission();
+    }
 
-    if (sessionErr || !session?.user) {
-      alert("⚠️ Debes iniciar sesión de nuevo en la app del comercio.");
+    if (permission !== 'granted') {
+      alert('Debes permitir las notificaciones para recibir alertas de pedidos.');
       return;
     }
 
-    const userId = session.user.id;
-    alert("5️⃣ Usuario autenticado (" + userId.substring(0, 8) + "...). Buscando comercio...");
+    // 3. Obtener el registro del Service Worker con un timeout para evitar congelamientos
+    const swRegistration = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout esperando Service Worker')), 5000))
+    ]);
 
-    // CORRECCIÓN: Se usa 'usuario_id' en lugar de 'user_id'
-    const { data: comercioData, error: comercioError } = await supabaseClient
-      .from('comercios')
-      .select('id')
-      .eq('usuario_id', userId)
-      .maybeSingle();
+    // 4. Obtener la clave VAPID pública
+    const PUBLIC_VAPID_KEY = 'BOfAC-hVG0Tv3K0gqdIHctkhntEXYeN9TVA6EBvwVNUopHpsYDGpINqQhQ797CMJPuBIaHjl0mQztLETi72XNXs'; // Reemplaza con tu clave pública VAPID
 
-    if (comercioError || !comercioData) {
-      alert("⚠️ No se encontró un comercio registrado para esta cuenta.");
-      return;
+    // Convertir la clave VAPID a Uint8Array
+    const convertedKey = urlBase64ToUint8Array(PUBLIC_VAPID_KEY);
+
+    // 5. Suscribir al PushManager
+    let subscription = await swRegistration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await swRegistration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedKey
+      });
     }
 
-    const idComercioActual = comercioData.id;
-    alert("6️⃣ Comercio encontrado (ID: " + idComercioActual + "). Esperando Service Worker...");
+    // 6. Enviar la suscripción a tu base de datos (Supabase)
+    await guardarSuscripcionEnBaseDeDatos(subscription);
 
-    // Control de tiempo de espera (5 segundos) por si navigator.serviceWorker.ready se congela en iOS
-    const swTimeout = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Tiempo de espera agotado para Service Worker ready")), 5000)
-    );
+    alert('🔔 ¡Notificaciones activadas con éxito!');
 
-    const reg = await Promise.race([navigator.serviceWorker.ready, swTimeout]);
-
-    let sub = await reg.pushManager.getSubscription();
-
-    if (sub) {
-      alert("7️⃣ Renovando suscripción previa...");
-      await sub.unsubscribe();
-    } else {
-      alert("7️⃣ Creando nueva suscripción Web Push...");
-    }
-
-    const PUBLIC_VAPID_KEY = 'BOfAC-hVG0Tv3K0gqdIHctkhntEXYeN9TVA6EBvwVNUopHpsYDGpINqQhQ797CMJPuBIaHjl0mQztLETi72XNXs';
-
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
-    });
-
-    alert("8️⃣ Guardando suscripción en Supabase...");
-
-    const subscriptionPayload = {
-      user_id: userId,
-      rol: 'comercio',
-      comercio_id: idComercioActual,
-      subscription_json: sub.toJSON(),
-      updated_at: new Date().toISOString()
-    };
-
-    const { error: upsertError } = await supabaseClient
-      .from('suscripciones_push')
-      .upsert(subscriptionPayload, { onConflict: 'user_id' });
-
-    if (upsertError) {
-      alert("❌ Error guardando en BD: " + upsertError.message);
-    } else {
-      alert("🎉 ¡Notificaciones Push activadas con éxito para este comercio!");
-      
-      const btn = document.getElementById('btnActivarPushComercio');
-      if (btn) {
-        btn.style.backgroundColor = '#16a34a';
-        btn.innerHTML = '✅ Notificaciones Activas';
-      }
-    }
-
-  } catch (err) {
-    alert("❌ Error en el proceso de suscripción: " + err.message);
+  } catch (error) {
+    console.error('❌ Error al activar notificaciones:', error);
+    alert('Ocurrió un error al activar las notificaciones: ' + error.message);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
     
