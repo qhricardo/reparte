@@ -20,18 +20,15 @@
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2981/2981312.png">
     
     <script>
-    // CORREGIDO: Registro de Service Worker sin error de sintaxis
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw-comercio.js', { scope: '/' })
-          .then((registration) => {
-            console.log('✅ Service Worker de Comercio registrado:', registration.scope);
-          })
-          .catch((error) => {
-            console.error('❌ Error registrando SW:', error);
-          });
-      });
-    }
+   if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw-comercio.js')
+    .then(reg => {
+      console.log('✅ Service Worker registrado con éxito en scope:', reg.scope);
+    })
+    .catch(err => {
+      console.error('❌ Error registrando SW:', err);
+    });
+}
     </script>
 
 <style>
