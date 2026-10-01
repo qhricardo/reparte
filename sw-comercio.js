@@ -1,16 +1,36 @@
-const CACHE_NAME = 'reparte-comercio-v4';
+const CACHE_NAME = 'reparte-comercio-v5';
 
-// 1. Instalación del Service Worker
+// Usamos self.registration.scope para construir rutas dinámicas y evitar errores 404 en subdirectorios
+const BASE_PATH = self.registration.scope;
+const APP_URL = new URL('comercio.html', BASE_PATH).href;
+const ICON_URL = new URL('https://cdn-icons-png.flaticon.com/512/2981/2981312.png', BASE_PATH).href;
+
+// 1. Instalación del Service Worker (Precarga del HTML principal)
 self.addEventListener('install', (e) => {
   self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll([APP_URL]);
+    })
+  );
 });
 
-// 2. Activación del Service Worker
+// 2. Activación: Limpieza de cachés antiguas y toma de control inmediata
 self.addEventListener('activate', (e) => {
-  e.waitUntil(clients.claim());
+  e.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      );
+    }).then(() => clients.claim())
+  );
 });
 
-// 3. Estrategia de Caché
+// 3. Estrategia de Caché: Network First con fallback a Caché dinámico
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
@@ -26,7 +46,15 @@ self.addEventListener('fetch', (e) => {
         }
         return response;
       })
-      .catch(() => caches.match(e.request))
+      .catch(async () => {
+        const cachedResponse = await caches.match(e.request);
+        if (cachedResponse) return cachedResponse;
+        
+        // Si falla la red y es una navegación HTML, retornar la app precachada (evita 404 en iOS)
+        if (e.request.mode === 'navigate') {
+          return caches.match(APP_URL);
+        }
+      })
   );
 });
 
@@ -44,10 +72,9 @@ self.addEventListener('message', (event) => {
 });
 
 // ==========================================
-// PASO 3: MANEJO DE NOTIFICACIONES PUSH EN SEGUNDO PLANO (PWA / iOS)
+// PASO 5: MANEJO DE NOTIFICACIONES PUSH EN SEGUNDO PLANO (PWA / iOS)
 // ==========================================
 
-// Escuchar el evento Push que llega desde la Edge Function de Supabase
 self.addEventListener('push', (event) => {
   let title = "🛍️ ¡Nuevo Pedido Recibido!";
   let body = "Tienes una nueva orden en tu comercio.";
@@ -62,26 +89,22 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  // Opciones ajustadas específicamente para el motor WebPush de iOS Safari
   const options = {
     body: body,
-    icon: '/icon-192.png',
-    badge: '/badge.png',
+    icon: ICON_URL,
+    badge: ICON_URL,
     vibrate: [200, 100, 200, 100, 200],
-    // Tag único indispensable para obligar a iOS a mostrar tiras emergentes con la app cerrada
     tag: 'pedido-' + Date.now(),
     renotify: true,
     data: {
-      url: '/comercio.html'
+      url: APP_URL
     }
   };
 
-  // Intentar actualizar el Badge del ícono sin bloquear la notificación
   if ('setAppBadge' in navigator) {
     navigator.setAppBadge(1).catch(() => {});
   }
 
-  // Promesa pura en waitUntil para garantizar el despliegue nativo
   event.waitUntil(
     self.registration.showNotification(title, options)
   );
@@ -95,17 +118,21 @@ self.addEventListener('notificationclick', (event) => {
     navigator.clearAppBadge().catch(() => {});
   }
 
-  const targetUrl = event.notification.data?.url || '/comercio.html';
+  const targetUrl = event.notification.data?.url || APP_URL;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Si la PWA ya está abierta, enfocar la ventana
+      // 1. Si la ventana ya está abierta (incluso en segundo plano), enfocarla y navegar
       for (const client of clientList) {
-        if (client.url.includes('comercio.html') && 'focus' in client) {
-          return client.focus();
+        if ('focus' in client && client.url.includes('comercio.html')) {
+          client.focus();
+          if ('navigate' in client) {
+            return client.navigate(targetUrl);
+          }
+          return;
         }
       }
-      // Si está cerrada, abrir la PWA en una nueva instancia
+      // 2. Si está completamente cerrada, abrir nueva ventana con la URL dinámica correcta
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }
