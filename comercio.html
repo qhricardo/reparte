@@ -2212,88 +2212,87 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 // --- ACCIÓN DIRECTA DEL USUARIO (DIAGNÓSTICO + SOLICITUD NATIVA iOS/ANDROID) ---
-async function solicitarPermisoPushManual() {
-  alert("1️⃣ Botón presionado. Verificando compatibilidad...");
-
-  if (!('serviceWorker' in navigator)) {
-    alert("❌ Tu navegador no soporta Service Workers.");
-    return;
-  }
-  if (!('PushManager' in window)) {
-    alert("❌ Dispositivo/Navegador sin soporte Push. Asegúrate de abrir la app desde el icono instalado en la pantalla de inicio del iPhone.");
-    return;
-  }
-
-  try {
-    alert("2️⃣ Solicitando permiso nativo al sistema...");
-    const permission = await Notification.requestPermission();
-    alert("3️⃣ Estado del permiso: " + permission);
-
-    if (permission === 'granted') {
-      alert("✅ Permiso concedido. Iniciando suscripción Web Push...");
-      await suscribirWebPushComercio();
-    } else if (permission === 'denied') {
-      alert("⚠️ Permiso denegado. Ve a Ajustes del iPhone > Notificaciones > Reparite y actívalas.");
-    } else {
-      alert("⚠️ No se seleccionó ninguna opción.");
-    }
-  } catch (err) {
-    alert("❌ Error al solicitar permiso: " + err.message);
-  }
-}
-
-// --- REGISTRO Y VINCULACIÓN EN SUPABASE CON TIMEOUT DE SW ---
-async function suscribirWebPushComercio() {
-  const btn = document.getElementById('btnNotificaciones'); // Ajusta al ID de tu botón
+async function activarPushComercio() {
+  const btn = document.getElementById('btnNotificaciones');
   if (btn) btn.disabled = true;
 
   try {
-    // 1. Verificar soporte básico
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      alert('Tu navegador o dispositivo no soporta Notificaciones Push.');
+    alert("1️⃣ Verificando compatibilidad...");
+
+    // 1. Validar soporte de PWA y Push
+    if (!('serviceWorker' in navigator)) {
+      alert("❌ Tu navegador no soporta Service Workers.");
+      return;
+    }
+    if (!('PushManager' in window)) {
+      alert("❌ Soporte Push no detectado. Asegúrate de abrir la app desde el icono instalado en la Pantalla de Inicio del iPhone.");
       return;
     }
 
-    // 2. PASO CRÍTICO EN iOS: Pedir permiso INMEDIATAMENTE en el hilo del clic
+    // 2. SOLICITUD DIRECTA DE PERMISO NATIVO (Obligatorio en el primer hilo del clic en iOS)
+    alert("2️⃣ Solicitando permiso nativo...");
     let permission = Notification.permission;
+    
     if (permission === 'default') {
       permission = await Notification.requestPermission();
     }
 
-    if (permission !== 'granted') {
-      alert('Debes permitir las notificaciones para recibir alertas de pedidos.');
+    alert("3️⃣ Estado del permiso: " + permission);
+
+    if (permission === 'denied') {
+      alert("⚠️ Permiso denegado. Ve a Ajustes del iPhone > Notificaciones > Comercio y actívalas.");
       return;
     }
 
-    // 3. Obtener el registro del Service Worker con un timeout para evitar congelamientos
-    const swRegistration = await Promise.race([
-      navigator.serviceWorker.ready,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout esperando Service Worker')), 5000))
-    ]);
+    if (permission !== 'granted') {
+      alert("⚠️ No se concedió el permiso de notificaciones.");
+      return;
+    }
 
-    // 4. Obtener la clave VAPID pública
-    const PUBLIC_VAPID_KEY = 'BOfAC-hVG0Tv3K0gqdIHctkhntEXYeN9TVA6EBvwVNUopHpsYDGpINqQhQ797CMJPuBIaHjl0mQztLETi72XNXs'; // Reemplaza con tu clave pública VAPID
+    // 3. Obtener el Service Worker de forma directa e infalible
+    alert("4️⃣ Obteniendo registro del Service Worker...");
+    
+    // Intentar obtener el registro activo sin colgar la aplicación
+    let reg = await navigator.serviceWorker.getRegistration();
+    
+    if (!reg) {
+      // Si no existe, esperar brevemente a .ready con timeout
+      reg = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('El Service Worker no está instalado o activo')), 4000))
+      ]);
+    }
 
-    // Convertir la clave VAPID a Uint8Array
+    if (!reg) {
+      throw new Error('No se encontró ningún Service Worker activo.');
+    }
+
+    // 4. Clave VAPID pública
+    const PUBLIC_VAPID_KEY = 'BOfAC-hVG0Tv3K0gqdIHctkhntEXYeN9TVA6EBvwVNUopHpsYDGpINqQhQ797CMJPuBIaHjl0mQztLETi72XNXs';
     const convertedKey = urlBase64ToUint8Array(PUBLIC_VAPID_KEY);
 
     // 5. Suscribir al PushManager
-    let subscription = await swRegistration.pushManager.getSubscription();
+    alert("5️⃣ Generando suscripción Web Push...");
+    let subscription = await reg.pushManager.getSubscription();
+
     if (!subscription) {
-      subscription = await swRegistration.pushManager.subscribe({
+      subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: convertedKey
       });
     }
 
-    // 6. Enviar la suscripción a tu base de datos (Supabase)
+    console.log("Suscripción generada:", JSON.stringify(subscription));
+
+    // 6. Guardar en Supabase / Backend
+    alert("6️⃣ Guardando suscripción en la base de datos...");
     await guardarSuscripcionEnBaseDeDatos(subscription);
 
-    alert('🔔 ¡Notificaciones activadas con éxito!');
+    alert("🔔 ¡Notificaciones activadas con éxito!");
 
   } catch (error) {
-    console.error('❌ Error al activar notificaciones:', error);
-    alert('Ocurrió un error al activar las notificaciones: ' + error.message);
+    console.error("❌ Error en activación Push:", error);
+    alert("❌ Error: " + error.message);
   } finally {
     if (btn) btn.disabled = false;
   }
