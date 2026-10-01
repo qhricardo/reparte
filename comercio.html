@@ -2165,33 +2165,36 @@ input:focus, textarea:focus {
     // IMPLEMENTACIÓN CORREGIDA DE NOTIFICACIONES PUSH PARA iOS / ANDROID
     // =========================================================================
 
-    async function guardarSuscripcionEnBaseDeDatos(sub) {
-      if (!usuarioActual) return;
+   async function guardarSuscripcionEnBaseDeDatos(sub) {
+  if (!usuarioActual) return;
 
-      const subObj = JSON.parse(JSON.stringify(sub));
-      const p256dh = subObj.keys ? subObj.keys.p256dh : '';
-      const auth = subObj.keys ? subObj.keys.auth : '';
+  const subObj = JSON.parse(JSON.stringify(sub));
+  const p256dh = subObj.keys ? subObj.keys.p256dh : '';
+  const auth = subObj.keys ? subObj.keys.auth : '';
 
-      const registro = {
-        usuario_id: usuarioActual.id,
-        comercio_id: miComercio ? miComercio.id : (window.miComercioId || null),
-        endpoint: subObj.endpoint,
-        p256dh: p256dh,
-        auth: auth,
-        rol: 'comercio',
-        updated_at: new Date().toISOString()
-      };
+  // Determinar el ID del comercio correctamente
+  const idComercioActual = miComercio ? miComercio.id : window.miComercioId;
 
-      const { error } = await supabaseClient
-        .from('suscripciones_push')
-        .upsert(registro, { onConflict: 'endpoint' });
+  const registro = {
+    usuario_id: usuarioActual.id,
+    comercio_id: idComercioActual || null,
+    endpoint: subObj.endpoint,
+    p256dh: p256dh,
+    auth: auth,
+    rol: idComercioActual ? 'comercio' : 'cliente',
+    updated_at: new Date().toISOString()
+  };
 
-      if (error) {
-        console.error("Error guardando suscripción push en Supabase:", error);
-      } else {
-        console.log("✅ Suscripción Web Push guardada correctamente en Supabase.");
-      }
-    }
+  const { error } = await supabaseClient
+    .from('suscripciones_push')
+    .upsert(registro, { onConflict: 'endpoint' });
+
+  if (error) {
+    console.error("Error guardando suscripción push en Supabase:", error);
+  } else {
+    console.log("✅ Suscripción Web Push guardada correctamente en Supabase.");
+  }
+}
 
     async function activarPushComercioSilencioso() {
       try {
