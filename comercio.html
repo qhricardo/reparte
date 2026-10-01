@@ -1648,12 +1648,26 @@ input:focus, textarea:focus {
                     btnSubmit.innerText = "Confirmar Pedido";
                 }
             } else {
+                try {
+        await supabaseClient.functions.invoke('notificar-pedido-admin', {
+            body: { 
+                pedido_id: data ? data[0]?.id : null,
+                comercio_id: objComercio.id,
+                total: totalFinal,
+                cliente: nombreCliente,
+                rol_destino: 'comercio' // o según la lógica de tu función
+            }
+        });
+    } catch (errPush) {
+        console.warn("No se pudo invocar la Edge Function de notificaciones:", errPush);
+    }
+                
                 if (totalFinal > 500) {
                     alert("⚠️ Tu pedido supera los $500.00 pesos y fue enviado a revisión con el Administrador.");
                 } else {
                     alert("¡Pedido registrado exitosamente! Ha sido enviado al comercio.");
                 }
-
+                
                 carrito = [];
                 actualizarBarraCarrito();
                 cerrarModalCheckout();
