@@ -624,21 +624,6 @@ input:focus, textarea:focus {
 
 <div class="contenedor">
 
-    <!-- Banner Promocional de Instalación PWA -->
-<div id="pwa-install-banner" class="pwa-banner hidden">
-  <div class="pwa-banner-content">
-    <img src="https://cdn-icons-png.flaticon.com/512/5951/5951235.png" alt="App Icon" class="pwa-icon">
-    <div class="pwa-text">
-      <strong>Para una mejor experiencia</strong>
-      <span>Instala la app de Comercios en tu dispositivo</span>
-    </div>
-  </div>
-  <div class="pwa-actions">
-    <button id="btn-instalar-pwa" class="btn-pwa-instalar">Descargar App</button>
-    <button id="btn-cerrar-banner" class="btn-pwa-cerrar" onclick="cerrarBannerPWA()">✕</button>
-  </div>
-</div>
-
     <!-- BARRA SUPERIOR DE USUARIO -->
     <div id="barraUsuario" class="encabezado-usuario oculto">
         <div class="info-usuario-móvil">
@@ -675,6 +660,21 @@ input:focus, textarea:focus {
         </div>
         <div id="listaComercios" class="grid-comercios"></div>
     </div>
+
+     <!-- Banner Promocional de Instalación PWA -->
+<div id="pwa-install-banner" class="pwa-banner hidden">
+  <div class="pwa-banner-content">
+    <img src="https://cdn-icons-png.flaticon.com/512/5951/5951235.png" alt="App Icon" class="pwa-icon">
+    <div class="pwa-text">
+      <strong>Para una mejor experiencia</strong>
+      <span>Instala la app de Comercios en tu dispositivo</span>
+    </div>
+  </div>
+  <div class="pwa-actions">
+    <button id="btn-instalar-pwa" class="btn-pwa-instalar">Descargar App</button>
+    <button id="btn-cerrar-banner" class="btn-pwa-cerrar" onclick="cerrarBannerPWA()">✕</button>
+  </div>
+</div>
 
     <!-- 3. PRODUCTOS DEL COMERCIO -->
     <div id="pantallaClienteProductos" class="oculto">
