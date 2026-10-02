@@ -461,6 +461,9 @@
             console.error('Error suscribiendo al Repartidor:', err);
         }
     }
+   window.guardarSuscripcionEnBaseDeDatos = async function(sub) {
+      return await suscribirWebPushRepartidor();
+    };
 
     // Funciones de Badge PWA
     function actualizarNotificacionBadge(conteo) {
