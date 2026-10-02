@@ -88,6 +88,7 @@ self.addEventListener('push', (event) => {
     vibrate: [200, 100, 200, 100, 200],
     tag: 'pedido-repartidor-' + Date.now(),
     renotify: true,
+    requireInteraction: true, // Mantiene la notificación visible hasta que el repartidor interactúe
     data: {
       url: payloadData.url || APP_URL
     }
@@ -97,8 +98,20 @@ self.addEventListener('push', (event) => {
     navigator.setAppBadge(1).catch(() => {});
   }
 
+  // Notificar a las pestañas activas si la pantalla está abierta
   event.waitUntil(
-    self.registration.showNotification(title, options)
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      clientList.forEach((client) => {
+        client.postMessage({
+          type: 'NUEVO_PEDIDO_PUSH',
+          title: title,
+          body: body
+        });
+      });
+
+      // Muestra la notificación nativa en el sistema
+      return self.registration.showNotification(title, options);
+    })
   );
 });
 
