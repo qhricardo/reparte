@@ -1,4 +1,4 @@
-const CACHE_NAME = 'reparte-repartidor-v4';
+const CACHE_NAME = 'reparte-repartidor-v5';
 
 const BASE_PATH = self.registration.scope;
 const APP_URL = new URL('repartidor.html', BASE_PATH).href;
@@ -65,14 +65,17 @@ self.addEventListener('message', (event) => {
 
 // 5. Recepción de Notificaciones Push
 self.addEventListener('push', (event) => {
+  console.log('📬 Evento Push interceptado en el Service Worker:', event);
+
   let title = "🛵 ¡Nuevo Pedido en el Radar!";
   let body = "Hay un pedido listo para entregar.";
+  let payloadData = {};
 
   if (event.data) {
     try {
-      const payload = event.data.json();
-      title = payload.title || title;
-      body = payload.body || body;
+      payloadData = event.data.json();
+      title = payloadData.title || title;
+      body = payloadData.body || body;
     } catch (err) {
       body = event.data.text();
     }
@@ -85,7 +88,9 @@ self.addEventListener('push', (event) => {
     vibrate: [200, 100, 200, 100, 200],
     tag: 'pedido-repartidor-' + Date.now(),
     renotify: true,
-    data: { url: APP_URL }
+    data: {
+      url: payloadData.url || APP_URL
+    }
   };
 
   if ('setAppBadge' in navigator) {
@@ -112,7 +117,10 @@ self.addEventListener('notificationclick', (event) => {
       for (const client of clientList) {
         if ('focus' in client && client.url.includes('repartidor.html')) {
           client.focus();
-          return 'navigate' in client ? client.navigate(targetUrl) : null;
+          if ('navigate' in client) {
+            return client.navigate(targetUrl);
+          }
+          return;
         }
       }
       if (clients.openWindow) {
