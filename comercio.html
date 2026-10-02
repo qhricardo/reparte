@@ -541,11 +541,103 @@ input:focus, textarea:focus {
         to { transform: translateY(0); opacity: 1; } 
     }
 }
+
+    .pwa-banner {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 480px;
+  background-color: #ffffff;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 9999;
+  border: 1px solid #e5e7eb;
+  transition: all 0.3s ease;
+}
+
+.pwa-banner.hidden {
+  display: none !important;
+}
+
+.pwa-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pwa-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+}
+
+.pwa-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.pwa-text strong {
+  font-size: 14px;
+  color: #111827;
+}
+
+.pwa-text span {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.pwa-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-pwa-instalar {
+  background-color: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: bold;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-pwa-cerrar {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+}
 </style>
 </head>
 <body>
 
 <div class="contenedor">
+
+    <!-- Banner Promocional de Instalación PWA -->
+<div id="pwa-install-banner" class="pwa-banner hidden">
+  <div class="pwa-banner-content">
+    <img src="https://cdn-icons-png.flaticon.com/512/5951/5951235.png" alt="App Icon" class="pwa-icon">
+    <div class="pwa-text">
+      <strong>Para una mejor experiencia</strong>
+      <span>Instala la app de Comercios en tu dispositivo</span>
+    </div>
+  </div>
+  <div class="pwa-actions">
+    <button id="btn-instalar-pwa" class="btn-pwa-instalar">Descargar App</button>
+    <button id="btn-cerrar-banner" class="btn-pwa-cerrar" onclick="cerrarBannerPWA()">✕</button>
+  </div>
+</div>
 
     <!-- BARRA SUPERIOR DE USUARIO -->
     <div id="barraUsuario" class="encabezado-usuario oculto">
@@ -2294,6 +2386,57 @@ input:focus, textarea:focus {
         }
       }
     });
+
+
+    
+    let deferredPrompt = null;
+
+// Interceptar evento de instalación nativo
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+
+  // Mostrar el banner si no fue cerrado previamente en esta sesión
+  if (!sessionStorage.getItem('pwa_banner_closed')) {
+    const banner = document.getElementById('pwa-install-banner');
+    if (banner) banner.classList.remove('hidden');
+  }
+});
+
+// Manejo del clic en "Descargar App"
+document.addEventListener('DOMContentLoaded', () => {
+  const btnInstalar = document.getElementById('btn-instalar-pwa');
+
+  if (btnInstalar) {
+    btnInstalar.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`Resultado de instalación: ${outcome}`);
+        deferredPrompt = null;
+        ocultarBannerPWA();
+      } else {
+        // Fallback para dispositivos o Safari iOS donde no se dispara beforeinstallprompt
+        alert("📲 Para instalar en iPhone/iPad:\n1. Toca el botón 'Compartir' en Safari.\n2. Selecciona 'Agregar a la pantalla de inicio'.");
+      }
+    });
+  }
+});
+
+function cerrarBannerPWA() {
+  sessionStorage.setItem('pwa_banner_closed', 'true');
+  ocultarBannerPWA();
+}
+
+function ocultarBannerPWA() {
+  const banner = document.getElementById('pwa-install-banner');
+  if (banner) banner.classList.add('hidden');
+}
+
+// Ocultar automáticamente si la app ya se ejecuta como PWA instalada
+if (window.matchMedia('(display-mode: standalone)').matches) {
+  ocultarBannerPWA();
+}
 </script>
 </body>
 </html>
