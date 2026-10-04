@@ -4,17 +4,15 @@ const BASE_PATH = self.registration.scope;
 const APP_URL = new URL('comercio.html', BASE_PATH).href;
 const ICON_URL = new URL('icon.png', BASE_PATH).href; 
 
-// 1. Instalación
+// 1. Instalación robusta
 self.addEventListener('install', (e) => {
   self.skipWaiting();
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll([
-        APP_URL,
-        './',
-        'manifest.json',
-        'icon.png'
-      ]);
+      // Usar catch para evitar que un fallo de caché cierre la app
+      return cache.addAll([APP_URL, ICON_URL]).catch((err) => {
+        console.error('Error precachando recursos PWA:', err);
+      });
     })
   );
 });
