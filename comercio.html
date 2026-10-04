@@ -20,6 +20,63 @@
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/5951/5951235.png">
     
     <script>
+
+    // PASO 4: CAPTURA Y MANEJO DE LA INSTALACIÓN PWA (AL INICIO)
+    // -------------------------------------------------------------
+    window.deferredPrompt = null;
+
+    // Se registra inmediatamente en el window
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault(); // Evita la barra nativa pequeña de Chrome
+      window.deferredPrompt = e;
+      console.log('✅ Evento beforeinstallprompt listo');
+
+      // Muestra el banner si no ha sido cerrado manualmente
+      const banner = document.getElementById('pwa-install-banner');
+      if (banner && !sessionStorage.getItem('pwa_banner_closed')) {
+        banner.classList.remove('hidden');
+      }
+    });
+
+    // Registrar el Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw-comercio.js')
+          .then((reg) => console.log('Service Worker registrado:', reg.scope))
+          .catch((err) => console.error('Error al registrar Service Worker:', err));
+      });
+    }
+
+    // Handlers para el banner
+    document.addEventListener('DOMContentLoaded', () => {
+      const btnInstalar = document.getElementById('btn-instalar-pwa');
+
+      if (btnInstalar) {
+        btnInstalar.addEventListener('click', async () => {
+          if (window.deferredPrompt) {
+            window.deferredPrompt.prompt();
+            const { outcome } = await window.deferredPrompt.userChoice;
+            console.log(`Resultado de instalación: ${outcome}`);
+            window.deferredPrompt = null;
+            ocultarBannerPWA();
+          } else {
+            alert("📲 Si no aparece la ventana:\n1. Toca los 3 puntos (⋮) de Chrome.\n2. Elige 'Agregar a la pantalla principal' o 'Instalar aplicación'.");
+          }
+        });
+      }
+    });
+
+    function cerrarBannerPWA() {
+      sessionStorage.setItem('pwa_banner_closed', 'true');
+      ocultarBannerPWA();
+    }
+
+    function ocultarBannerPWA() {
+      const banner = document.getElementById('pwa-install-banner');
+      if (banner) banner.classList.add('hidden');
+    }
+
+        
    if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw-comercio.js')
     .then(reg => {
