@@ -1,6 +1,6 @@
 {
-  "name": "Comercio",
-  "short_name": "Comercio",
+  "name": "Reparte",
+  "short_name": "ReparT",
   "start_url": "./comercio.html",
   "display": "standalone",
   "background_color": "#ffffff",
