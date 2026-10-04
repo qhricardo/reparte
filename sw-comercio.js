@@ -1,4 +1,4 @@
-const CACHE_NAME = 'reparte-comercio-v7'; // Incrementamos la versión de la caché
+const CACHE_NAME = 'reparte-comercio-v8'; // Incrementamos la versión de la caché
 
 const BASE_PATH = self.registration.scope;
 const APP_URL = new URL('comercio.html', BASE_PATH).href;
