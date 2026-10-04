@@ -1,15 +1,21 @@
-const CACHE_NAME = 'reparte-comercio-v6';
+const CACHE_NAME = 'reparte-comercio-v7'; // Incrementamos la versión de la caché
 
 const BASE_PATH = self.registration.scope;
 const APP_URL = new URL('comercio.html', BASE_PATH).href;
-// Usar ruta relativa local para evitar timeouts con CDNs externos
 const ICON_URL = new URL('icon.png', BASE_PATH).href; 
 
 // 1. Instalación
 self.addEventListener('install', (e) => {
   self.skipWaiting();
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll([APP_URL]))
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll([
+        APP_URL,
+        './',
+        'manifest.json',
+        'icon.png'
+      ]);
+    })
   );
 });
 
@@ -62,7 +68,7 @@ self.addEventListener('message', (event) => {
 
 // 5. Push Notifications
 self.addEventListener('push', (event) => {
-  let title = "🛍️ ¡Nuevo Pedido Recibido!";
+  let title = "🛍️️ ¡Nuevo Pedido Recibido!";
   let body = "Tienes una nueva orden en tu comercio.";
 
   if (event.data) {
