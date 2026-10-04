@@ -2480,10 +2480,13 @@ function ocultarBannerPWA() {
   if (banner) banner.classList.add('hidden');
 }
 
-// Ocultar automáticamente si la app ya se ejecuta como PWA instalada
-if (window.matchMedia('(display-mode: standalone)').matches) {
-  ocultarBannerPWA();
-}
+// Ocultar automáticamente si la app ya se ejecuta como PWA (Standalone)
+window.addEventListener('DOMContentLoaded', () => {
+  if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
+    ocultarBannerPWA();
+  }
+});
 </script>
 </body>
 </html>
+
