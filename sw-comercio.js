@@ -28,7 +28,7 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// 3. Estrategia Network First
+// 3. Estrategia Network First segura
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
@@ -39,7 +39,7 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     fetch(e.request)
       .then((response) => {
-        if (response.status === 200) {
+        if (response && response.status === 200) {
           const resClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(e.request, resClone));
         }
@@ -51,6 +51,7 @@ self.addEventListener('fetch', (e) => {
         if (e.request.mode === 'navigate') {
           return caches.match(APP_URL);
         }
+        return new Response('Sin conexión a internet', { status: 503, statusText: 'Service Unavailable' });
       })
   );
 });
