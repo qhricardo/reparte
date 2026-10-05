@@ -18,82 +18,20 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/5951/5951235.png">
-    
-    <script>
-
-    // PASO 4: CAPTURA Y MANEJO DE LA INSTALACIÓN PWA (AL INICIO)
-    // -------------------------------------------------------------
-    window.deferredPrompt = null;
-
-    // Se registra inmediatamente en el window
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault(); // Evita la barra nativa pequeña de Chrome
-      window.deferredPrompt = e;
-      console.log('✅ Evento beforeinstallprompt listo');
-
-      // Muestra el banner si no ha sido cerrado manualmente
-      const banner = document.getElementById('pwa-install-banner');
-      if (banner && !sessionStorage.getItem('pwa_banner_closed')) {
-        banner.classList.remove('hidden');
-      }
-    });
-
-    // Registrar el Service Worker
-    if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw-comercio.js')
-      .then((reg) => console.log('✅ Service Worker de Comercio registrado:', reg.scope))
-      .catch((err) => console.error('❌ Error al registrar SW Comercio:', err));
-  });
-}
-
-    // Handlers para el banner
-    document.addEventListener('DOMContentLoaded', () => {
-      const btnInstalar = document.getElementById('btn-instalar-pwa');
-
-      if (btnInstalar) {
-        btnInstalar.addEventListener('click', async () => {
-          if (window.deferredPrompt) {
-            window.deferredPrompt.prompt();
-            const { outcome } = await window.deferredPrompt.userChoice;
-            console.log(`Resultado de instalación: ${outcome}`);
-            window.deferredPrompt = null;
-            ocultarBannerPWA();
-          } else {
-            alert("📲 Si no aparece la ventana:\n1. Toca los 3 puntos (⋮) de Chrome.\n2. Elige 'Agregar a la pantalla principal' o 'Instalar aplicación'.");
-          }
-        });
-      }
-    });
-
-    function cerrarBannerPWA() {
-      sessionStorage.setItem('pwa_banner_closed', 'true');
-      ocultarBannerPWA();
-    }
-
-    function ocultarBannerPWA() {
-      const banner = document.getElementById('pwa-install-banner');
-      if (banner) banner.classList.add('hidden');
-    }
-
-        
-    </script>
 
 <style>
     :root {
-    /* Paleta Profesional & Gastronómica - Ixtlahuaca Premium */
-    --color-principal: #8C2D19;      /* Terracota refinado y sobrio */
-    --color-principal-hover: #6E2212;/* Terracota oscuro para interacción */
-    --color-secundario: #2E6A38;     /* Verde verde oliva/agrícola profundo */
-    --color-acento: #D96B27;         /* Cálido terroso / Apetito */
-    --color-fondo: #F7F5F0;          /* Fondo hueso / marfil ultra suave */
+    --color-principal: #8C2D19;
+    --color-principal-hover: #6E2212;
+    --color-secundario: #2E6A38;
+    --color-acento: #D96B27;
+    --color-fondo: #F7F5F0;
     --color-tarjeta: #FFFFFF;
-    --color-texto: #1C1917;          /* Texto gris muy oscuro (alto contraste) */
-    --color-texto-suave: #6B7280;    /* Muted text profesional */
-    --color-borde: #E5E7EB;          /* Bordes limpios y neutros */
-    --color-borde-calido: #F3E8E0;   /* Bordes cálidos sutiles */
+    --color-texto: #1C1917;
+    --color-texto-suave: #6B7280;
+    --color-borde: #E5E7EB;
+    --color-borde-calido: #F3E8E0;
     
-    /* Sistema de Sombras Moderno */
     --sombra-suave: 0 2px 8px -2px rgba(28, 25, 23, 0.05), 0 4px 12px -2px rgba(28, 25, 23, 0.06);
     --sombra-elevada: 0 10px 25px -3px rgba(140, 45, 25, 0.12), 0 4px 10px -2px rgba(0, 0, 0, 0.04);
     --sombra-modal: 0 -10px 25px rgba(0, 0, 0, 0.15);
@@ -287,7 +225,7 @@ input:focus, textarea:focus {
     margin: 6px 0; 
 }
 
-/* Encabezado del Usuario (Adaptado para móvil) */
+/* Encabezado del Usuario */
 .encabezado-usuario { 
     display: flex; 
     flex-direction: column;
@@ -321,7 +259,7 @@ input:focus, textarea:focus {
     margin: 0;
 }
 
-/* Barra Inferior Carrito (Estilo App Móvil) */
+/* Barra Inferior Carrito */
 #barraCarrito { 
     position: fixed; 
     bottom: 16px; 
@@ -554,24 +492,16 @@ input:focus, textarea:focus {
         justify-content: space-between;
         align-items: center;
     }
-    .info-usuario-móvil {
-        width: auto;
-    }
-    .acciones-usuario {
-        width: auto;
-    }
+    .info-usuario-móvil { width: auto; }
+    .acciones-usuario { width: auto; }
     .acciones-usuario .btn {
         flex: initial;
         padding: 12px 20px;
         font-size: 14px;
     }
 
-    .modal { 
-        align-items: center; 
-    }
-    .modal-contenido { 
-        border-radius: 20px; 
-    }
+    .modal { align-items: center; }
+    .modal-contenido { border-radius: 20px; }
     .modal-checkout-flex {
         height: auto;
         max-height: 85vh;
@@ -590,7 +520,7 @@ input:focus, textarea:focus {
     }
 }
 
-    .pwa-banner {
+.pwa-banner {
   position: fixed;
   bottom: 20px;
   left: 50%;
@@ -797,20 +727,21 @@ input:focus, textarea:focus {
             </div>
         </div>
     </div>
-     <!-- Banner Promocional de Instalación PWA -->
-<div id="pwa-install-banner" class="pwa-banner hidden">
-  <div class="pwa-banner-content">
-    <img src="https://cdn-icons-png.flaticon.com/512/5951/5951235.png" alt="App Icon" class="pwa-icon">
-    <div class="pwa-text">
-      <strong>Para una mejor experiencia</strong>
-      <span>Instala la app de Comercios en tu dispositivo</span>
+
+    <!-- Banner Promocional de Instalación PWA -->
+    <div id="pwa-install-banner" class="pwa-banner hidden">
+      <div class="pwa-banner-content">
+        <img src="https://cdn-icons-png.flaticon.com/512/5951/5951235.png" alt="App Icon" class="pwa-icon">
+        <div class="pwa-text">
+          <strong>Para una mejor experiencia</strong>
+          <span>Instala la app de Comercios en tu dispositivo</span>
+        </div>
+      </div>
+      <div class="pwa-actions">
+        <button id="btn-instalar-pwa" class="btn-pwa-instalar">Descargar App</button>
+        <button id="btn-cerrar-banner" class="btn-pwa-cerrar" onclick="cerrarBannerPWA()">✕</button>
+      </div>
     </div>
-  </div>
-  <div class="pwa-actions">
-    <button id="btn-instalar-pwa" class="btn-pwa-instalar">Descargar App</button>
-    <button id="btn-cerrar-banner" class="btn-pwa-cerrar" onclick="cerrarBannerPWA()">✕</button>
-  </div>
-</div>
 </div>
 
 <!-- BARRA FLOTANTE CARRITO -->
@@ -925,14 +856,45 @@ input:focus, textarea:focus {
     const PRECIO_BASE_ENVIO = 20;
     const PRECIO_KM = 8;
 
+    // Manejo de Instalación PWA (Global Unificado)
+    window.deferredPrompt = null;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        window.deferredPrompt = e;
+        console.log('✅ Evento beforeinstallprompt listo');
+
+        if (!sessionStorage.getItem('pwa_banner_closed')) {
+            const banner = document.getElementById('pwa-install-banner');
+            if (banner) banner.classList.remove('hidden');
+        }
+    });
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw-comercio.js')
+                .then((reg) => console.log('✅ Service Worker registrado:', reg.scope))
+                .catch((err) => console.error('❌ Error SW:', err));
+        });
+    }
+
+    function cerrarBannerPWA() {
+        sessionStorage.setItem('pwa_banner_closed', 'true');
+        ocultarBannerPWA();
+    }
+
+    function ocultarBannerPWA() {
+        const banner = document.getElementById('pwa-install-banner');
+        if (banner) banner.classList.add('hidden');
+    }
+
     window.loginConGoogle = async function() {
         if (window.location.protocol === 'file:') {
-            alert("Aviso: Google OAuth requiere ejecutarse desde un servidor web o Live Server.");
+            alert("Aviso: Google OAuth requiere ejecutarse desde un servidor web.");
             return;
         }
 
         const redirectTarget = window.location.origin + window.location.pathname;
-
         const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: { redirectTo: redirectTarget }
@@ -949,6 +911,22 @@ input:focus, textarea:focus {
     };
 
     document.addEventListener("DOMContentLoaded", async () => {
+        // Handlers Banner PWA
+        const btnInstalar = document.getElementById('btn-instalar-pwa');
+        if (btnInstalar) {
+            btnInstalar.addEventListener('click', async () => {
+                if (window.deferredPrompt) {
+                    window.deferredPrompt.prompt();
+                    const { outcome } = await window.deferredPrompt.userChoice;
+                    console.log(`Resultado de instalación: ${outcome}`);
+                    window.deferredPrompt = null;
+                    ocultarBannerPWA();
+                } else {
+                    alert("📲 Para instalar en iPhone/iPad:\n1. Toca 'Compartir' en Safari.\n2. Elige 'Agregar a la pantalla de inicio'.");
+                }
+            });
+        }
+
         document.getElementById('btnLoginGoogle')?.addEventListener('click', window.loginConGoogle);
         document.getElementById('btnCerrarSesion')?.addEventListener('click', window.cerrarSesion);
         document.getElementById('btnCambiarModo')?.addEventListener('click', alternarModoVista);
@@ -977,7 +955,7 @@ input:focus, textarea:focus {
         const label = document.getElementById('labelUsuario');
         const login = document.getElementById('pantallaLogin');
 
-        const usr = typeof usuarioActual !== 'undefined' ? usuarioActual : user;
+        const usr = usuarioActual;
 
         if (usr) {
             const nombreCompleto = usr.user_metadata?.full_name 
@@ -1006,6 +984,8 @@ input:focus, textarea:focus {
         if (data && data.length > 0) {
             miComercio = data[0];
             window.miComercioId = miComercio.id;
+            localStorage.setItem('comercio_id', miComercio.id);
+
             if (badgeRol) badgeRol.innerText = "Dueño de Comercio";
             
             if (btnCambiar) {
@@ -1017,12 +997,14 @@ input:focus, textarea:focus {
             if (typeof cargarPanelDuenio === 'function') cargarPanelDuenio();
             if (typeof activarEscuchaPedidosEnTiempoReal === 'function') activarEscuchaPedidosEnTiempoReal();
             
-            // Auto-suscripción si ya tenía permisos previos en iOS/Android
             if (Notification.permission === 'granted') {
                 activarPushComercioSilencioso();
             }
         } else {
             miComercio = null;
+            window.miComercioId = null;
+            localStorage.removeItem('comercio_id');
+
             if (badgeRol) badgeRol.innerText = "Cliente";
             if (btnCambiar) btnCambiar.classList.add('oculto');
             cargarComerciosCliente();
@@ -1086,7 +1068,6 @@ input:focus, textarea:focus {
                             filter: `cliente_id=eq.${usuarioActual.id}`
                         },
                         async (payload) => {
-                            console.log('¡Cambio detectado en pedido propio!', payload);
                             await renderizarPedidosCliente();
                         }
                     )
@@ -1117,7 +1098,6 @@ input:focus, textarea:focus {
                 const logo = c.logo_url || c.logo || DEFAULT_LOGO_SVG;
                 const nombreComercio = c.nombre || c.nombre_comercio || 'Comercio';
                 const direccionComercio = c.direccion || c.direccion_escrita || '';
-
                 const estaAbierto = c.abierto !== false;
 
                 card.onclick = () => {
@@ -1134,7 +1114,6 @@ input:focus, textarea:focus {
                     <img src="${logo}" alt="${nombreComercio}" style="width:80px; height:80px; object-fit:cover; border-radius:8px; ${!estaAbierto ? 'filter: grayscale(100%); opacity: 0.5;' : ''}">
                     <h3>${nombreComercio}</h3>
                     <p style="color:#7f8c8d; font-size:13px;">${direccionComercio}</p>
-
                     <div style="margin-top: 6px;">
                         ${estaAbierto ? `
                             <span class="badge-estado estado-entregado" style="font-size:10px;">🟢 ABIERTO</span>
@@ -1170,8 +1149,6 @@ input:focus, textarea:focus {
                 .select('*')
                 .eq('comercio_id', comercioObj.id);
 
-            if (error) console.error("Error al obtener productos:", error);
-
             const lista = document.getElementById('listaProductosCliente');
             if (!lista) return;
 
@@ -1190,7 +1167,6 @@ input:focus, textarea:focus {
                 const imagenProd = p.imagen || p.imagen_url || DEFAULT_PROD_SVG;
                 const nombreProd = p.nombre || 'Producto';
                 const descProd = p.descripcion || '';
-                
                 const estaDisponible = p.disponible !== false;
 
                 card.innerHTML = `
@@ -1235,9 +1211,7 @@ input:focus, textarea:focus {
             const nombreUsuario = usuarioActual.user_metadata?.full_name || usuarioActual.user_metadata?.name || '';
 
             let queryOR = `cliente_nombre.eq.${idUsuario},cliente_nombre.eq.${correoUsuario}`;
-            if (nombreUsuario) {
-                queryOR += `,cliente_nombre.eq.${nombreUsuario}`;
-            }
+            if (nombreUsuario) queryOR += `,cliente_nombre.eq.${nombreUsuario}`;
 
             let { data: pedidosActivos, error } = await supabaseClient
                 .from('pedidos')
@@ -1252,9 +1226,7 @@ input:focus, textarea:focus {
                     .or(`cliente_id.eq.${idUsuario},usuario_id.eq.${idUsuario}`)
                     .order('created_at', { ascending: false });
                 
-                if (resAlt.data && resAlt.data.length > 0) {
-                    pedidosActivos = resAlt.data;
-                }
+                if (resAlt.data && resAlt.data.length > 0) pedidosActivos = resAlt.data;
             }
 
             if (!pedidosActivos || pedidosActivos.length === 0) {
@@ -1296,15 +1268,12 @@ input:focus, textarea:focus {
                                 ${estadoTexto.toUpperCase()}
                             </span>
                         </div>
-
                         <div style="margin-top: 8px; font-size: 14px; color: #2c3e50;">
                             <b>Producto:</b> ${nombreProducto}
                         </div>
-                        
                         <p style="margin: 6px 0 0 0; font-size: 13px; color: #555;">
                             Precio: <b>$${precioPagar.toFixed(2)}</b>
                         </p>
-
                         ${esRutaActiva ? `
                             <div style="margin-top: 10px; padding: 8px; background: #f3e5f5; border-radius: 6px; color: #6a1b9a; font-size: 12px; font-weight: bold; display: flex; align-items: center; gap: 6px;">
                                 <span>🚀 ¡Tu repartidor va en camino con el pedido!</span>
@@ -1315,7 +1284,6 @@ input:focus, textarea:focus {
             });
 
             contenedorPedidos.innerHTML = htmlPedidos;
-
         } catch (err) {
             console.error("Error al renderizar pedidos del cliente:", err);
         }
@@ -1329,7 +1297,6 @@ input:focus, textarea:focus {
             if (!mapaRegComercio) {
                 mapaRegComercio = L.map('mapaComercioReg').setView([coordsComercioRegistro.lat, coordsComercioRegistro.lng], 14);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapaRegComercio);
-
                 marcadorComercioReg = L.marker([coordsComercioRegistro.lat, coordsComercioRegistro.lng], { draggable: true }).addTo(mapaRegComercio);
 
                 marcadorComercioReg.on('dragend', function (e) {
@@ -1379,9 +1346,7 @@ input:focus, textarea:focus {
         const archivoInput = document.getElementById('logoComercioArchivo');
         const archivo = archivoInput ? archivoInput.files[0] : null;
 
-        if (!archivo) {
-            return alert("Por favor selecciona una imagen o logo para tu comercio.");
-        }
+        if (!archivo) return alert("Por favor selecciona una imagen o logo para tu comercio.");
 
         try {
             if (btnGuardar) {
@@ -1421,9 +1386,7 @@ input:focus, textarea:focus {
             alert("¡Comercio enviado a revisión! El administrador validará tu solicitud pronto.");
             document.getElementById('formComercio').reset();
             
-            if (typeof verificarSiEsDuenio === 'function') {
-                verificarSiEsDuenio();
-            }
+            if (typeof verificarSiEsDuenio === 'function') verificarSiEsDuenio();
 
         } catch (err) {
             alert("Error al registrar el comercio: " + err.message);
@@ -1488,9 +1451,7 @@ input:focus, textarea:focus {
             return { lat: 19.5694, lng: -99.7669 };
         }
         const match = comercioSeleccionadoObjeto.direccion.match(/GPS:\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
-        if (match) {
-            return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
-        }
+        if (match) return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
         return { lat: 19.5694, lng: -99.7669 };
     }
 
@@ -1527,9 +1488,7 @@ input:focus, textarea:focus {
                 });
             } else {
                 mapaEntrega.invalidateSize();
-                if (marcadorComercioEnMapa) {
-                    marcadorComercioEnMapa.setLatLng([coordsComercio.lat, coordsComercio.lng]);
-                }
+                if (marcadorComercioEnMapa) marcadorComercioEnMapa.setLatLng([coordsComercio.lat, coordsComercio.lng]);
             }
             recalcularTotales();
         }, 300);
@@ -1543,13 +1502,11 @@ input:focus, textarea:focus {
 
         if (!carrito || carrito.length === 0) {
             contenedorResumen.innerHTML = '<p style="text-align:center; color:#DC2626; padding:12px; font-weight:600;">⚠️ El carrito está vacío. Agrega productos para continuar.</p>';
-            
             if (btnConfirmar) {
                 btnConfirmar.disabled = true;
                 btnConfirmar.style.opacity = '0.5';
                 btnConfirmar.style.cursor = 'not-allowed';
             }
-
             actualizarBarraCarrito();
             if (typeof recalcularTotales === 'function') recalcularTotales();
             return;
@@ -1584,10 +1541,7 @@ input:focus, textarea:focus {
         if (!carrito[index]) return;
         carrito[index].cantidad += cambio;
 
-        if (carrito[index].cantidad <= 0) {
-            carrito.splice(index, 1);
-        }
-
+        if (carrito[index].cantidad <= 0) carrito.splice(index, 1);
         actualizarResumenCarrito();
     }
 
@@ -1612,9 +1566,7 @@ input:focus, textarea:focus {
                 const lon = parseFloat(results[0].lon);
                 coordsEntrega = { lat, lng: lon };
                 
-                if (mapaEntrega && marcadorCliente) {
-                    marcadorCliente.setLatLng([lat, lon]);
-                }
+                if (mapaEntrega && marcadorCliente) marcadorCliente.setLatLng([lat, lon]);
                 recalcularTotales();
             } else {
                 alert("No se encontró la dirección especificada.");
@@ -1628,9 +1580,7 @@ input:focus, textarea:focus {
         try {
             const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
             const data = await response.json();
-            if (data && data.display_name) {
-                document.getElementById(elementIdInput).value = data.display_name;
-            }
+            if (data && data.display_name) document.getElementById(elementIdInput).value = data.display_name;
         } catch (err) {
             console.error(err);
         }
@@ -1650,7 +1600,6 @@ input:focus, textarea:focus {
             if (data.routes && data.routes.length > 0) {
                 const ruta = data.routes[0];
                 distanciaKm = ruta.distance / 1000;
-
                 const coordenadasPolyline = ruta.geometry.coordinates.map(coord => [coord[1], coord[0]]);
 
                 if (mapaEntrega) {
@@ -1721,9 +1670,7 @@ input:focus, textarea:focus {
             const elemDist = document.getElementById('txtDistancia');
             const distanciaKm = elemDist ? parseFloat(elemDist.innerText) || 0 : 0;
 
-            if (distanciaKm > 7) {
-                return alert(`ERROR: La distancia (${distanciaKm.toFixed(2)} km) supera el límite máximo de 7 km.`);
-            }
+            if (distanciaKm > 7) return alert(`ERROR: La distancia (${distanciaKm.toFixed(2)} km) supera el límite máximo de 7 km.`);
 
             const btnSubmit = document.getElementById('btnEnviarPedidoFinal') || document.getElementById('btnConfirmarPedido');
             if (btnSubmit) {
@@ -1739,7 +1686,7 @@ input:focus, textarea:focus {
 
             const estadoInicial = totalFinal > 500 ? 'revision_admin' : 'pendiente';
 
-            const usuarioSesion = (typeof usuarioActual !== 'undefined' && usuarioActual) ? usuarioActual : (typeof user !== 'undefined' ? user : null);
+            const usuarioSesion = (typeof usuarioActual !== 'undefined' && usuarioActual) ? usuarioActual : null;
             const nombreCliente = usuarioSesion?.user_metadata?.full_name 
               || usuarioSesion?.user_metadata?.name 
               || (usuarioSesion?.email ? usuarioSesion.email.split('@')[0] : 'Cliente');
@@ -1774,7 +1721,7 @@ input:focus, textarea:focus {
                 estado: estadoInicial
             };
 
-            const { data, error } = await supabaseClient.from('pedidos').insert([payloadPedido]);
+            const { data, error } = await supabaseClient.from('pedidos').insert([payloadPedido]).select();
 
             if (error) {
                 console.error("Error al insertar en Supabase:", error);
@@ -1785,18 +1732,18 @@ input:focus, textarea:focus {
                 }
             } else {
                 try {
-        await supabaseClient.functions.invoke('notificar-pedido-admin', {
-            body: { 
-                pedido_id: data ? data[0]?.id : null,
-                comercio_id: objComercio.id,
-                total: totalFinal,
-                cliente: nombreCliente,
-                rol_destino: 'comercio' // o según la lógica de tu función
-            }
-        });
-    } catch (errPush) {
-        console.warn("No se pudo invocar la Edge Function de notificaciones:", errPush);
-    }
+                    await supabaseClient.functions.invoke('notificar-pedido-admin', {
+                        body: { 
+                            pedido_id: data ? data[0]?.id : null,
+                            comercio_id: objComercio.id,
+                            total: totalFinal,
+                            cliente: nombreCliente,
+                            rol_destino: 'comercio'
+                        }
+                    });
+                } catch (errPush) {
+                    console.warn("No se pudo invocar la Edge Function de notificaciones:", errPush);
+                }
                 
                 if (totalFinal > 500) {
                     alert("⚠️ Tu pedido supera los $500.00 pesos y fue enviado a revisión con el Administrador.");
@@ -1815,7 +1762,7 @@ input:focus, textarea:focus {
 
         } catch (err) {
             console.error("Excepción detectada:", err);
-            alert("Ocurrió un error inesperado al procesar el pedido. Revisa la consola.");
+            alert("Ocurrió un error inesperado al procesar el pedido.");
             const btnSubmit = document.getElementById('btnEnviarPedidoFinal') || document.getElementById('btnConfirmarPedido');
             if (btnSubmit) {
                 btnSubmit.disabled = false;
@@ -1825,7 +1772,6 @@ input:focus, textarea:focus {
     }
 
     window.procesarPedidoFinal = procesarPedidoFinal;
-    window.procesarPedido = procesarPedidoFinal;
 
     async function cargarPanelDuenio() {
         ocultarTodasLasPantallas();
@@ -2043,10 +1989,7 @@ input:focus, textarea:focus {
                 .update({ disponible: nuevoEstado })
                 .eq('id', idProducto);
 
-            if (error) {
-                console.error("Error al actualizar disponibilidad:", error);
-                alert("No se pudo actualizar el estado en el servidor.");
-            }
+            if (error) alert("No se pudo actualizar el estado en el servidor.");
         } catch (err) {
             console.error("Error en base de datos:", err);
         }
@@ -2100,29 +2043,84 @@ input:focus, textarea:focus {
         }
     };
 
-    document.addEventListener('DOMContentLoaded', () => {
-        const formProducto = document.getElementById('formProducto');
-        if (formProducto) {
-            formProducto.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const btnGuardar = document.getElementById('btnGuardarProducto');
-                const archivoInput = document.getElementById('prodImagenArchivo');
-                const archivo = archivoInput ? archivoInput.files[0] : null;
+    // Subida y edición de productos
+    const formProducto = document.getElementById('formProducto');
+    if (formProducto) {
+        formProducto.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btnGuardar = document.getElementById('btnGuardarProducto');
+            const archivoInput = document.getElementById('prodImagenArchivo');
+            const archivo = archivoInput ? archivoInput.files[0] : null;
 
-                if (!archivo) return alert("Selecciona una imagen.");
+            if (!archivo) return alert("Selecciona una imagen.");
 
-                try {
-                    if (btnGuardar) {
-                        btnGuardar.disabled = true;
-                        btnGuardar.innerText = "Subiendo imagen...";
-                    }
+            try {
+                if (btnGuardar) {
+                    btnGuardar.disabled = true;
+                    btnGuardar.innerText = "Subiendo imagen...";
+                }
 
-                    const extension = archivo.name.split('.').pop();
-                    const nombreArchivo = `${miComercio.id}/${Date.now()}.${extension}`;
+                const extension = archivo.name.split('.').pop();
+                const nombreArchivo = `${miComercio.id}/${Date.now()}.${extension}`;
+
+                const { error: uploadError } = await supabaseClient.storage
+                    .from('productos')
+                    .upload(nombreArchivo, archivo);
+
+                if (uploadError) throw uploadError;
+
+                const { data: publicUrlData } = supabaseClient.storage
+                    .from('productos')
+                    .getPublicUrl(nombreArchivo);
+
+                const producto = {
+                    comercio_id: miComercio.id,
+                    nombre: document.getElementById('prodNombre').value.trim(),
+                    precio: parseFloat(document.getElementById('prodPrecio').value),
+                    descripcion: document.getElementById('prodDescripcion').value.trim(),
+                    imagen: publicUrlData.publicUrl
+                };
+
+                const { error: insertError } = await supabaseClient.from('productos').insert([producto]);
+                if (insertError) throw insertError;
+
+                formProducto.reset();
+                cargarProductosDuenio();
+            } catch (err) {
+                alert("Error al crear producto: " + err.message);
+            } finally {
+                if (btnGuardar) {
+                    btnGuardar.disabled = false;
+                    btnGuardar.innerText = "Publicar Producto";
+                }
+            }
+        });
+    }
+
+    const formEditarProducto = document.getElementById('formEditarProducto');
+    if (formEditarProducto) {
+        formEditarProducto.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btnGuardar = document.getElementById('btnGuardarEdicionProd');
+            const idProducto = document.getElementById('editProdId').value;
+            const fileInput = document.getElementById('editProdImagenArchivo');
+            const archivoNuevo = fileInput ? fileInput.files[0] : null;
+            let urlImagenFinal = document.getElementById('editProdImagenActual').value;
+
+            try {
+                if (btnGuardar) {
+                    btnGuardar.disabled = true;
+                    btnGuardar.innerText = "Guardando cambios...";
+                }
+
+                if (archivoNuevo) {
+                    if (btnGuardar) btnGuardar.innerText = "Subiendo nueva imagen...";
+                    const extension = archivoNuevo.name.split('.').pop();
+                    const nombreArchivo = `${miComercio.id}/${Date.now()}_mod.${extension}`;
 
                     const { error: uploadError } = await supabaseClient.storage
                         .from('productos')
-                        .upload(nombreArchivo, archivo);
+                        .upload(nombreArchivo, archivoNuevo);
 
                     if (uploadError) throw uploadError;
 
@@ -2130,92 +2128,36 @@ input:focus, textarea:focus {
                         .from('productos')
                         .getPublicUrl(nombreArchivo);
 
-                    const producto = {
-                        comercio_id: miComercio.id,
-                        nombre: document.getElementById('prodNombre').value.trim(),
-                        precio: parseFloat(document.getElementById('prodPrecio').value),
-                        descripcion: document.getElementById('prodDescripcion').value.trim(),
-                        imagen: publicUrlData.publicUrl
-                    };
-
-                    const { error: insertError } = await supabaseClient.from('productos').insert([producto]);
-                    if (insertError) throw insertError;
-
-                    formProducto.reset();
-                    cargarProductosDuenio();
-                } catch (err) {
-                    alert("Error al crear producto: " + err.message);
-                } finally {
-                    if (btnGuardar) {
-                        btnGuardar.disabled = false;
-                        btnGuardar.innerText = "Publicar Producto";
-                    }
+                    urlImagenFinal = publicUrlData.publicUrl;
                 }
-            });
-        }
 
-        const formEditarProducto = document.getElementById('formEditarProducto');
-        if (formEditarProducto) {
-            formEditarProducto.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const btnGuardar = document.getElementById('btnGuardarEdicionProd');
-                const idProducto = document.getElementById('editProdId').value;
-                const fileInput = document.getElementById('editProdImagenArchivo');
-                const archivoNuevo = fileInput ? fileInput.files[0] : null;
-                let urlImagenFinal = document.getElementById('editProdImagenActual').value;
+                const datosActualizados = {
+                    nombre: document.getElementById('editProdNombre').value.trim(),
+                    precio: parseFloat(document.getElementById('editProdPrecio').value),
+                    descripcion: document.getElementById('editProdDescripcion').value.trim(),
+                    imagen: urlImagenFinal
+                };
 
-                try {
-                    if (btnGuardar) {
-                        btnGuardar.disabled = true;
-                        btnGuardar.innerText = "Guardando cambios...";
-                    }
+                const { error: updateError } = await supabaseClient
+                    .from('productos')
+                    .update(datosActualizados)
+                    .eq('id', idProducto);
 
-                    if (archivoNuevo) {
-                        if (btnGuardar) btnGuardar.innerText = "Subiendo nueva imagen...";
-                        const extension = archivoNuevo.name.split('.').pop();
-                        const nombreArchivo = `${miComercio.id}/${Date.now()}_mod.${extension}`;
+                if (updateError) throw updateError;
 
-                        const { error: uploadError } = await supabaseClient.storage
-                            .from('productos')
-                            .upload(nombreArchivo, archivoNuevo);
+                cerrarModalEditarProducto();
+                cargarProductosDuenio();
 
-                        if (uploadError) throw uploadError;
-
-                        const { data: publicUrlData } = supabaseClient.storage
-                            .from('productos')
-                            .getPublicUrl(nombreArchivo);
-
-                        urlImagenFinal = publicUrlData.publicUrl;
-                    }
-
-                    const datosActualizados = {
-                        nombre: document.getElementById('editProdNombre').value.trim(),
-                        precio: parseFloat(document.getElementById('editProdPrecio').value),
-                        descripcion: document.getElementById('editProdDescripcion').value.trim(),
-                        imagen: urlImagenFinal
-                    };
-
-                    const { error: updateError } = await supabaseClient
-                        .from('productos')
-                        .update(datosActualizados)
-                        .eq('id', idProducto);
-
-                    if (updateError) throw updateError;
-
-                    cerrarModalEditarProducto();
-                    cargarProductosDuenio();
-
-                } catch (err) {
-                    alert("Error al actualizar producto: " + err.message);
-                } finally {
-                    if (btnGuardar) {
-                        btnGuardar.disabled = false;
-                        btnGuardar.innerText = "Guardar Cambios";
-                    }
+            } catch (err) {
+                alert("Error al actualizar producto: " + err.message);
+            } finally {
+                if (btnGuardar) {
+                    btnGuardar.disabled = false;
+                    btnGuardar.innerText = "Guardar Cambios";
                 }
-            });
-        }
-    });
+            }
+        });
+    }
 
     function actualizarBotonEstadoComercio(estaAbierto) {
         const btn = document.getElementById('btnEstadoComercio');
@@ -2246,10 +2188,7 @@ input:focus, textarea:focus {
                 .update({ abierto: nuevoEstado })
                 .eq('id', miComercio.id);
 
-            if (error) {
-                console.error("Error al cambiar estado del comercio:", error);
-                alert("No se pudo actualizar el estado en la base de datos.");
-            }
+            if (error) alert("No se pudo actualizar el estado en la base de datos.");
         } catch (err) {
             console.error("Error de red:", err);
         }
@@ -2263,21 +2202,6 @@ input:focus, textarea:focus {
           navigator.clearAppBadge().catch(err => console.log('Error Clear:', err));
         }
       }
-    }
-
-    if (typeof supabase !== 'undefined' && supabaseClient) {
-      supabaseClient
-        .channel('pedidos-comercio-badge')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pedidos' }, payload => {
-          actualizarGloboNotificacion(1);
-          if (Notification.permission === 'granted') {
-            new Notification('¡Nuevo Pedido Recibido!', {
-              body: `Pedido #${payload.new.id || ''} por $${payload.new.total || ''}`,
-              icon: 'https://cdn-icons-png.flaticon.com/512/3081/3081559.png'
-            });
-          }
-        })
-        .subscribe();
     }
 
     window.addEventListener('focus', () => {
@@ -2301,40 +2225,39 @@ input:focus, textarea:focus {
     // IMPLEMENTACIÓN CORREGIDA DE NOTIFICACIONES PUSH PARA iOS / ANDROID
     // =========================================================================
 
-  async function guardarSuscripcionEnBaseDeDatos(sub) {
-  if (!usuarioActual) return;
+    async function guardarSuscripcionEnBaseDeDatos(sub) {
+      if (!usuarioActual) return;
 
-  const subObj = JSON.parse(JSON.stringify(sub));
-  const p256dh = subObj.keys ? subObj.keys.p256dh : '';
-  const auth = subObj.keys ? subObj.keys.auth : '';
+      const subObj = JSON.parse(JSON.stringify(sub));
+      const p256dh = subObj.keys ? subObj.keys.p256dh : '';
+      const auth = subObj.keys ? subObj.keys.auth : '';
 
-  // Búsqueda del ID con respaldo en localStorage
-  const idComercioActual = (miComercio ? miComercio.id : null) 
-                        || window.miComercioId 
-                        || localStorage.getItem('comercio_id');
+      const idComercioActual = (miComercio ? miComercio.id : null) 
+                            || window.miComercioId 
+                            || localStorage.getItem('comercio_id');
 
-  console.log("📌 ID de comercio detectado para Push:", idComercioActual);
+      console.log("📌 ID de comercio detectado para Push:", idComercioActual);
 
-  const registro = {
-    usuario_id: usuarioActual.id,
-    comercio_id: idComercioActual || null,
-    endpoint: subObj.endpoint,
-    p256dh: p256dh,
-    auth: auth,
-    rol: idComercioActual ? 'comercio' : 'cliente',
-    updated_at: new Date().toISOString()
-  };
+      const registro = {
+        usuario_id: usuarioActual.id,
+        comercio_id: idComercioActual || null,
+        endpoint: subObj.endpoint,
+        p256dh: p256dh,
+        auth: auth,
+        rol: idComercioActual ? 'comercio' : 'cliente',
+        updated_at: new Date().toISOString()
+      };
 
-  const { error } = await supabaseClient
-    .from('suscripciones_push')
-    .upsert(registro, { onConflict: 'endpoint' });
+      const { error } = await supabaseClient
+        .from('suscripciones_push')
+        .upsert(registro, { onConflict: 'endpoint' });
 
-  if (error) {
-    console.error("Error guardando suscripción push en Supabase:", error);
-  } else {
-    console.log("✅ Suscripción Web Push guardada correctamente en Supabase.");
-  }
-}
+      if (error) {
+        console.error("Error guardando suscripción push en Supabase:", error);
+      } else {
+        console.log("✅ Suscripción Web Push guardada correctamente en Supabase.");
+      }
+    }
 
     async function activarPushComercioSilencioso() {
       try {
@@ -2359,7 +2282,7 @@ input:focus, textarea:focus {
           return;
         }
         if (!('PushManager' in window)) {
-          alert("❌ Soporte Push no detectado. Si estás en iPhone, guarda esta app en la pantalla de inicio (Agregar a Inicio) y ábrela desde allí.");
+          alert("❌ Soporte Push no detectado. Si estás en iPhone, guarda esta app en la pantalla de inicio y ábrela desde allí.");
           return;
         }
 
@@ -2369,7 +2292,7 @@ input:focus, textarea:focus {
         }
 
         if (permission === 'denied') {
-          alert("⚠️ Permisos denegados. Ve a los Ajustes de tu iPhone > Notificaciones > Comercio y actívalas manualmente.");
+          alert("⚠️ Permisos denegados. Ve a Ajustes > Notificaciones > Comercio y actívalas manualmente.");
           return;
         }
 
@@ -2382,13 +2305,11 @@ input:focus, textarea:focus {
         if (!reg) {
           reg = await Promise.race([
             navigator.serviceWorker.ready,
-            new Promise((_, reject) => setTimeout(() => reject(new Error('El Service Worker tardó demasiado en responder')), 4000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error('El Service Worker tardó demasiado')), 4000))
           ]);
         }
 
-        if (!reg) {
-          throw new Error('No se encontró un Service Worker activo.');
-        }
+        if (!reg) throw new Error('No se encontró un Service Worker activo.');
 
         const PUBLIC_VAPID_KEY = 'BOfAC-hVG0Tv3K0gqdIHctkhntEXYeN9TVA6EBvwVNUopHpsYDGpINqQhQ797CMJPuBIaHjl0mQztLETi72XNXs';
         const convertedKey = urlBase64ToUint8Array(PUBLIC_VAPID_KEY);
@@ -2412,81 +2333,6 @@ input:focus, textarea:focus {
         if (btn) btn.disabled = false;
       }
     }
-
-    supabaseClient.auth.onAuthStateChange(async (event, session) => {
-      if (session && session.user) {
-        try {
-          const { data: comercio } = await supabaseClient
-            .from('comercios')
-            .select('id')
-            .eq('usuario_id', session.user.id)
-            .maybeSingle();
-
-          if (comercio && comercio.id) {
-            window.miComercioId = comercio.id;
-            if (Notification.permission === 'granted') {
-              await activarPushComercioSilencioso();
-            }
-          }
-        } catch (err) {
-          console.error("Error en auth state change:", err);
-        }
-      }
-    });
-
-
-    
-    let deferredPrompt = null;
-
-// Interceptar evento de instalación nativo
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-
-  // Mostrar el banner si no fue cerrado previamente en esta sesión
-  if (!sessionStorage.getItem('pwa_banner_closed')) {
-    const banner = document.getElementById('pwa-install-banner');
-    if (banner) banner.classList.remove('hidden');
-  }
-});
-
-// Manejo del clic en "Descargar App"
-document.addEventListener('DOMContentLoaded', () => {
-  const btnInstalar = document.getElementById('btn-instalar-pwa');
-
-  if (btnInstalar) {
-    btnInstalar.addEventListener('click', async () => {
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        console.log(`Resultado de instalación: ${outcome}`);
-        deferredPrompt = null;
-        ocultarBannerPWA();
-      } else {
-        // Fallback para dispositivos o Safari iOS donde no se dispara beforeinstallprompt
-        alert("📲 Para instalar en iPhone/iPad:\n1. Toca el botón 'Compartir' en Safari.\n2. Selecciona 'Agregar a la pantalla de inicio'.");
-      }
-    });
-  }
-});
-
-function cerrarBannerPWA() {
-  sessionStorage.setItem('pwa_banner_closed', 'true');
-  ocultarBannerPWA();
-}
-
-function ocultarBannerPWA() {
-  const banner = document.getElementById('pwa-install-banner');
-  if (banner) banner.classList.add('hidden');
-}
-
-// Ocultar automáticamente si la app ya se ejecuta como PWA (Standalone)
-window.addEventListener('DOMContentLoaded', () => {
-  if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
-    ocultarBannerPWA();
-  }
-});
 </script>
 </body>
 </html>
-
