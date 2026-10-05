@@ -128,7 +128,7 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
-        if ('focus' in client && client.url.includes('repartidor.html')) {
+        if ('focus' in client && client.url.includes("https://qhricardo.github.io/reparte/repartidor")) {
           client.focus();
           if ('navigate' in client) {
             return client.navigate(targetUrl);
