@@ -368,23 +368,30 @@ async function probarSuscripcionDirecta() {
         if (el) el.classList.remove('oculto');
     }
 
-    // --- EVALUACIÓN DE ROLES Y REDIRECCIÓN ---
- async function evalRol() {
+ // --- EVALUACIÓN DE ROLES Y REDIRECCIÓN ---
+async function evalRol() {
     ocultar();
     actualizarBarraUsuario();
 
-    // Si el usuario NO es el administrador (o no hay sesión), expulsarlo a comercio.html
+    // Si el usuario NO es el administrador (o no hay sesión iniciada)
     if (!user || user.email !== EMAIL_ADMIN) {
-        window.location.replace('/comercio.html');
+        // Redirección dinámica segura que funciona tanto en dominio personalizado como en GitHub Pages
+        const destinoComercio = window.location.origin + window.location.pathname.replace(/index\.html$/, '') + 'comercio.html';
+        
+        // Evitar bucles comprobando si ya no estamos rebotando
+        if (!window.location.href.includes('comercio.html')) {
+            window.location.replace(destinoComercio);
+        }
         return;
     }
 
-    // Si SÍ es el administrador y abrió index.html directamente, se queda en el Panel Admin
-    document.getElementById('lblRol').innerText = 'ADMINISTRADOR';
+    // Si SÍ es el administrador y abrió index.html directamente, carga el Panel Admin
+    const lblRol = document.getElementById('lblRol');
+    if (lblRol) lblRol.innerText = 'ADMINISTRADOR';
+    
     show('pAdmin');
     cargarAdmin();
 }
-
     // --- VISTA PÚBLICA / CLIENTE ---
     async function cargarComercios() {
         ocultar();
