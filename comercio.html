@@ -889,21 +889,19 @@ input:focus, textarea:focus {
     }
 
     window.loginConGoogle = async function() {
-    if (window.location.protocol === 'file:') {
-        alert("Aviso: Google OAuth requiere ejecutarse desde un servidor web.");
-        return;
-    }
+        if (window.location.protocol === 'file:') {
+            alert("Aviso: Google OAuth requiere ejecutarse desde un servidor web.");
+            return;
+        }
 
-    // REDIRIGIR EXPLÍCITAMENTE A /comercio.html
-    const redirectTarget = window.location.origin + '/comercio.html';
-    
-    const { error } = await supabaseClient.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: redirectTarget }
-    });
+        const redirectTarget = window.location.origin + window.location.pathname;
+        const { error } = await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: redirectTarget }
+        });
 
-    if (error) alert("Error: " + error.message);
-};
+        if (error) alert("Error: " + error.message);
+    };
 
     window.cerrarSesion = async function() {
         if (supabaseClient) {
@@ -911,6 +909,7 @@ input:focus, textarea:focus {
             window.location.reload();
         }
     };
+
 
     document.addEventListener("DOMContentLoaded", async () => {
         // Handlers Banner PWA
