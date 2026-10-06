@@ -708,6 +708,10 @@ input:focus, textarea:focus {
                 <label>Descripción:</label>
                 <textarea id="prodDescripcion" rows="2" placeholder="Ingredientes o características..."></textarea>
 
+                                <!-- ➕ AGREGAR ESTO: -->
+                <label>Ingredientes (separados por coma):</label>
+                <input type="text" id="prodIngredientes" placeholder="Ej. Cebolla, Jitomate, Picante, Aguacate, Queso">
+
                 <label>Foto del Producto (Galería o Cámara):</label>
                 <input type="file" id="prodImagenArchivo" accept="image/*" required>
 
@@ -810,6 +814,10 @@ input:focus, textarea:focus {
 
             <label>Descripción:</label>
             <textarea id="editProdDescripcion" rows="3" style="width: 100%; margin-bottom: 10px; padding: 8px;"></textarea>
+
+                        <!-- ➕ AGREGAR ESTO: -->
+            <label>Ingredientes (separados por coma):</label>
+            <input type="text" id="editProdIngredientes" placeholder="Ej. Cebolla, Jitomate, Picante, Aguacate">
 
             <label>Imagen Actual:</label>
             <div style="margin-bottom: 10px;">
