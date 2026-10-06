@@ -2189,13 +2189,20 @@ window.cerrarSesion = async function() {
                     urlImagenFinal = publicUrlData.publicUrl;
                 }
 
-                const datosActualizados = {
-                    nombre: document.getElementById('editProdNombre').value.trim(),
-                    precio: parseFloat(document.getElementById('editProdPrecio').value),
-                    descripcion: document.getElementById('editProdDescripcion').value.trim(),
-                    imagen: urlImagenFinal
-                };
-
+             
+                
+                // En prepararEdicionProducto:
+            setVal('editProdIngredientes', prod.ingredientes || '');
+            
+            // En formEditarProducto submit:
+            const datosActualizados = {
+                nombre: document.getElementById('editProdNombre').value.trim(),
+                precio: parseFloat(document.getElementById('editProdPrecio').value),
+                descripcion: document.getElementById('editProdDescripcion').value.trim(),
+                ingredientes: document.getElementById('editProdIngredientes').value.trim(), // ➕ AGREGADO
+                imagen: urlImagenFinal
+            };
+                
                 const { error: updateError } = await supabaseClient
                     .from('productos')
                     .update(datosActualizados)
