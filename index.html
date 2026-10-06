@@ -5,15 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reparte Ixtlahuaca - Sistema Repartidores</title>
 
-    <script>
-  // Si entran a la raíz pura (sin parámetros ni hash de admin)
-  if (window.location.pathname === '/' || window.location.pathname === '/index.html') {
-    const params = new URLSearchParams(window.location.search);
-    // Si no incluye un parámetro de admin (ej. ?admin=true), redirige a comercio.html
-    if (!params.has('admin') && !window.location.hash.includes('admin')) {
+   <script>
+  (function() {
+    // Si la URL actual es exactamente la raíz (reparte.online o reparte.online/)
+    // y NO contiene el parámetro ?admin ni un hash #admin
+    const isRoot = window.location.pathname === '/' || window.location.pathname === '/index.html';
+    const hasAdminFlag = window.location.search.includes('admin') || window.location.hash.includes('admin');
+
+    if (isRoot && !hasAdminFlag) {
       window.location.replace('/comercio.html');
     }
-  }
+  })();
 </script>
     <!-- Librerías Externas -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
