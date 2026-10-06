@@ -1179,6 +1179,21 @@ window.cerrarSesion = async function() {
                 const nombreProd = p.nombre || 'Producto';
                 const descProd = p.descripcion || '';
                 const estaDisponible = p.disponible !== false;
+                const listaIngredientes = p.ingredientes ? p.ingredientes.split(',').map(i => i.trim()).filter(i => i) : [];
+
+                let htmlIngredientes = '';
+                if (listaIngredientes.length > 0) {
+                    htmlIngredientes = `
+                        <div style="margin: 8px 0; font-size: 12px; text-align: left; background: #f9f9f9; padding: 6px 8px; border-radius: 6px; border: 1px solid #eee;">
+                            <strong>Quitar ingredientes:</strong><br>
+                            ${listaIngredientes.map((ing, idx) => `
+                                <label style="display:inline-flex; align-items:center; margin: 3px 6px 3px 0; font-size: 11px; text-transform:none; cursor:pointer;">
+                                    <input type="checkbox" class="chk-ingrediente-${p.id}" value="${ing}" style="width:auto; margin:0 4px 0 0;"> ${ing}
+                                </label>
+                            `).join('')}
+                        </div>
+                    `;
+                }
 
                 card.innerHTML = `
                     <img src="${imagenProd}" alt="${nombreProd}" style="width:100%; height:140px; object-fit:cover; border-radius:6px; ${!estaDisponible ? 'filter: grayscale(100%); opacity: 0.5;' : ''}">
@@ -1596,6 +1611,36 @@ window.cerrarSesion = async function() {
             console.error(err);
         }
     }
+
+
+    
+    function agregarAlCarritoConIngredientes(id, nombre, precio) {
+    if (!esHorarioPermitidoPedidos()) {
+        alert("Lo sentimos, el servicio está cerrado. Nuestro horario de atención finaliza a las 9:00 p.m.");
+        return;
+    }
+
+    // Obtener los ingredientes marcados para quitar
+    const checkboxes = document.querySelectorAll(`.chk-ingrediente-${id}:checked`);
+    const ingredientesAQuitar = Array.from(checkboxes).map(cb => cb.value);
+
+    let nombreFinal = nombre;
+    if (ingredientesAQuitar.length > 0) {
+        nombreFinal += ` (Sin ${ingredientesAQuitar.join(', ')})`;
+    }
+
+    const existente = carrito.find(item => item.id === id && item.nombre === nombreFinal);
+    if (existente) {
+        existente.cantidad++;
+    } else {
+        carrito.push({ id, nombre: nombreFinal, precio: parseFloat(precio), cantidad: 1, ingredientesSin: ingredientesAQuitar });
+    }
+
+    // Desmarcar checkboxes
+    checkboxes.forEach(cb => cb.checked = false);
+
+    actualizarBarraCarrito();
+}
 
     async function recalcularTotales() {
         const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
