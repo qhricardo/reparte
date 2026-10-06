@@ -374,11 +374,10 @@ async function probarSuscripcionDirecta() {
         actualizarBarraUsuario();
 
         // Si no es admin, redirigir directamente a la pantalla de comercios
-        if (!user || user.email !== EMAIL_ADMIN) {
-            document.getElementById('lblRol').innerText = 'CLIENTE';
-            cargarComercios();
-            return;
-        }
+     if (!user || user.email !== EMAIL_ADMIN) {
+        window.location.replace('/comercio');
+        return;
+    }
 
         // Acceso exclusivo para Administrador Autorizado
         document.getElementById('lblRol').innerText = 'ADMINISTRADOR';
