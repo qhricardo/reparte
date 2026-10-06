@@ -369,21 +369,21 @@ async function probarSuscripcionDirecta() {
     }
 
     // --- EVALUACIÓN DE ROLES Y REDIRECCIÓN ---
-    async function evalRol() {
-        ocultar();
-        actualizarBarraUsuario();
+   async function evalRol() {
+    ocultar();
+    actualizarBarraUsuario();
 
-        // Si no es admin, redirigir directamente a la pantalla de comercios
-     if (!user || user.email !== EMAIL_ADMIN) {
-        window.location.replace('/comercio');
+    // Solo expulsar de index.html a quienes NO son administradores
+    if (!user || user.email !== EMAIL_ADMIN) {
+        window.location.replace('/comercio.html');
         return;
     }
 
-        // Acceso exclusivo para Administrador Autorizado
-        document.getElementById('lblRol').innerText = 'ADMINISTRADOR';
-        show('pAdmin');
-        cargarAdmin();
-    }
+    // Si es administrador, se queda en el Panel Admin (index.html)
+    document.getElementById('lblRol').innerText = 'ADMINISTRADOR';
+    show('pAdmin');
+    cargarAdmin();
+}
 
     // --- VISTA PÚBLICA / CLIENTE ---
     async function cargarComercios() {
