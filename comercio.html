@@ -764,6 +764,7 @@ input:focus, textarea:focus {
             <span class="cerrar-modal" onclick="cerrarModalCheckout()">&times;</span>
         </div>
 
+        <!-- CUERPO CON SCROLL SOLO PARA ITEMS, DIRECCIÓN Y MAPA -->
         <div class="modal-body">
             <div id="resumenItemsCarrito"></div>
             
@@ -778,19 +779,22 @@ input:focus, textarea:focus {
 
             <div id="mapaEntrega"></div>
             <small class="mapa-leyenda">🔵 Marcador Azul = Comercio | 🔴 Marcador Rojo = Tu Entrega</small>
+        </div>
 
-            <div class="desglose-resumen">
+        <!-- FOOTER FIJO/ANCLADO: INCLUYE RESUMEN DE PAGOS Y BOTONES -->
+        <div class="modal-footer" style="flex-direction: column; gap: 10px;">
+            <div class="desglose-resumen" style="margin-top: 0; width: 100%;">
                 <p>Distancia Comercio → Cliente: <b><span id="txtDistancia">0.0</span> km</b></p>
                 <p>Subtotal Productos: <b>$<span id="txtSubtotal">0.00</span></b></p>
                 <p>Costo de Envío: <b>$<span id="txtCostoEnvio">25.00</span></b></p>
-                <hr>
+                <hr style="margin: 6px 0;">
                 <h3 class="total-texto">Total a Pagar: $<span id="txtTotalPagar">0.00</span></h3>
             </div>
-        </div>
 
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secundario" onclick="cerrarModalCheckout()">Cancelar</button>
-            <button type="button" class="btn btn-primary" id="btnConfirmarPedido" onclick="procesarPedidoFinal(event)">Confirmar Pedido</button>
+            <div style="display: flex; gap: 12px; width: 100%;">
+                <button type="button" class="btn btn-secundario" style="flex: 1;" onclick="cerrarModalCheckout()">Cancelar</button>
+                <button type="button" class="btn btn-primary" style="flex: 1;" id="btnConfirmarPedido" onclick="procesarPedidoFinal(event)">Confirmar Pedido</button>
+            </div>
         </div>
     </div>
 </div>
