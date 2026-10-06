@@ -2129,11 +2129,13 @@ window.cerrarSesion = async function() {
                     .from('productos')
                     .getPublicUrl(nombreArchivo);
 
+              
                 const producto = {
                     comercio_id: miComercio.id,
                     nombre: document.getElementById('prodNombre').value.trim(),
                     precio: parseFloat(document.getElementById('prodPrecio').value),
                     descripcion: document.getElementById('prodDescripcion').value.trim(),
+                    ingredientes: document.getElementById('prodIngredientes').value.trim(), // ➕ AGREGADO
                     imagen: publicUrlData.publicUrl
                 };
 
